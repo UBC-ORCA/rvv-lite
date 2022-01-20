@@ -1,7 +1,7 @@
 module vec_regfile #(
-    parameter VLEN_B = 128,   // bit length of a vector
+    // parameter VLEN_B = 128,   // bit length of a vector
     parameter ADDR_WIDTH = 5, // this gives us 32 vectors
-    parameter DATA_WIDTH = 64
+    parameter DATA_WIDTH = 128 // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
 ) (
     input clk,
     input en,           // no action unless high
@@ -12,10 +12,10 @@ module vec_regfile #(
     output [DATA_WIDTH-1:0] data_out  // read 64 bits at a time
     );
 
-    parameter MAX_IDX = VLEN_B/DATA_WIDTH - 1;
-    parameter IDX_BITS = $clog2(MAX_IDX); // screw it I can't do the math rn
+    // parameter MAX_IDX = VLEN_B/DATA_WIDTH - 1;
+    // parameter IDX_BITS = $clog2(MAX_IDX); // screw it I can't do the math rn
     
-    reg [IDX_BITS - 1:0] curr_idx;
+    // reg [IDX_BITS - 1:0] curr_idx;
     reg [ADDR_WIDTH-1:0] curr_reg; // latch current register just in case input changes!
   
     reg [DATA_WIDTH-1 : 0] data_tmp;
@@ -36,19 +36,19 @@ module vec_regfile #(
     assign data_out = data_tmp;
 
     // latching input values
-  always @(posedge clk) begin
-        if (en) begin
-            if (state[1:0] == 2'b00) begin
-                curr_reg[ADDR_WIDTH-1:0] <= addr[ADDR_WIDTH-1:0];
-            end
-        end else begin
-            curr_idx <= 0;
-        end
+  // always @(posedge clk) begin
+  //       if (en) begin
+  //           if (state[1:0] == 2'b00) begin
+  //               curr_reg[ADDR_WIDTH-1:0] <= addr[ADDR_WIDTH-1:0];
+  //           end
+  //       end else begin
+  //           curr_idx <= 0;
+  //       end
 
-        if (^state) begin // if state is 01 or 10 :)
-          curr_idx <= en ? curr_idx + 1 : 0;
-        end
-  end
+  //       if (^state) begin // if state is 01 or 10 :)
+  //         curr_idx <= en ? curr_idx + 1 : 0;
+  //       end
+  // end
 
     // TODO: may need to implement multi-cycle read/write maybe -- esp for register groupings!
 //   assign data_start = curr_idx*VLEN_B;

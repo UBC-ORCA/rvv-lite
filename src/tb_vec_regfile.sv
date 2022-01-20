@@ -1,13 +1,16 @@
 module tb_vec_regfile;
 
+parameter VLEN_B = 128;
+parameter ADDR_WIDTH = 5;
+
 reg clk;
 reg en;
 reg rw;
-reg [4:0] addr;
-reg [63:0] data_in;
-reg [63:0] data_out;
+reg [ADDR_WIDTH-1:0] addr;
+reg [VLEN_B-1:0] data_in;
+reg [VLEN_B-1:0] data_out;
 
-  vec_regfile DUT(.clk(clk), .en(en), .rw(rw), .addr(addr), .data_in(data_in), .data_out(data_out));
+  vec_regfile #(.DATA_WIDTH(VLEN_B), .ADDR_WIDTH(ADDR_WIDTH)) DUT (.clk(clk), .en(en), .rw(rw), .addr(addr), .data_in(data_in), .data_out(data_out));
   
 initial begin
   clk = 0;
@@ -19,8 +22,8 @@ end
 initial begin
   $dumpfile("dump.vcd"); $dumpvars;
   
-  addr = 5'b0;
-  data_in = 64'hABCDEF0123456789;
+  addr = 'b0;
+  data_in = 'hABCDEF0123456789;
   en = 1'b1;
   rw = 1'b1;
   #10;
