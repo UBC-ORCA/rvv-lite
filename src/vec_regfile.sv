@@ -1,25 +1,25 @@
 module vec_regfile #(
-    // parameter VLEN_B = 128,   // bit length of a vector
-    parameter ADDR_WIDTH = 5, // this gives us 32 vectors
-    parameter DATA_WIDTH = 128 // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
+    parameter VLEN = 128,       // bit length of a vector
+    parameter ADDR_WIDTH = 5,   // this gives us 32 vectors
+    parameter DATA_WIDTH = 128, // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
+    parameter PORTS = 2         // number of data ports
 ) (
+    // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input clk,
-    input en,           // no action unless high
-    input rw,           // 0 == read, 1 == write
-    input [ADDR_WIDTH-1:0] addr,   // 32 possible vector registers -- TODO: would like to make this SP eventually!
-    input [DATA_WIDTH-1:0] data_in,  // write 64 bits at a time
+    input en [PORTS-1:0],           // no action unless high
+    input rw [PORTS-1:0],           // 0 == read, 1 == write
+    input [ADDR_WIDTH-1:0] addr [PORTS-1:0],   // 32 possible vector registers -- TODO: would like to make this SP eventually!
+    input [DATA_WIDTH-1:0] data_in [PORTS-1:0],  // write 64 bits at a time
     // input [7:0] num_elems, // we can know this from vsetvli
-    output [DATA_WIDTH-1:0] data_out  // read 64 bits at a time
+    output reg [DATA_WIDTH-1:0] data_out [PORTS-1:0]  // read 64 bits at a time
     );
 
-    // parameter MAX_IDX = VLEN_B/DATA_WIDTH - 1;
+    // parameter MAX_IDX = VLEN/DATA_WIDTH - 1;
     // parameter IDX_BITS = $clog2(MAX_IDX); // screw it I can't do the math rn
     
     // reg [IDX_BITS - 1:0] curr_idx;
     reg [ADDR_WIDTH-1:0] curr_reg; // latch current register just in case input changes!
-  
-    reg [DATA_WIDTH-1 : 0] data_tmp;
-  
+    
     wire [ADDR_WIDTH-1:0] data_start;
     wire [ADDR_WIDTH-1:0] data_end;
 
@@ -28,12 +28,11 @@ module vec_regfile #(
     // TODO: change to a byte-addressable space, for strided reads.
     reg [DATA_WIDTH-1:0] vec_data [ADDR_WIDTH-1:0];
 //   reg [DATA_WIDTH-1:0] vec_data;
-//   reg [ADDR_WIDTH-1:0] vec_data [VLEN_B-1:0];
+//   reg [ADDR_WIDTH-1:0] vec_data [VLEN-1:0];
 
     reg [1:0] state;  // STATES: IDLE, BUSY_R, BUSY_W
 
 //     assign data_start = curr_reg + curr_idx;
-    assign data_out = data_tmp;
 
     // latching input values
   // always @(posedge clk) begin
@@ -50,23 +49,25 @@ module vec_regfile #(
   //       end
   // end
 
-    // TODO: may need to implement multi-cycle read/write maybe -- esp for register groupings!
-//   assign data_start = curr_idx*VLEN_B;
-//   assign data_end = data_start + VLEN_B - 1;
+    // TODO: implement multi-cycle read/write -- esp for register groupings!
+//   assign data_start = curr_idx*VLEN;
+//   assign data_end = data_start + VLEN - 1;
 
     // data read/write
   always @(posedge clk) begin
 //         if (en) begin // drive enable low when we're out of bounds
             // TODO: add conditions for reading in first cycle of state change
 //             if (state[1:0] == 2'b01) begin // read
-              if (en && ~rw) begin
-                data_tmp <= vec_data[addr];
-//                  data_tmp <= vec_data[curr_reg];
-              end else if (en && rw) begin
-//             end else if (state[1:0] == 2'b10) begin // write
-//                 vec_data[curr_reg] <=  data_in;
-                vec_data[addr] <= data_in;
-            end
+    for (int i = 0; i < PORTS; i++) begin
+      if (en[i] && ~rw[i]) begin
+        data_out[i] <= vec_data[addr[i]];
+  //                  data_tmp <= vec_data[curr_reg];
+      end else if (en[i] && rw[i]) begin
+  //             end else if (state[1:0] == 2'b10) begin // write
+  //                 vec_data[curr_reg] <=  data_in;
+        vec_data[addr[i]] <= data_in[i];
+      end
+    end
 //         end
   end
 
