@@ -1,4 +1,5 @@
 `include "vec_regfile.sv"
+`include "insn_decoder.sv"
 
 module rvv_proc_main
 #(parameter VLEN = 128,   // vector length in bits
@@ -14,7 +15,6 @@ parameter DATA_WIDTH = 64
     parameter ADDR_WIDTH = $clog2(NUM_VEC);
     parameter REG_PORTS = 2;
 
-    reg clk;
     reg vr_en [REG_PORTS-1:0];
     reg vr_rw [REG_PORTS-1:0];
     reg [ADDR_WIDTH-1:0] vr_addr [REG_PORTS-1:0];
@@ -41,46 +41,10 @@ parameter DATA_WIDTH = 64
     reg vm;
     reg [5:0] funct6;
 
-    // instruction decode block
-    always_ff @(posedge clk or negedge rst) begin
-        if(~rst) begin
-            // general, universal
-            opcode  <= 0;
-            dest    <= 0;
-            src_1   <= 0;
-            src_2   <= 0;
-            vm      <= 0;
-            funct6  <= 0;
-            zimm_11 <= 0;
-            zimm_10 <= 0;
-            mop     <= 0;
-            mew     <= 0;
-            nf      <= 0;
-        end else begin
-            // general, universal
-            opcode  <= insn_in[31:25];
-            dest    <= insn_in[24:20];
-            src_1   <= insn_in[16:12];
-            src_2   <= insn_in[11:7];
+    insn_decoder #(.INSN_WIDTH(INSN_WIDTH)) id (.clk(clk), .rst(rst), .insn_in(insn_in), .opcode(opcode), .dest(dest), .src_1(src_1), .src_2(src_2), .width(width), .mop(mop), .mew(mew), .nf(nf),
+                                                    .zimm_11(zimm_11), .zimm_10(zimm_10), .vm(vm), .funct6(funct6));
 
-            // vec-alu and vec-mem
-            vm      <= insn_in[6];
-
-            // vec-alu
-            funct6  <= insn_in[5:0];
-
-            // vec-cfg
-            zimm_11 <= insn_in[11:1];
-            zimm_10 <= insn_in[11:2];
-
-            // vec-mem
-            mop     <= insn_in[5:4];
-            mew     <= insn_in[3];
-            nf      <= insn_in[2:0];
-        end
-    end
-
-  vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(REG_PORTS)) vr (.clk(clk), .en(vr_en), .addr(vr_addr), .data_in(vr_data_in), .data_out(vr_data_out));
+    vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(REG_PORTS)) vr (.clk(clk), .en(vr_en), .addr(vr_addr), .data_in(vr_data_in), .data_out(vr_data_out));
 
 
 endmodule

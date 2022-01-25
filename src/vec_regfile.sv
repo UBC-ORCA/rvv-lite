@@ -14,14 +14,14 @@ module vec_regfile #(
     output reg [DATA_WIDTH-1:0] data_out [PORTS-1:0]  // read 64 bits at a time
     );
 
-    // parameter MAX_IDX = VLEN/DATA_WIDTH - 1;
-    // parameter IDX_BITS = $clog2(MAX_IDX); // screw it I can't do the math rn
+    parameter MAX_IDX = VLEN/DATA_WIDTH - 1;
+    parameter IDX_BITS = $clog2(MAX_IDX); // screw it I can't do the math rn
     
-    // reg [IDX_BITS - 1:0] curr_idx;
-    reg [ADDR_WIDTH-1:0] curr_reg; // latch current register just in case input changes!
+  reg [IDX_BITS - 1:0] curr_idx [PORTS-1:0];
+    reg [ADDR_WIDTH-1:0] curr_reg [PORTS-1:0]; // latch current register just in case input changes!
     
-    wire [ADDR_WIDTH-1:0] data_start;
-    wire [ADDR_WIDTH-1:0] data_end;
+    wire [ADDR_WIDTH-1:0] data_start[PORTS-1:0];
+    wire [ADDR_WIDTH-1:0] data_end[PORTS-1:0];
 
     // TODO: add request queue (using num_elems and busy flag) so we don't have to wait on requests to return always
 
@@ -30,24 +30,26 @@ module vec_regfile #(
 //   reg [DATA_WIDTH-1:0] vec_data;
 //   reg [ADDR_WIDTH-1:0] vec_data [VLEN-1:0];
 
-    reg [1:0] state;  // STATES: IDLE, BUSY_R, BUSY_W
+    reg [1:0] state [PORTS-1:0];  // STATES: IDLE, BUSY_R, BUSY_W
 
 //     assign data_start = curr_reg + curr_idx;
 
     // latching input values
-  // always @(posedge clk) begin
-  //       if (en) begin
-  //           if (state[1:0] == 2'b00) begin
-  //               curr_reg[ADDR_WIDTH-1:0] <= addr[ADDR_WIDTH-1:0];
-  //           end
-  //       end else begin
-  //           curr_idx <= 0;
-  //       end
+  always @(posedge clk) begin
+    for (int i = 0; i < PORTS; i++) begin
+        if (en[i]) begin
+            if (state[i] == 2'b00) begin
+                curr_reg[i] <= addr[i];
+            end
+        end else begin
+            curr_idx[i] <= 0;
+        end
 
-  //       if (^state) begin // if state is 01 or 10 :)
-  //         curr_idx <= en ? curr_idx + 1 : 0;
-  //       end
-  // end
+      if (^state[i]) begin // if state is 01 or 10 :)
+          curr_idx[i] <= en[i] ? curr_idx[i] + 1 : 0;
+        end
+    end
+  end
 
     // TODO: implement multi-cycle read/write -- esp for register groupings!
 //   assign data_start = curr_idx*VLEN;
@@ -73,20 +75,22 @@ module vec_regfile #(
 
 
     // STATE MACHINE :)
-//       always @(posedge clk) begin
-//         case (state)
-//             2'b00: begin
-//                 if (en) begin
-//                   state <= (rw ? 2'b01 : 2'b10);
-//                 end
-//             end // IDLE
-//             2'b01, // BUSY_RD
-//             2'b10: begin
-//                 state <= (curr_idx == MAX_IDX) ? 2'b00 : state;
-//             end // BUSY_WR
-//             default : state <= state;
-//         endcase
-//       end
+      always @(posedge clk) begin
+        for (int i = 0; i < PORTS; i++) begin
+            case (state[i])
+                2'b00: begin
+                    if (en[i]) begin
+                      state[i] <= (rw[i] ? 2'b01 : 2'b10);
+                    end
+                end // IDLE
+                2'b01, // BUSY_RD
+                2'b10: begin
+                    state[i] <= (curr_idx[i] == MAX_IDX) ? 2'b00 : state[i];
+                end // BUSY_WR
+                default : state[i] <= state[i];
+            endcase
+        end
+    end
 
 
 endmodule
