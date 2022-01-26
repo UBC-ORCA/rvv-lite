@@ -3,7 +3,8 @@ module insn_decoder
     (   input clk,
         input rst,
         input [INSN_WIDTH-1 : 0] insn_in,
-        output reg [6:0] opcode,
+        output reg [6:0] opcode_mjr, // OP-V, LOAD-FP, STR-FP
+        output reg [2:0] opcode_mnr, // CFG=7, other= ALU types
         output reg [4:0] dest,    // rd, vd, or vs3 -- TODO make better name lol
         output reg [4:0] src_1,   // rs1, vs1, or imm/uimm
         output reg [4:0] src_2,   // rs2, vs2, or imm -- for mem could be lumop, sumop
@@ -27,7 +28,7 @@ module insn_decoder
     always_ff @(posedge clk or negedge rst) begin
         if(~rst) begin
             // general, universal
-            opcode  <= 0;
+            opcode_mjr  <= 0;
             dest    <= 0;
             src_1   <= 0;
             src_2   <= 0;
@@ -40,10 +41,11 @@ module insn_decoder
             nf      <= 0;
         end else begin
             // general, universal
-            opcode  <= insn_in[6:0];
-            dest    <= insn_in[11:7];
-            src_1   <= insn_in[16:12];
-            src_2   <= insn_in[21:17];
+            opcode_mjr  <= insn_in[6:0];
+            opcode_mnr  <= insn_in[14:12];
+            dest        <= insn_in[11:7];
+            src_1       <= insn_in[16:12];
+            src_2       <= insn_in[21:17];
 
             // vec-alu and vec-mem
             vm      <= insn_in[22];
@@ -54,6 +56,7 @@ module insn_decoder
             // vec-cfg
             zimm_11 <= insn_in[30:20];
             zimm_10 <= insn_in[29:20];
+            cfg_type <= insn_in[31:30]; // 0X = vsetvli, 11 = vsetivli, 10 = vsetvl
 
             // vec-mem
             mop     <= insn_in[27:26];
