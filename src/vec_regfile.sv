@@ -22,6 +22,8 @@ module vec_regfile #(
     
     reg [IDX_BITS - 1:0] curr_idx [PORTS-1:0];
     reg [ADDR_WIDTH-1:0] curr_reg [PORTS-1:0]; // latch current register just in case input changes!
+  
+    wire [ADDR_WIDTH-1:0] rw_reg [PORTS-1:0];
     
     wire [ADDR_WIDTH-1:0] data_start[PORTS-1:0];
     wire [ADDR_WIDTH-1:0] data_end[PORTS-1:0];
@@ -48,6 +50,11 @@ module vec_regfile #(
   wire [IDX_BITS - 1:0] curr_idx_0;
   wire [IDX_BITS - 1:0] curr_idx_1;
   
+  wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_0;
+  wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_1;
+  wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_2;
+  wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_3;
+  
   assign curr_idx_0 = curr_idx[0];
   assign curr_idx_1 = curr_idx[1];
   
@@ -59,6 +66,11 @@ module vec_regfile #(
   
   assign rw_0 = rw[0];
   assign rw_1 = rw[1];
+  
+  assign vec_data_0 = vec_data[0];
+  assign vec_data_1 = vec_data[1];
+  assign vec_data_2 = vec_data[2];
+  assign vec_data_3 = vec_data[3];
 
 //     assign data_start = curr_reg + curr_idx;
   
@@ -122,21 +134,22 @@ module vec_regfile #(
   
   generate
     for (i = 0; i < PORTS; i++) begin
+      assign rw_reg[i] = (MAX_IDX > 0 && curr_idx[i] >= 0) ? curr_reg[i] : addr[i];
       for (j = 0; j < DW_B; j++) begin
         always @(posedge clk) begin
           if (~rst) begin
-            data_out[i] <= 'hX;
+            data_out[i][(j+1)*8-1:j*8] <= 8'hXX;
           end else begin
     //         if (en) begin // drive enable low when we're out of bounds
                 // TODO: add conditions for reading in first cycle of state change
     //             if (state[1:0] == 2'b01) begin // read
             if (en[i][j] && ~rw[i] || state[i] == 2'b01) begin // read
     //           data_out[i] <= vec_data[addr[i]];
-              data_out[i][(j+1)*8-1:j*8] <= vec_data[curr_reg[i]][curr_idx[i]][(j+1)*8-1:j*8];
+              data_out[i][(j+1)*8-1:j*8] <= vec_data[rw_reg[i]][curr_idx[i]][(j+1)*8-1:j*8];
             end else if (en[i][j] && rw[i] || state[i] == 2'b10) begin
         //             end else if (state[1:0] == 2'b10) begin // write
         //                 vec_data[curr_reg] <=  data_in;
-              vec_data[curr_reg[i]][curr_idx[i]][(j+1)*8-1:j*8] <= data_in[i][(j+1)*8-1:j*8];
+              vec_data[rw_reg[i]][curr_idx[i]][(j+1)*8-1:j*8] <= data_in[i][(j+1)*8-1:j*8];
             end else begin
             end
           end

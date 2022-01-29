@@ -1,9 +1,10 @@
 module tb_vec_regfile;
 
-parameter VLEN_B = 128;
+parameter VLEN_B = 64;
 parameter DATA_WIDTH = 64;
 parameter ADDR_WIDTH = 5;
 parameter PORTS = 2;
+parameter DW_B = DATA_WIDTH/8;
 
 reg clk;
 reg rst;
@@ -18,6 +19,8 @@ reg [DATA_WIDTH-1:0] data_out [PORTS-1:0];
   reg [DATA_WIDTH-1:0] data_in_1;
   reg [DATA_WIDTH-1:0] data_out_0;
   reg [DATA_WIDTH-1:0] data_out_1;
+  reg [ADDR_WIDTH-1:0] addr_0;
+  reg [ADDR_WIDTH-1:0] addr_1;
   reg rw_0;
   reg rw_1;
 
@@ -27,6 +30,8 @@ assign data_in_0 = data_in[0];
 assign data_in_1 = data_in[1];
 assign data_out_0 = data_out[0];
 assign data_out_1 = data_out[1];
+assign addr_0 = addr[0];
+assign addr_1 = addr[1];
 assign rw_0 = rw[0];
 assign rw_1 = rw[1];
   
@@ -47,25 +52,32 @@ initial begin
     rst=1'b1;
     
     for (int i = 0; i < PORTS; i++) begin
-      addr[i] = 'b0;
+      addr[i] = 'h0;
       data_in[i] = 'hABCDEF0123456789;
-      en[i] = 8'b01010101;
+      en[i] = {DW_B{1'b1}};
       rw[i] = 1'b1;
     end
     #10;
     for (int i = 0; i < PORTS; i++) begin
-      en[i] = 0;
+      addr[i] = 'h1;
+      en[i] = {DW_B{1'b0}};
       data_in[i] = 'h9876543210FEDCBA;
     end
     #10;
     for (int i = 0; i < PORTS; i++) begin
+      addr[i] = 'h2;
       data_in[i] = 'hAAAAAAAAAAAAAAAA;
     end
     #10;
     for (int i = 0; i < PORTS; i++) begin
+      addr[i] = 'h3;
       data_in[i] = 'hBBBBBBBBBBBBBBBB;
+      en[i] = {DW_B{1'b1}};
     end
     #10;
+    for (int i = 0; i < PORTS; i++) begin
+      en[i] = {DW_B{1'b0}};
+    end
   
     #100;
 
@@ -73,13 +85,13 @@ initial begin
     assert(DUT.vec_data[addr[i]] == data_in[i])
       else $display("Data mismatch! Got %h, expected %h", data_out[i], data_in[i]);
 
-    en[i] = 8'b10101010;
+    en[i] = {DW_B{1'b1}};
     rw[i] = 1'b0;
   end
     #10;
-for (int i = 0; i < PORTS; i++) begin
-    en[i] = 0;
-end
+  for (int i = 0; i < PORTS; i++) begin
+      en[i] = {DW_B{1'b0}};
+  end
 
     #20;
 for (int i = 0; i < PORTS; i++) begin
