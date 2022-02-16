@@ -29,10 +29,10 @@ module insn_decoder
   assign opcode_mnr = {3{rst}} & insn_in[14:12];
   
   assign dest = {5{rst}} & insn_in[11:7];
-  assign src_1 = {5{rst}} & insn_in[16:12];
-  assign src_2 ={5{rst}} & insn_in[21:17];
+  assign src_1 = {5{rst}} & insn_in[19:15];
+  assign src_2 ={5{rst}} & insn_in[24:20];
   
-  assign vm = rst & insn_in[22];
+  assign vm = rst & insn_in[25];
   assign funct6 = {6{rst}} & insn_in[31:26];
   
   assign zimm_11 = {11{rst}} & insn_in[30:20];

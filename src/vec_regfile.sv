@@ -40,20 +40,31 @@ module vec_regfile #(
 
     reg [1:0] state [PORTS-1:0];  // STATES: IDLE, BUSY_R, BUSY_W
   
-  // debug
+  // --------------------------- DEBUG SIGNALS ------------------------------------
   wire [1:0] state_0;
   wire [1:0] state_1;
+  wire [1:0] state_2;
+  
   wire [DW_B-1:0] en_0;
   wire [DW_B-1:0] en_1;
+  wire [DW_B-1:0] en_2;
+  
   wire rw_0;
   wire rw_1;
-  wire [IDX_BITS - 1:0] curr_idx_0;
-  wire [IDX_BITS - 1:0] curr_idx_1;
+  wire rw_2;
   
   wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_0;
   wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_1;
   wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_2;
   wire [(VLEN/DATA_WIDTH)-1:0][DATA_WIDTH-1:0] vec_data_3;
+  
+  wire [IDX_BITS - 1:0] curr_idx_0;
+  wire [IDX_BITS - 1:0] curr_idx_1;
+  wire [IDX_BITS - 1:0] curr_idx_2;
+  
+  wire [ADDR_WIDTH-1:0] curr_reg_0;
+  wire [ADDR_WIDTH-1:0] curr_reg_1;
+  wire [ADDR_WIDTH-1:0] curr_reg_2;
   
   assign curr_idx_0 = curr_idx[0];
   assign curr_idx_1 = curr_idx[1];
@@ -69,37 +80,33 @@ module vec_regfile #(
   
   assign en_0 = en[0];
   assign en_1 = en[1];
+  assign en_2 = en[2];
   
   assign rw_0 = rw[0];
   assign rw_1 = rw[1];
+  assign rw_2 = rw[2];
   
   assign vec_data_0 = vec_data[0];
   assign vec_data_1 = vec_data[1];
   assign vec_data_2 = vec_data[2];
   assign vec_data_3 = vec_data[3];
 
+  // TODO: continuous register data
 //     assign data_start = curr_reg + curr_idx;
   
+  // ----------------------------- REGISTER INIT --------------------------------------
   genvar i;
   genvar j;
-//   genvar k;
-//   genvar a;
 
   initial begin
-//     for (int a = 0; i < PORTS; i++) begin
       for (int c = 0; c < (1'b1 << (ADDR_WIDTH - 1)); c++) begin
         for (int d = 0; d < MAX_IDX + 1; d++) begin
-//           for (int b = 0; b < 1; b++) begin
-//               vec_data[c][d][((b+1)*8-1):(b*8)] <= c;
-          vec_data[c][d][7:0] <= c;
-//               vec_data[1][0][7:0] <= 'hF;
-//             end
-//           end
+          vec_data[c][d][DATA_WIDTH-1:0] <= c;
         end
       end
-//     end
   end
   
+  // --------------------------- REGISTER TRACKING ------------------------------------
   generate
     // latching input https://www.edaplayground.com/x/c_t8#design0values
     for (i = 0; i < PORTS; i++) begin
@@ -154,7 +161,7 @@ module vec_regfile #(
 //     end
 //   endgenerate
   
-  
+  // --------------------------- READING AND WRITING ------------------------------------
   generate
     for (i = 0; i < PORTS; i++) begin
       assign rw_reg[i] = (MAX_IDX > 0 && curr_idx[i] >= 0) ? curr_reg[i] : addr[i];
@@ -183,7 +190,7 @@ module vec_regfile #(
   endgenerate
 
 
-    // STATE MACHINE :)
+  // --------------------------- STATE MACHINE :) ---------------------------------------
     generate
       for (i = 0; i < PORTS; i++) begin
         always @(posedge clk) begin

@@ -79,17 +79,17 @@ module rvv_proc_main
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(REG_PORTS)) vr (.clk(clk), .rst(rst), .en(vr_en), .rw(vr_rw), .addr(vr_addr), .data_in(vr_data_in), .data_out(vr_data_out));
 
     // used only for OPIVV, OPFVV, OPMVV
-    assign en_vs1 = (opcode_mjr == 7'h57 && opcode_mnr >= 3'h0 && opcode_mnr <= 3'h2);
+  assign en_vs1 = (opcode_mjr === 7'h57 && opcode_mnr >= 3'h0 && opcode_mnr <= 3'h2);
 
     // used for all ALU and one each of load/store
-  assign en_vs2 = (opcode_mjr == 7'h57 && opcode_mnr != 3'h7 && funct6 != 'h17) || (opcode_mjr == 7'h7 && mop[0]) || (opcode_mjr == 7'h27 && mop[0]);
+  assign en_vs2 = (opcode_mjr === 7'h57 && opcode_mnr !== 3'h7 && funct6 !== 'h17) || (opcode_mjr === 7'h7 && mop[0]) || (opcode_mjr === 7'h27 && mop[0]);
   
     // used for LOAD-FP (m stage) and ALU (wb stage)
-    assign en_vd = (opcode_mjr_w == 7'h57 && opcode_mnr_w != 3'h7); //(opcode_mjr_m == 7'h7) || 
+    assign en_vd = (opcode_mjr_w === 7'h57 && opcode_mnr_w !== 3'h7); //(opcode_mjr_m == 7'h7) || 
 
     // lol bro thats not how store works
     // used only for STORE-FP in M stage
-    assign en_vs3 = (opcode_mjr_m == 7'h27 && opcode_mnr_m >= 3'h0 && opcode_mnr_m <= 3'h2);
+  assign en_vs3 = (opcode_mjr_m === 7'h27 && opcode_mnr_m >= 3'h0 && opcode_mnr_m <= 3'h2);
 
     // Read vector sources
     // TODO: add mask read logic
@@ -143,7 +143,7 @@ module rvv_proc_main
 //         vr_rw[2] <= 0;
 //         vr_en[2] <= 0;
       end else begin
-        if (opcode_mjr_e == 7'h57 && funct6_e == 6'h17) begin
+        if (opcode_mjr_e === 7'h57 && funct6_e === 6'h17) begin
 //         vr_data_tmp[0] <= vr_data_out[0];
 //          vr_data_in[2] <= vr_data_out[0];
         end

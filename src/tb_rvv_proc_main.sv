@@ -20,25 +20,21 @@ end
 
 initial begin
   $dumpfile("dump.vcd"); $dumpvars;
-  rst = 0;
+  rst = 0;https://www.edaplayground.com/x/c_t8#testbench0
   #10;
+  
   rst = 1;
-
-  insn_in = 'h5c0000d7;
+  // Because of timing, we end up using the previous values.
+  // For this test, that's intended. Will add dependency checking soon.
+  insn_in = 'h5c0000d7; // v.mv.vv v0, v1
   #10;
-  insn_in = 'h0;
+  insn_in = 'h5c008157; // v.mv.vv v1, v2
   #10;
-  insn_in = 'h5c0001d7;
+  insn_in = 'h5c0101d7; // v.mv.vv v2, v3
   #10;
-  insn_in = 'h0;
-  #100;
-  
-  insn_in = 'habcef012;
-  
-  #100;
-  
-  insn_in = 'h98765432;
-  
+  insn_in = 'h5c018057; // v.mv.vv v3, v0
+  #10;
+  insn_in = 'h0; // NOP
   #100;
   
   $finish;
