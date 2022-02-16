@@ -57,9 +57,15 @@ module vec_regfile #(
   
   assign curr_idx_0 = curr_idx[0];
   assign curr_idx_1 = curr_idx[1];
+  assign curr_idx_2 = curr_idx[2];
+  
+  assign curr_reg_0 = curr_reg[0];
+  assign curr_reg_1 = curr_reg[1];
+  assign curr_reg_2 = curr_reg[2];
   
   assign state_0 = state[0];
   assign state_1 = state[1];
+  assign state_2 = state[2];
   
   assign en_0 = en[0];
   assign en_1 = en[1];
@@ -76,9 +82,26 @@ module vec_regfile #(
   
   genvar i;
   genvar j;
+//   genvar k;
+//   genvar a;
 
+  initial begin
+//     for (int a = 0; i < PORTS; i++) begin
+      for (int c = 0; c < (1'b1 << (ADDR_WIDTH - 1)); c++) begin
+        for (int d = 0; d < MAX_IDX + 1; d++) begin
+//           for (int b = 0; b < 1; b++) begin
+//               vec_data[c][d][((b+1)*8-1):(b*8)] <= c;
+          vec_data[c][d][7:0] <= c;
+//               vec_data[1][0][7:0] <= 'hF;
+//             end
+//           end
+        end
+      end
+//     end
+  end
+  
   generate
-    // latching input values
+    // latching input https://www.edaplayground.com/x/c_t8#design0values
     for (i = 0; i < PORTS; i++) begin
       always @(posedge clk or negedge rst) begin
         if (~rst) begin
@@ -181,6 +204,8 @@ module vec_regfile #(
                 default : state[i] <= 2'b00;
               endcase
             end
+          end else begin
+            state[i] <= 2'b00;
           end
         end
       end
