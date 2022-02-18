@@ -13,11 +13,12 @@ module addr_gen_unit #(
     
     reg [ADDR_WIDTH-1:0] curr_reg;
     reg [ADDR_WIDTH-1:0] max_reg;
-    reg [1:0] state;  // STATES: IDLE, BUSY
+    reg state;  // STATES: IDLE, BUSY
   
 //   assign reg_group = (vlmul > 3'b000 && vlmul < 3'b100);
   assign addr_out = curr_reg;
-  assign idle = ~state;
+  assign idle_single_addr = (vlmul >= 3'b100 && ~en);
+  assign idle = ~state;// || (vlmul >= 3'b100 && ~en); // TODO: TEST THIS LOGIC LMAO
 
   // latching input values
   always @(posedge clk or negedge rst) begin
@@ -26,8 +27,10 @@ module addr_gen_unit #(
       max_reg <= 0;
     end else begin
       if (state == 1'b0) begin
-        curr_reg <= (vlmul > 3'b000 && vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-        max_reg <= (vlmul > 3'b000 && vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+        if (en) begin
+          curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
+          max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+        end
       end else begin
         curr_reg <= (curr_reg === max_reg) ? 'hX : curr_reg + 1;
       end

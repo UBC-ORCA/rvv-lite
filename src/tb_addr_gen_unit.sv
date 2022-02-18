@@ -21,26 +21,34 @@ initial begin
 end
 
 initial begin
-  	$dumpfile("dump.vcd"); $dumpvars;
+    $dumpfile("dump.vcd"); $dumpvars;
     rst = 1'b0;
     #10;
     rst = 1'b1;
   
-  	en = 1'b1;
-  	addr_in = 5'h1;
-  	vlmul = 3'b010;
-  	wait(~agu_idle);
+    en = 1'b1;
+    addr_in = 5'h1;
+    vlmul = 3'b010;
+    wait(~agu_idle);
     wait(agu_idle);
-  	// test that it doesn't take this input
-   	addr_in = 5'h3;
-  	vlmul = 3'b001;
-  	wait(~agu_idle);
+    // test that it doesn't take this input
+    addr_in = 5'h3;
+    vlmul = 3'b001;
+    wait(~agu_idle);
     wait(agu_idle);
     addr_in = 5'h3;
-  	vlmul = 3'b011;
-  	wait(~agu_idle);
-  	en = 1'b0;
-  	wait(agu_idle);
+    vlmul = 3'b011;
+    wait(~agu_idle);
+    wait(agu_idle);
+    addr_in = 5'h5;
+    vlmul = 3'b000;
+    wait(~agu_idle);
+    wait(agu_idle);
+    addr_in = 5'h5;
+    vlmul = 3'b100;
+    wait(~agu_idle);
+    en = 1'b0;
+    wait(agu_idle);
   
   $finish;
 end

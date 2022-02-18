@@ -20,7 +20,7 @@ end
 
 initial begin
   $dumpfile("dump.vcd"); $dumpvars;
-  rst = 0;https://www.edaplayground.com/x/c_t8#testbench0
+  rst = 0;
   #10;
   
   rst = 1;

@@ -1,5 +1,6 @@
 `include "vec_regfile.sv"
 `include "insn_decoder.sv"
+`include "addr_gen_unit.sv"
 
 // TODO: register groupings
 // TODO: 
@@ -70,13 +71,23 @@ module rvv_proc_main
     // valu
     wire vm;
     wire [5:0] funct6;
+  
+    wire [2:0] vlmul;
+  
+  wire agu_idle [REG_PORTS-1:0];
 
     insn_decoder #(.INSN_WIDTH(INSN_WIDTH)) id (.clk(clk), .rst(rst), .insn_in(insn_in), .opcode_mjr(opcode_mjr), .opcode_mnr(opcode_mnr), .dest(dest), .src_1(src_1), .src_2(src_2),
                                                 .width(width), .mop(mop), .mew(mew), .nf(nf), .zimm_11(zimm_11), .zimm_10(zimm_10), .vm(vm), .funct6(funct6));
 
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst(rst), .en(en_vs1), .vlmul(vlmul), .addr_in(src_1), .addr_out(vr_addr[0]), .idle(agu_idle[0]));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst(rst), .en(en_vs2), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_addr[1]), .idle(agu_idle[1]));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst(rst), .en(en_vd), .vlmul(vlmul), .addr_in(dest_w), .addr_out(vr_addr[2]), .idle(agu_idle[2]));
+  
     // TODO: add normal regfile? connect to external one? what do here
 
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(REG_PORTS)) vr (.clk(clk), .rst(rst), .en(vr_en), .rw(vr_rw), .addr(vr_addr), .data_in(vr_data_in), .data_out(vr_data_out));
+  
+    assign vlmul = 3'b000;  // TODO: implement vtype
 
     // used only for OPIVV, OPFVV, OPMVV
   assign en_vs1 = (opcode_mjr === 7'h57 && opcode_mnr >= 3'h0 && opcode_mnr <= 3'h2);
@@ -91,6 +102,7 @@ module rvv_proc_main
     // used only for STORE-FP in M stage
   assign en_vs3 = (opcode_mjr_m === 7'h27 && opcode_mnr_m >= 3'h0 && opcode_mnr_m <= 3'h2);
 
+// ------------------------- BEGIN DEBUG --------------------------
     // Read vector sources
     // TODO: add mask read logic
     assign vr_data_out_0 = vr_data_out[0];
@@ -112,51 +124,14 @@ module rvv_proc_main
   assign vr_rw_0 = vr_rw[0];
   assign vr_rw_2 = vr_rw[2];
   
-    always_ff @(posedge clk or negedge rst) begin
-        if(~rst) begin
-          for (int i = 0; i < 2; i++) begin
-                vr_en[i]    <= 0;
-              vr_rw[i] <= 0;
-            end
-        end else begin
-            vr_en[0]    <= en_vs1;
-            if (en_vs1) begin
-                vr_addr[0]  <= src_1;
-                vr_rw[0]    <= 0;
-            end
-
-            vr_en[1]    <= en_vs2;
-            if (en_vs2) begin
-                vr_addr[1]  <= src_2;
-                vr_rw[1]    <= 0;
-            end
-        end
-    end
+// ------------------------- END DEBUG --------------------------
   
-//   assign vr_en[0] = rst & en_vs1;
-//   assign vr_en[1] = rst & en_vs2;
-  
-    // move instruction
-  // ACTUAL FLOW: have read registers going D->E->WB so the E source is what we're trying to write and exists before the cycle.
-    always_ff @(posedge clk or negedge rst) begin
-      if (~rst) begin
-//         vr_rw[2] <= 0;
-//         vr_en[2] <= 0;
-      end else begin
-        if (opcode_mjr_e === 7'h57 && funct6_e === 6'h17) begin
-//         vr_data_tmp[0] <= vr_data_out[0];
-//          vr_data_in[2] <= vr_data_out[0];
-        end
-        if (en_vd) begin
-//          vr_rw[2] <= 1;
-//          vr_en[2] <= {DW_B{1'b1}}; // TODO: this should be corrected
-//              vr_addr[2] <= dest_w;
-        end
-      end
-    end
+  assign vr_en[0] = ~agu_idle[0];
+  assign vr_en[1] = ~agu_idle[1];   //rst & en_vs2;
+  assign vr_rw[0] = agu_idle[0];
+  assign vr_rw[1] = agu_idle[1];
     
   assign vr_data_in[2] = (opcode_mjr_w == 7'h57 && funct6_w == 6'h17) ? vr_data_out[0] : 'hXXXXXX; // TODO: assign second option to ALU output or MEM output (depending on opcode)
-  assign vr_addr[2] = {ADDR_WIDTH{rst & en_vd}} & dest_w;
   assign vr_rw[2]   = rst & en_vd;
   assign vr_en[2]   = {DW_B{rst & en_vd}}; // TODO: add byte masking
   
