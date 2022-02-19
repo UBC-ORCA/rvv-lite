@@ -20,7 +20,7 @@ module rvv_proc_main
     parameter ADDR_WIDTH = $clog2(NUM_VEC);
     parameter REG_PORTS = 3;
 
-    reg vr_en [REG_PORTS-1:0];
+    reg [DW_B-1:0] vr_en [REG_PORTS-1:0];
     reg vr_rw [REG_PORTS-1:0];
     reg [ADDR_WIDTH-1:0] vr_addr [REG_PORTS-1:0];
     reg [VLEN-1:0] vr_data_in [REG_PORTS-1:0];
@@ -49,9 +49,11 @@ module rvv_proc_main
     reg [2:0] opcode_mnr_e;
     reg [4:0] dest_e;    // rd, vd, or vs3 -- TODO make better name lol
     reg [5:0] funct6_e;
+  
     reg [6:0] opcode_mjr_m;
     reg [2:0] opcode_mnr_m;
     reg [4:0] dest_m;    // rd, vd, or vs3 -- TODO make better name lol
+    reg [5:0] funct6_m;
   
     reg [6:0] opcode_mjr_w;
     reg [2:0] opcode_mnr_w;
@@ -74,14 +76,16 @@ module rvv_proc_main
   
     wire [2:0] vlmul;
   
-  wire agu_idle [REG_PORTS-1:0];
+    wire agu_idle [REG_PORTS-1:0];
 
     insn_decoder #(.INSN_WIDTH(INSN_WIDTH)) id (.clk(clk), .rst(rst), .insn_in(insn_in), .opcode_mjr(opcode_mjr), .opcode_mnr(opcode_mnr), .dest(dest), .src_1(src_1), .src_2(src_2),
                                                 .width(width), .mop(mop), .mew(mew), .nf(nf), .zimm_11(zimm_11), .zimm_10(zimm_10), .vm(vm), .funct6(funct6));
 
+  
+    // TODO: figure out how to make this single cycle, so we can fully pipeline lol
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst(rst), .en(en_vs1), .vlmul(vlmul), .addr_in(src_1), .addr_out(vr_addr[0]), .idle(agu_idle[0]));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst(rst), .en(en_vs2), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_addr[1]), .idle(agu_idle[1]));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst(rst), .en(en_vd), .vlmul(vlmul), .addr_in(dest_w), .addr_out(vr_addr[2]), .idle(agu_idle[2]));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst(rst), .en(en_vd), .vlmul(vlmul), .addr_in(dest_e), .addr_out(vr_addr[2]), .idle(agu_idle[2]));
   
     // TODO: add normal regfile? connect to external one? what do here
 
@@ -96,7 +100,7 @@ module rvv_proc_main
   assign en_vs2 = (opcode_mjr === 7'h57 && opcode_mnr !== 3'h7 && funct6 !== 'h17) || (opcode_mjr === 7'h7 && mop[0]) || (opcode_mjr === 7'h27 && mop[0]);
   
     // used for LOAD-FP (m stage) and ALU (wb stage)
-    assign en_vd = (opcode_mjr_w === 7'h57 && opcode_mnr_w !== 3'h7); //(opcode_mjr_m == 7'h7) || 
+  assign en_vd = (opcode_mjr_e === 7'h57 && opcode_mnr_e !== 3'h7); //(opcode_mjr_m == 7'h7) || 
 
     // lol bro thats not how store works
     // used only for STORE-FP in M stage
@@ -126,14 +130,23 @@ module rvv_proc_main
   
 // ------------------------- END DEBUG --------------------------
   
-  assign vr_en[0] = ~agu_idle[0];
-  assign vr_en[1] = ~agu_idle[1];   //rst & en_vs2;
+  assign vr_en[0] = {DW_B{~agu_idle[0]}};
+  assign vr_en[1] = {DW_B{~agu_idle[1]}};   //rst & en_vs2;
   assign vr_rw[0] = agu_idle[0];
   assign vr_rw[1] = agu_idle[1];
     
-  assign vr_data_in[2] = (opcode_mjr_w == 7'h57 && funct6_w == 6'h17) ? vr_data_out[0] : 'hXXXXXX; // TODO: assign second option to ALU output or MEM output (depending on opcode)
-  assign vr_rw[2]   = rst & en_vd;
-  assign vr_en[2]   = {DW_B{rst & en_vd}}; // TODO: add byte masking
+  // clock the writeback stage data i guess
+//   always_ff @(posedge clk or negedge rst) begin
+//     if(~rst) begin
+//     end else begin
+//       vr_data_in[2] <= (opcode_mjr_w == 7'h57 && funct6_w == 6'h17) ? vr_data_out[0] : 'hXXXXXX;
+//     end
+//   end
+      
+      
+  assign vr_data_in[2] = (opcode_mjr_w == 7'h57 && funct6_w == 6'h17) ? vr_data_out[0] : 'hDEADBEEF; // TODO: assign second option to ALU output or MEM output (depending on opcode)
+  assign vr_rw[2]   = ~agu_idle[2];//rst & en_vd;
+  assign vr_en[2]   = {DW_B{~agu_idle[2]}};//{DW_B{rst & en_vd}}; // TODO: add byte masking
   
 //   assign vr_en[2] = {DW_B{(rst & en_vd)}};
 
@@ -142,13 +155,17 @@ module rvv_proc_main
         if(~rst) begin
             opcode_mjr_e    <= 0;
             opcode_mnr_e    <= 0;
+            dest_e          <= 0;
             funct6_e        <= 0;
 
             opcode_mjr_m    <= 0;
             opcode_mnr_m    <= 0;
+            dest_m          <= 0;
+            funct6_m        <= 0;
           
             opcode_mjr_w    <= 0;
             opcode_mnr_w    <= 0;
+            dest_w          <= 0;
             funct6_w        <= 0;
         end else begin
             opcode_mjr_e    <= opcode_mjr;
@@ -159,6 +176,7 @@ module rvv_proc_main
             opcode_mjr_m    <= opcode_mjr;
             opcode_mnr_m    <= opcode_mnr;
             dest_m          <= dest;
+            funct6_m        <= funct6;
           
             opcode_mjr_w    <= opcode_mjr_e;
             opcode_mnr_w    <= opcode_mnr_e;

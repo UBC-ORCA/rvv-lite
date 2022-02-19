@@ -14,17 +14,17 @@ reg [ADDR_WIDTH-1:0] addr [PORTS-1:0];
 reg [DATA_WIDTH-1:0] data_in [PORTS-1:0];
 reg [DATA_WIDTH-1:0] data_out [PORTS-1:0];
   
-  // debug signals
-  reg [DATA_WIDTH-1:0] data_in_0;
-  reg [DATA_WIDTH-1:0] data_in_1;
-  reg [DATA_WIDTH-1:0] data_out_0;
-  reg [DATA_WIDTH-1:0] data_out_1;
-  reg [ADDR_WIDTH-1:0] addr_0;
-  reg [ADDR_WIDTH-1:0] addr_1;
-  reg rw_0;
-  reg rw_1;
+// debug signals
+reg [DATA_WIDTH-1:0] data_in_0;
+reg [DATA_WIDTH-1:0] data_in_1;
+reg [DATA_WIDTH-1:0] data_out_0;
+reg [DATA_WIDTH-1:0] data_out_1;
+reg [ADDR_WIDTH-1:0] addr_0;
+reg [ADDR_WIDTH-1:0] addr_1;
+reg rw_0;
+reg rw_1;
 
-  vec_regfile #(.VLEN(VLEN_B), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(PORTS)) DUT (.clk(clk), .rst(rst), .en(en), .rw(rw), .addr(addr), .data_in(data_in), .data_out(data_out));
+vec_regfile #(.VLEN(VLEN_B), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .PORTS(PORTS)) DUT (.clk(clk), .rst(rst), .en(en), .rw(rw), .addr(addr), .data_in(data_in), .data_out(data_out));
   
 assign data_in_0 = data_in[0];
 assign data_in_1 = data_in[1];

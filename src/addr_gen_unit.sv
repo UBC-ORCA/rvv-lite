@@ -32,7 +32,14 @@ module addr_gen_unit #(
           max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
         end
       end else begin
-        curr_reg <= (curr_reg === max_reg) ? 'hX : curr_reg + 1;
+        if (curr_reg === max_reg) begin
+          if (en) begin
+            curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
+            max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+          end
+        end else begin
+            curr_reg <= curr_reg + 1;
+        end
       end
     end
   end
@@ -49,7 +56,7 @@ module addr_gen_unit #(
               end
             end // IDLE
             1'b1: begin
-              state <= (curr_reg !== max_reg);
+              state <= (curr_reg !== max_reg) || en;
             end // BUSY
           default : state <= 1'b0;
         endcase
