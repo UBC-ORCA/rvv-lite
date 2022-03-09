@@ -1,3 +1,18 @@
+`include "vAdd_min_max.v"
+`include "vAndOrXor.v"
+`include "vMerge.v"
+`include "vMOP.v"
+`include "vMove.v"
+`include "vMul.v"
+`include "vNarrow.v"
+`include "vPopc.v"
+`include "vRedAndOrXor.v"
+`include "vRedAndOrXor_unit_block.v"
+`include "vRedSum_min_max.v"
+`include "vRedSum_Min_Max_unit_block.v"
+`include "vSlide.v"
+`include "vWiden.v"
+
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
     parameter REQ_DATA_WIDTH    = 64,
@@ -93,7 +108,7 @@ module vALU #(
 
     assign vSlide_in1 = vSlide_insert ? req_data1 : 'b0;
 
-    assign vAdd_en      = req_valid & ((req_func_id[5:3] == 3'b000) | (req_func_id[5:2] == 4'b1100));
+    assign vAdd_en      = req_valid & ((req_func_id[5:3] == 3'b000) || (req_func_id[5:2] == 4'b1100));
     assign vAndOrXor_en = req_valid & (req_func_id[5:2] == 4'b0010);
     assign vMinMax_en   = req_valid & (req_func_id[5:2] == 4'b0001);
     assign vMul_en      = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
@@ -433,13 +448,13 @@ module vALU #(
 
             req_be_out <= vSlide_outBe    | s5_be                 | vNarrow_be;
             
-            resp_valid <= vAdd_outValid   | vAndOrXor_outValid    | vMul_outValid   | vSlide_outValid       | vNarrow_outValid
-                        | vMerge_outValid | vMOP_outValid         | vPopc_outValid  | vRedAndOrXor_outValid | vRedSum_min_max_outValid
-                        | vMove_outValid;
+            resp_valid <= vMove_outValid | vAdd_outValid; //   || vAndOrXor_outValid    || vMul_outValid   || vSlide_outValid       || vNarrow_outValid
+//                         || vMerge_outValid || vMOP_outValid         || vPopc_outValid  || vRedAndOrXor_outValid || vRedSum_min_max_outValid
+//                         || vMove_outValid;
             
-            resp_data  <= vAdd_outVec     | vAndOrXor_outVec      | vMul_outVec     | vSlide_outVec         | vNarrow_outVec
-                        | vMerge_outVec   | vMOP_outVec           | vPopc_outVec    | vRedAndOrXor_outVec   | vRedSum_min_max_outVec
-                        | vMove_outVec;
+            resp_data  <= vMove_outVec | vAdd_outVec;//     | vAndOrXor_outVec      | vMul_outVec     | vSlide_outVec         | vNarrow_outVec
+//                         | vMerge_outVec   | vMOP_outVec           | vPopc_outVec    | vRedAndOrXor_outVec   | vRedSum_min_max_outVec
+//                         | vMove_outVec;
 
             if(req_end)
                 turn <= 'b0;

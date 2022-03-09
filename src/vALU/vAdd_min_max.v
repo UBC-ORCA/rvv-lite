@@ -1,3 +1,6 @@
+// `include "vMinMaxSelector.v"
+// `include "vAdd_unit_block.v"
+
 module vAdd_min_max #(
 	parameter REQ_DATA_WIDTH  = 64,
 	parameter RESP_DATA_WIDTH = 64,
@@ -121,12 +124,13 @@ module vAdd_min_max #(
 			s1_opSel <= s0_opSel;
 			s1_valid <= s0_valid;
 
-			s2_valid   <= s1_valid;
+          	// min-max is combinational, so this returns the value a cycle early lol
+			s2_valid   <= s0_valid;
 			s2_out_vec <= s1_opSel[4] ? w_minMax_result : w_s2_arith_result;
 			s2_equal   <= w_equal;
 			s2_gt      <= w_gt;
 			s2_lt      <= w_lt;
-			s2_opSel   <= s1_opSel;
+			s2_opSel   <= s0_opSel;
 
 			s3_valid <= s2_valid;
 			case(s2_opSel[8:5])
@@ -139,11 +143,11 @@ module vAdd_min_max #(
 				default : s3_out_vec <= s2_out_vec;
 			endcase
 
-			s4_out_vec <= s3_out_vec;
-			s4_valid   <= s3_valid;
+// 			s4_out_vec <= s3_out_vec;
+// 			s4_valid   <= s3_valid;
 
-			out_vec   <= s4_out_vec;
-			out_valid <= s4_valid;
+			out_vec   <= s3_out_vec;
+			out_valid <= s3_valid;
 		end
 	end
 

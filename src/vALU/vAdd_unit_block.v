@@ -63,6 +63,6 @@ module vAdd_unit_block #(
 						v1_sgn[1],w_vec1[15:8] ,v1_ext1,
 						v1_sgn[0],w_vec1[7:0]  ,is_sub};
 
-	assign result = w_op0 + w_op1 + carry;
+	assign result = w_op0 + w_op1;// + carry; TODO: actually add carry lol
 
 endmodule
