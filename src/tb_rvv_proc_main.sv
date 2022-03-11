@@ -1,5 +1,5 @@
-`define FILE_SIZE 38
-`define MEM_SIZE 100
+`define FILE_SIZE 50
+`define MEM_SIZE 1000
 `define VLEN 64
 `define INSN_WIDTH 32
 `define DATA_WIDTH 64
@@ -36,34 +36,16 @@ initial begin
   
   rst = 1;
   
+  // current latency is 8 cycles, lets work on reducing this maybe? or find a way to stall the pipeline so we don't have to put NOP in the test file
+  
   for (int i = 0; i < `FILE_SIZE; i++) begin
     insn_in = insn_mem[i];
     #10;
   end
   // Because of timing, we end up using the previous values.
-  // For this test, that's intended. Will add dependency checking soon.
+  // For this, that's fine. Will add dependency checking soon.
   // TODO: fix timing. currently requires NOP because of timing.
-//   insn_in = 'h5c0000d7; // v.mv.vv v0, v1
-//   #10;
-//   insn_in = 'h0; // NOP
-//   #10;
-//   insn_in = 'h5c008157; // v.mv.vv v1, v2
-//   #10;
-//   insn_in = 'h0; // NOP
-//   #10;
-//   insn_in = 'h5c0101d7; // v.mv.vv v2, v3
-//   #10;
-//   insn_in = 'h0; // NOP
-//   #10;
-//   insn_in = 'h5c018057; // v.mv.vv v3, v0
-//   #10;
-//   insn_in = 'h00110257; // v.add.vv v4, v1, v2
-//   #10;
-//   insn_in = 'h000182d7; // v.add.vv v5, v0, v3
-//   #10;
-//   insn_in = 'h00428357; // v.add.vv v6, v4, v5
-//   #10;
-//   insn_in = 'h0; // NOP -- resets pipeline
+
   #100;
   
   $finish;
