@@ -1,3 +1,13 @@
+01107057
+00000000
+5c03B057
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
 5c0000d7
 00000000
 00000000
@@ -15,14 +25,6 @@
 00000000
 00000000
 5c0101d7
-00000000
-00000000
-00000000
-00000000
-00000000
-00000000
-00000000
-5c018057
 00000000
 00000000
 00000000
@@ -50,10 +52,11 @@
 00000000
 
 // insert NOP to have 8 cycle gap between instructions with dependencies
-// v.mv.vv v0, v1
-// v.mv.vv v1, v2
-// v.mv.vv v2, v3
-// v.mv.vv v3, v0
-// v.add.vv v4, v1, v2
-// v.add.vv v5, v0, v3
-// v.add.vv v6, v4, v5
+// vsetvli a0, a0, e32, m2
+// vmv.vi v0, #7
+// vmv.vv v1, v2
+// vmv.vv v2, v3
+// vmv.vv v3, v0
+// vadd.vv v4, v1, v2
+// vadd.vv v5, v0, v3
+// vadd.vv v6, v4, v5
