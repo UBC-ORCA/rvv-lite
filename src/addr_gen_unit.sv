@@ -1,5 +1,4 @@
-module addr_gen_unit #(
-    parameter ADDR_WIDTH = 5    // this gives us 32 vectors
+module addr_gen_unit #(parameter ADDR_WIDTH = 5    // this gives us 32 vectors
 ) (
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input clk,
@@ -9,58 +8,58 @@ module addr_gen_unit #(
     input [ADDR_WIDTH-1:0] addr_in,   // register group address
     output [ADDR_WIDTH-1:0] addr_out, // output of v_reg address
     output idle             // signal to processor that we can get another address
-    );
-    
+);
+
     reg [ADDR_WIDTH-1:0] curr_reg;
     reg [ADDR_WIDTH-1:0] max_reg;
     reg state;  // STATES: IDLE, BUSY
-  
+
 //   assign reg_group = (vlmul > 3'b000 && vlmul < 3'b100);
-  assign addr_out = curr_reg;
-  assign idle_single_addr = (vlmul >= 3'b100 && ~en);
-  assign idle = ~state;// || (vlmul >= 3'b100 && ~en); // TODO: TEST THIS LOGIC LMAO
+    assign addr_out         = curr_reg;
+    assign idle_single_addr = (vlmul >= 3'b100 && ~en);
+    assign idle             = ~state;// || (vlmul >= 3'b100 && ~en); // TODO: TEST THIS LOGIC LMAO
 
-  // latching input values
-  always @(posedge clk or negedge rst) begin
-    if (~rst) begin
-      curr_reg <= 0;
-      max_reg <= 0;
-    end else begin
-      if (state == 1'b0) begin
-        if (en) begin
-          curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-          max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-        end
-      end else begin
-        if (curr_reg === max_reg) begin
-          if (en) begin
-            curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-            max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-          end
+    // latching input values
+    always @(posedge clk or negedge rst) begin
+        if (~rst) begin
+            curr_reg <= 0;
+            max_reg <= 0;
         end else begin
-            curr_reg <= curr_reg + 1;
+            if (state == 1'b0) begin
+                if (en) begin
+                    curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
+                    max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                end
+            end else begin
+                if (curr_reg === max_reg) begin
+                    if (en) begin
+                        curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
+                        max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                    end
+                end else begin
+                    curr_reg <= curr_reg + 1;
+                end
+            end
         end
-      end
     end
-  end
 
-  // STATE MACHINE :)
-  always @(posedge clk) begin
-      if (~rst) begin
-        state <= 1'b0;
-      end else begin
-        case (state)
-            1'b0: begin
-              if (en) begin
-                  state <= 1'b1;
-              end
-            end // IDLE
-            1'b1: begin
-              state <= (curr_reg !== max_reg) || en;
-            end // BUSY
-          default : state <= 1'b0;
-        endcase
-      end
-  end
+    // STATE MACHINE :)
+    always @(posedge clk) begin
+        if (~rst) begin
+            state <= 1'b0;
+        end else begin
+            case (state)
+                1'b0: begin
+                    if (en) begin
+                        state <= 1'b1;
+                    end
+                end // IDLE
+                1'b1: begin
+                    state <= (curr_reg !== max_reg) || en;
+                end // BUSY
+                default : state <= 1'b0;
+            endcase
+        end
+    end
 
 endmodule

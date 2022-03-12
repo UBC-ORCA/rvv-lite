@@ -16,8 +16,8 @@ module insn_decoder
         output [2:0] nf,
 
         // vcfg
-        output [10:0] zimm_11,
-        output [9:0]  zimm_10,
+        output [10:0] vtype_11,
+        output [9:0]  vtype_10,
         output [1:0] cfg_type,
 
         // valu
@@ -35,8 +35,8 @@ module insn_decoder
   assign vm = rst & insn_in[25];
   assign funct6 = {6{rst}} & insn_in[31:26];
   
-  assign zimm_11 = {11{rst}} & insn_in[30:20];
-  assign zimm_10 = {10{rst}} & insn_in[29:20];
+  assign vtype_11 = {11{rst}} & insn_in[30:20];
+  assign vtype_10 = {10{rst}} & insn_in[29:20];
   
   assign mop = {2{rst}} & insn_in[27:26];
   assign mew = rst & insn_in[28];

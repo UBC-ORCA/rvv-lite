@@ -40,8 +40,8 @@ module vMove #(
 // 			s3_valid <= s2_valid;
 			s4_valid <= s1_valid;
 			out_valid  <= s4_valid;
-          
-          	s0_out_vec <= {RESP_DATA_WIDTH{in_valid}} & in_vec0;
+
+			s0_out_vec <= {RESP_DATA_WIDTH{in_valid}} & in_vec0;
 			s1_out_vec <= s0_out_vec;
 // 			s2_out_vec <= s1_out_vec;
 // 			s3_out_vec <= s2_out_vec;
