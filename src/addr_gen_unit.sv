@@ -45,21 +45,11 @@ module addr_gen_unit #(parameter ADDR_WIDTH = 5    // this gives us 32 vectors
 
     // STATE MACHINE :)
     always @(posedge clk) begin
-        if (~rst) begin
-            state <= 1'b0;
-        end else begin
-            case (state)
-                1'b0: begin
-                    if (en) begin
-                        state <= 1'b1;
-                    end
-                end // IDLE
-                1'b1: begin
-                    state <= (curr_reg !== max_reg) || en;
-                end // BUSY
-                default : state <= 1'b0;
-            endcase
-        end
+        case (state)
+            1'b0: state <= rst & en; // IDLE
+            1'b1: state <= rst & (curr_reg !== max_reg) | en; // BUSY
+            default : state <= 1'b0;
+        endcase
     end
 
 endmodule
