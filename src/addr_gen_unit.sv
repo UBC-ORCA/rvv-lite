@@ -1,13 +1,14 @@
-module addr_gen_unit #(parameter ADDR_WIDTH = 5    // this gives us 32 vectors
+module addr_gen_unit #(
+    parameter ADDR_WIDTH = 5    // this gives us 32 vectors
 ) (
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
-    input clk,
-    input rst,
-    input en,
-    input [2:0] vlmul,
-    input [ADDR_WIDTH-1:0] addr_in,   // register group address
-    output [ADDR_WIDTH-1:0] addr_out, // output of v_reg address
-    output idle             // signal to processor that we can get another address
+    input                       clk,
+    input                       rst,
+    input                       en,
+    input   [2:0]               vlmul,
+    input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
+    output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
+    output                      idle             // signal to processor that we can get another address
 );
 
     reg [ADDR_WIDTH-1:0] curr_reg;
@@ -17,7 +18,7 @@ module addr_gen_unit #(parameter ADDR_WIDTH = 5    // this gives us 32 vectors
 //   assign reg_group = (vlmul > 3'b000 && vlmul < 3'b100);
     assign addr_out         = curr_reg;
     assign idle_single_addr = (vlmul >= 3'b100 && ~en);
-    assign idle             = ~state;// || (vlmul >= 3'b100 && ~en); // TODO: TEST THIS LOGIC LMAO
+    assign idle             = ~state;
 
     // latching input values
     always @(posedge clk or negedge rst) begin
