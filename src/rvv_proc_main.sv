@@ -240,7 +240,8 @@ module rvv_proc_main #(
     // FIXME - load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     
     // need to stall for register groupings
-    // TODO: stall for hazards
+    // TODO: stall for hazards within 1 cycle
+    // TODO: Add valid instruction logic, so we don't count instructions twice
     always @(posedge clk or negedge rst) begin  
         // insn_in_f <= ((hold_reg_group & reg_count > 0) | haz_src1 | haz_src2) ? insn_in_f : insn_in;
         if (~rst) begin
@@ -397,7 +398,7 @@ module rvv_proc_main #(
     // assign req_vs3 = (opcode_mjr === `ST_INSN);
     assign en_vs3 = (opcode_mjr === `ST_INSN);// && opcode_mnr >= 3'h0 && opcode_mnr <= 3'h2);
     assign en_mem_out = (opcode_mjr_m === `ST_INSN);// && opcode_mnr_m >= 3'h0 && opcode_mnr_m <= 3'h2);
-    assign en_mem_in = (opcode_mjr_m === `LD_INSN);
+    assign en_mem_in = (opcode_mjr_d === `LD_INSN);
 
     assign en_vr_port1 = en_vs1 || en_vs3;
     always_comb begin
@@ -450,10 +451,10 @@ module rvv_proc_main #(
     // LOAD
     always_ff @(posedge clk or negedge rst) begin
         if(~rst) begin
-            ld_data_in        <= 'hX;
+            ld_data_in      <= 'hX;
         end else begin
-            if (en_mem_in) begin
-                ld_data_in <= mem_port_in;
+            if (en_mem_in && mem_port_valid_in) begin
+                ld_data_in  <= mem_port_in;
             end
        end
    end
@@ -512,8 +513,8 @@ module rvv_proc_main #(
             // FIXME circular stall logic
             opcode_mjr_d    <= ~stall ? opcode_mjr : (no_bubble ? opcode_mjr_d : 'h0);
             opcode_mnr_d    <= ~stall ? opcode_mnr : (no_bubble ? opcode_mnr_d : 'h0);
-            dest_d          <= (reg_count === 'h0) ? dest : (no_bubble ? dest_d : 'h0);
-            funct6_d        <= (reg_count === 'h0) ? funct6 : (no_bubble ? funct6_d : 'h0);
+            dest_d          <= ~stall ? dest : (no_bubble ? dest_d : 'h0);
+            funct6_d        <= ~stall ? funct6 : (no_bubble ? funct6_d : 'h0);
             src_1_d         <= ~stall ? src_1 : (no_bubble ? src_1_d : 'h0);
             ld_valid        <= (opcode_mjr === `LD_INSN);
 
