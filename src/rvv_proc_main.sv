@@ -107,6 +107,7 @@ module rvv_proc_main #(
     logic [4:0] src_2_d;
     logic [4:0] dest_d;    // rd, vd, or vs3 -- TODO make better name lol
     logic [5:0] funct6_d;
+    logic       vm_d;
 
     logic [6:0] opcode_mjr_e;
     logic [2:0] opcode_mnr_e;
@@ -114,6 +115,7 @@ module rvv_proc_main #(
     logic [4:0] src_2_e;
     logic [4:0] dest_e;   // rd, vd, or vs3 -- TODO make better name lol
     logic [5:0] funct6_e;
+    logic       vm_e;
 
     logic [6:0] opcode_mjr_m;
     logic [2:0] opcode_mnr_m;
@@ -292,7 +294,7 @@ module rvv_proc_main #(
 
     // SIGN-EXTENDED IMMEDIATE FOR ALU
     always_comb begin
-        case (alu_req_sew)
+        case (sew)
             3'h0:     s_ext_imm = {{(DATA_WIDTH-8){1'b0}}, {3{src_1[4]}}, src_1};
             3'h1:     s_ext_imm = {{(DATA_WIDTH-16){1'b0}}, {11{src_1[4]}}, src_1};
             3'h2:     s_ext_imm = {{(DATA_WIDTH-32){1'b0}}, {27{src_1[4]}}, src_1};
@@ -317,17 +319,14 @@ module rvv_proc_main #(
     end
 
     // ALU INPUTS
-
-    // always @(posedge clk) begin
-    // enable ALU if ALU op AND ((VR enabled AND valu.vv) OR valu.vi OR valu.vx)
-    //     alu_req_sew <= sew;
-    // end
+    always @(posedge clk) begin
+        alu_req_sew <= sew;
+    end
 
     // ASSIGNING FIRST SOURCE BASED ON OPCODE TYPE (VX vs VI vs VV)
     always_comb begin
         // enable ALU if ALU op AND ((VR enabled AND valu.vv) OR valu.vi OR valu.vx)
         alu_enable  = (((vr_active[0] || vr_active[1]) && (opcode_mnr_e == 3'b0)) || (opcode_mnr_e == 3'b011) || (opcode_mnr_e == 3'b100)) && (opcode_mjr_e === `OP_INSN);
-        alu_req_sew = sew;
 
         case (opcode_mnr_e)
             3'h0:   alu_data_in1 = vr_data_out[0];  // valu.vv
@@ -348,8 +347,8 @@ module rvv_proc_main #(
     assign alu_data_in2 = vr_data_out[0];
 
     // TODO: update to use active low reset lol
-    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH)) alu (.clk(clk), .rst(~rst),
-        .req_valid(alu_enable), .req_func_id(funct6_e), .req_sew(alu_req_sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
+    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH)) alu (.clk(clk), .rst(~rst), .req_mask(vm_e),
+        .req_valid(alu_enable), .req_func_id(funct6_e), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out));
     //  MISSING PORT CONNECTIONS:
     //     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
@@ -444,6 +443,7 @@ module rvv_proc_main #(
             opcode_mnr_d    <= 0;
             dest_d          <= 0;
             funct6_d        <= 0;
+            vm_d            <= 0;
             src_1_d         <= 0;
             ld_valid        <= 0;
 
@@ -451,6 +451,7 @@ module rvv_proc_main #(
             opcode_mnr_e    <= 0;
             dest_e          <= 0;
             funct6_e        <= 0;
+            vm_e            <= 0;
 
             opcode_mjr_m    <= 0;
             opcode_mnr_m    <= 0;
@@ -459,16 +460,18 @@ module rvv_proc_main #(
         end else begin
             // all stalling should happen here
             // FIXME circular stall logic
-            opcode_mjr_d    <= ~stall ? opcode_mjr : (no_bubble ? opcode_mjr_d : 'h0);
-            opcode_mnr_d    <= ~stall ? opcode_mnr : (no_bubble ? opcode_mnr_d : 'h0);
-            dest_d          <= ~stall ? dest : (no_bubble ? dest_d : 'h0);
-            funct6_d        <= ~stall ? funct6 : (no_bubble ? funct6_d : 'h0);
-            src_1_d         <= ~stall ? src_1 : (no_bubble ? src_1_d : 'h0);
+            opcode_mjr_d    <= ~stall ? opcode_mjr  : (no_bubble ? opcode_mjr_d : 'h0);
+            opcode_mnr_d    <= ~stall ? opcode_mnr  : (no_bubble ? opcode_mnr_d : 'h0);
+            dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
+            funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
+            src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
+            vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b0);
 
             opcode_mjr_e    <= opcode_mjr_d;
             opcode_mnr_e    <= opcode_mnr_d;
             dest_e          <= dest_d;
             funct6_e        <= funct6_d;
+            vm_e            <= vm_d;
 
             opcode_mjr_m    <= opcode_mjr_d;
             opcode_mnr_m    <= opcode_mnr_d;
