@@ -8,7 +8,7 @@ module vec_regfile #(
 ) (
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input clk,
-    input rst,
+    input rst_n,
     input [DW_B-1:0] en [0:PORTS-1],    // no action unless high
     input [DW_B-1:0] ld_en,
     input [DW_B-1:0] st_en,
@@ -188,13 +188,13 @@ module vec_regfile #(
     // --------------------------- REGISTER TRACKING ------------------------------------
     generate
         for (i = 0; i < PORTS; i++) begin
-            always @(posedge clk or negedge rst) begin
-                curr_reg[i] <= {ADDR_WIDTH{rst}} & ((|en[i] && state[i] == 2'b00) ? addr[i] : curr_reg[i]);
+            always @(posedge clk or negedge rst_n) begin
+                curr_reg[i] <= {ADDR_WIDTH{rst_n}} & ((|en[i] && state[i] == 2'b00) ? addr[i] : curr_reg[i]);
 
                 case(state[i])
-                    2'b00:  curr_idx[i] <= (rst & |en[i] & (MAX_IDX > 0)); // If any enable bits are high, we should update
+                    2'b00:  curr_idx[i] <= (rst_n & |en[i] & (MAX_IDX > 0)); // If any enable bits are high, we should update
                     2'b01,
-                        2'b10:  curr_idx[i] <= (~rst || curr_idx[i] == MAX_IDX) ? 0 : curr_idx[i] + 1;
+                        2'b10:  curr_idx[i] <= (~rst_n || curr_idx[i] == MAX_IDX) ? 0 : curr_idx[i] + 1;
                     default: curr_idx[i] <= 0;
                 endcase
             end
@@ -202,22 +202,22 @@ module vec_regfile #(
     endgenerate
 
     // MEMORY PORT VERISONS -- LOAD
-    always @(posedge clk or negedge rst) begin
-        ld_curr_reg <= {ADDR_WIDTH{rst}} & ((|ld_en && ld_state == 1'b0) ? ld_addr : ld_curr_reg);
+    always @(posedge clk or negedge rst_n) begin
+        ld_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|ld_en && ld_state == 1'b0) ? ld_addr : ld_curr_reg);
 
         case(ld_state)
-            1'b0:   ld_curr_idx <= (rst & |ld_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   ld_curr_idx <= (~rst || ld_curr_idx == MAX_IDX) ? 0 : ld_curr_idx + 1;
+            1'b0:   ld_curr_idx <= (rst_n & |ld_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
+            1'b1:   ld_curr_idx <= (~rst_n || ld_curr_idx == MAX_IDX) ? 0 : ld_curr_idx + 1;
         endcase
     end
 
     // MEMORY PORT VERISONS -- STORE
-    always @(posedge clk or negedge rst) begin
-        st_curr_reg <= {ADDR_WIDTH{rst}} & ((|st_en && st_state == 1'b0) ? st_addr : st_curr_reg);
+    always @(posedge clk or negedge rst_n) begin
+        st_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|st_en && st_state == 1'b0) ? st_addr : st_curr_reg);
 
         case(st_state)
-            1'b0:   st_curr_idx <= (rst & |st_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   st_curr_idx <= (~rst || st_curr_idx == MAX_IDX) ? 0 : st_curr_idx + 1;
+            1'b0:   st_curr_idx <= (rst_n & |st_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
+            1'b1:   st_curr_idx <= (~rst_n || st_curr_idx == MAX_IDX) ? 0 : st_curr_idx + 1;
         endcase
     end
 
@@ -231,7 +231,7 @@ module vec_regfile #(
             assign rw_reg[i] = (MAX_IDX > 0 && curr_idx[i] >= 0) ? curr_reg[i] : addr[i];
             for (j = 0; j < DW_B; j++) begin
                 always @(posedge clk) begin
-                    if (~rst) begin
+                    if (~rst_n) begin
                         data_out[i][(j+1)*8-1:j*8] <= 8'h0;
                     end else begin
                         if (en[i][j] && ~rw[i] || state[i] == 2'b01) begin // read
@@ -250,11 +250,11 @@ module vec_regfile #(
 
         for (j = 0; j < DW_B; j++) begin
             always @(posedge clk) begin
-                if (rst & (st_en[j] | st_state)) begin
+                if (rst_n & (st_en[j] | st_state)) begin
                     st_data_out[(j+1)*8-1:j*8] <= vec_data[st_reg][st_curr_idx][(j+1)*8-1:j*8];
                 end
 
-                if (rst & (ld_en[j] | ld_state)) begin
+                if (rst_n & (ld_en[j] | ld_state)) begin
                     vec_data[ld_reg][ld_curr_idx][(j+1)*8-1:j*8] <= ld_data_in[(j+1)*8-1:j*8];
                 end
             end
@@ -268,9 +268,9 @@ module vec_regfile #(
             always @(posedge clk) begin
                 if (MAX_IDX > 0) begin
                     case (state[i])
-                        2'b00: state[i] <= {2{(rst & |en[i])}} & (rw[i] ? 2'b10 : 2'b01); // IDLE
+                        2'b00: state[i] <= {2{(rst_n & |en[i])}} & (rw[i] ? 2'b10 : 2'b01); // IDLE
                         2'b01, // BUSY_RD
-                            2'b10: state[i] <= {2{rst & (curr_idx[i] != MAX_IDX)}} & state[i]; // BUSY
+                            2'b10: state[i] <= {2{rst_n & (curr_idx[i] != MAX_IDX)}} & state[i]; // BUSY
                         default : state[i] <= 2'b00;
                     endcase
                 end else begin
@@ -283,8 +283,8 @@ module vec_regfile #(
     always @(posedge clk) begin
         if (MAX_IDX > 0) begin
             case (ld_state)
-                1'b0:   ld_state <= rst & |ld_en; // IDLE
-                1'b1:   ld_state <= rst & (ld_curr_idx != MAX_IDX) & ld_state; // BUSY
+                1'b0:   ld_state <= rst_n & |ld_en; // IDLE
+                1'b1:   ld_state <= rst_n & (ld_curr_idx != MAX_IDX) & ld_state; // BUSY
                 default: ld_state <= 1'b0;
             endcase
         end else begin
@@ -295,8 +295,8 @@ module vec_regfile #(
     always @(posedge clk) begin
         if (MAX_IDX > 0) begin
             case (st_state)
-                1'b0:   st_state <= rst & |st_en; // IDLE
-                1'b1:   st_state <= rst & (st_curr_idx != MAX_IDX) & st_state; // BUSY
+                1'b0:   st_state <= rst_n & |st_en; // IDLE
+                1'b1:   st_state <= rst_n & (st_curr_idx != MAX_IDX) & st_state; // BUSY
                 default: st_state <= 1'b0;
             endcase
         end else begin

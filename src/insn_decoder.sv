@@ -1,7 +1,7 @@
 module insn_decoder
 #(parameter INSN_WIDTH = 32)   // width of a single instruction
     (   input clk,
-        input rst,
+        input rst_n,
         input [INSN_WIDTH-1 : 0] insn_in,
         output [6:0] opcode_mjr, // OP-V, LOAD-FP, STR-FP
         output [2:0] opcode_mnr, // CFG=7, other= ALU types
@@ -25,23 +25,23 @@ module insn_decoder
         output [5:0] funct6
     );
   
-  assign opcode_mjr = {7{rst}} & insn_in[6:0];
-  assign opcode_mnr = {3{rst}} & insn_in[14:12];
+  assign opcode_mjr = {7{rst_n}} & insn_in[6:0];
+  assign opcode_mnr = {3{rst_n}} & insn_in[14:12];
   
-  assign dest = {5{rst}} & insn_in[11:7];
-  assign src_1 = {5{rst}} & insn_in[19:15];
-  assign src_2 ={5{rst}} & insn_in[24:20];
+  assign dest = {5{rst_n}} & insn_in[11:7];
+  assign src_1 = {5{rst_n}} & insn_in[19:15];
+  assign src_2 ={5{rst_n}} & insn_in[24:20];
   
-  assign vm = rst & insn_in[25];
-  assign funct6 = {6{rst}} & insn_in[31:26];
+  assign vm = rst_n & insn_in[25];
+  assign funct6 = {6{rst_n}} & insn_in[31:26];
   
-  assign vtype_11 = {11{rst}} & insn_in[30:20];
-  assign vtype_10 = {10{rst}} & insn_in[29:20];
+  assign vtype_11 = {11{rst_n}} & insn_in[30:20];
+  assign vtype_10 = {10{rst_n}} & insn_in[29:20];
   
-  assign mop = {2{rst}} & insn_in[27:26];
-  assign mew = rst & insn_in[28];
-  assign nf = {3{rst}} & insn_in[31:29];
+  assign mop = {2{rst_n}} & insn_in[27:26];
+  assign mew = rst_n & insn_in[28];
+  assign nf = {3{rst_n}} & insn_in[31:29];
   
-  assign cfg_type = {2{rst}} & insn_in[31:30];
+  assign cfg_type = {2{rst_n}} & insn_in[31:30];
 
 endmodule

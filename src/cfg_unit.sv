@@ -3,7 +3,7 @@ module cfg_unit #(
     parameter VLEN = 64
 ) (
     input                   clk,
-    input                   rst,
+    input                   rst_n,
     input                   en,
     input       [XLEN-1:0]  vtype_nxt,
     input       [1:0]       cfg_type,
@@ -16,8 +16,8 @@ module cfg_unit #(
     output reg              vta,
     output reg              vill
 );
-    always @(posedge clk or negedge rst) begin
-        if (~rst) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n) begin
             sew     <= 3'h0;
             vlmul   <= 3'h0;
             vma     <= 1'b0;

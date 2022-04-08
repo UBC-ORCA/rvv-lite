@@ -3,7 +3,7 @@ module addr_gen_unit #(
 ) (
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                       clk,
-    input                       rst,
+    input                       rst_n,
     input                       en,
     input   [2:0]               vlmul,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
@@ -21,8 +21,8 @@ module addr_gen_unit #(
     assign idle             = ~state;
 
     // latching input values
-    always @(posedge clk or negedge rst) begin
-        if (~rst) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n) begin
             curr_reg <= 0;
             max_reg <= 0;
         end else begin
@@ -47,8 +47,8 @@ module addr_gen_unit #(
     // STATE MACHINE :)
     always @(posedge clk) begin
         case (state)
-            1'b0: state <= rst & en; // IDLE
-            1'b1: state <= rst & (curr_reg !== max_reg) | en; // BUSY
+            1'b0: state <= rst_n & en; // IDLE
+            1'b1: state <= rst_n & (curr_reg !== max_reg) | en; // BUSY
             default : state <= 1'b0;
         endcase
     end

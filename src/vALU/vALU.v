@@ -90,10 +90,10 @@ assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010);
 assign vMinMax_en           = req_valid & (req_func_id[5:2] == 4'b0001);
 assign vMul_en              = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
 assign vSlide_en            = req_valid & (req_func_id[5:1] == 5'b00111);
-assign vMove_en             = req_valid & (req_func_id == 6'b010111) & ~req_mask;
+assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
-assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & req_mask;
+assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
 assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // todo
 assign vPopc_en             = 0; // req_valid & (req_func_id == 'h3F); //todo
 assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b000001 | req_func_id == 6'b000010 | req_func_id == 6'b000011) & (req_op_mnr == 3'h2);
