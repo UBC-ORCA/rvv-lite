@@ -1,6 +1,10 @@
+// `include "vMinMaxSelector.v"
+// `include "vAdd_unit_block.v"
+
 module vAdd_min_max #(
 	parameter REQ_DATA_WIDTH  = 64,
 	parameter RESP_DATA_WIDTH = 64,
+	parameter REQ_ADDR_WIDTH  = 32,
 	parameter SEW_WIDTH       = 2 ,
 	parameter OPSEL_WIDTH     = 9 ,
 	parameter MIN_MAX_ENABLE  = 1
@@ -13,41 +17,29 @@ module vAdd_min_max #(
 	input      [      SEW_WIDTH-1:0] in_sew   ,
 	input      [    OPSEL_WIDTH-1:0] in_opSel ,
 	input                            in_carry ,
+	input	   [ REQ_ADDR_WIDTH-1:0] in_addr  ,
 	output reg [RESP_DATA_WIDTH-1:0] out_vec  ,
-	output reg                       out_valid
+	output reg                       out_valid,
+	output reg [ REQ_ADDR_WIDTH-1:0] out_addr
 );
 
 	genvar i;
 
-	reg [ REQ_DATA_WIDTH-1:0] s0_vec0   ;
-	reg [ REQ_DATA_WIDTH-1:0] s0_vec1   ;
-	reg [ REQ_DATA_WIDTH-1:0] s1_vec0   ;
-	reg [ REQ_DATA_WIDTH-1:0] s1_vec1   ;
-	reg [RESP_DATA_WIDTH-1:0] s2_out_vec;
-	reg [RESP_DATA_WIDTH-1:0] s3_out_vec;
-	reg [RESP_DATA_WIDTH-1:0] s4_out_vec;
-	reg [      SEW_WIDTH-1:0] s0_sew    ;
-	reg [      SEW_WIDTH-1:0] s1_sew    ;
-	reg [    OPSEL_WIDTH-1:0] s0_opSel  ;
-	reg [    OPSEL_WIDTH-1:0] s1_opSel  ;
-	reg [    OPSEL_WIDTH-1:0] s2_opSel  ;
-	reg                       s0_valid  ;
-	reg                       s1_valid  ;
-	reg                       s2_valid  ;
-	reg                       s3_valid  ;
-	reg                       s4_valid  ;
-	reg [                7:0] s2_gt, s2_lt;
-	reg [                7:0] s2_equal  ;
+	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
+	reg [ REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
+	reg [RESP_DATA_WIDTH-1:0] s2_out_vec, s3_out_vec, s4_out_vec;
+	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew;
+	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel, s2_opSel;
+	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
+	reg [                7:0] s2_gt, s2_lt, s2_equal;
 
+	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
 	wire [REQ_DATA_WIDTH+16:0] s1_result;
 
 	wire [RESP_DATA_WIDTH-1:0] w_minMax_result  ;
 	wire [RESP_DATA_WIDTH-1:0] w_s2_arith_result;
-	wire [                7:0] w_equal          ;
-	wire [                7:0] w_gt             ;
-	wire [                7:0] w_lt             ;
-
+	wire [                7:0] w_gt, w_lt, w_equal;
 
 	generate
 		if(MIN_MAX_ENABLE == 1) begin
@@ -84,66 +76,84 @@ module vAdd_min_max #(
 
 	always @(posedge clk) begin
 		if(rst) begin
-			s0_vec0    <= 'b0;
-			s0_vec1    <= 'b0;
-			s0_sew     <= 'b0;
-			s0_valid   <= 'b0;
-			s0_opSel   <= 'b0;
-			s1_vec0    <= 'b0;
-			s1_vec1    <= 'b0;
-			s1_sew     <= 'b0;
-			s1_opSel   <= 'b0;
-			s1_valid   <= 'b0;
-			s2_valid   <= 'b0;
-			s2_out_vec <= 'b0;
-			s2_equal   <= 'b0;
-			s2_gt      <= 'b0;
-			s2_lt      <= 'b0;
-			s2_opSel   <= 'b0;
-			s3_valid   <= 'b0;
-			s4_valid   <= 'b0;
-			s3_out_vec <= 'b0;
-			s4_out_vec <= 'b0;
-			out_vec    <= 'b0;
-			out_valid  <= 'b0;
+			s0_vec0    	<= 'b0;
+			s1_vec0    	<= 'b0;
+			s0_vec1    	<= 'b0;
+			s1_vec1    	<= 'b0;
+			s2_out_vec 	<= 'b0;
+			s3_out_vec 	<= 'b0;
+			s4_out_vec 	<= 'b0;
+			out_vec    	<= 'b0;
+
+			s0_sew     	<= 'b0;
+			s1_sew     	<= 'b0;
+
+			s0_opSel   	<= 'b0;
+			s1_opSel   	<= 'b0;
+			s2_opSel   	<= 'b0;
+
+			s0_valid   	<= 'b0;
+			s1_valid   	<= 'b0;
+			s2_valid   	<= 'b0;
+			s3_valid   	<= 'b0;
+			s4_valid   	<= 'b0;
+			out_valid  	<= 'b0;
+
+			s2_equal   	<= 'b0;
+			s2_gt      	<= 'b0;
+			s2_lt      	<= 'b0;
+
+			s0_out_addr	<= 'b0;
+			s1_out_addr	<= 'b0;
+			s2_out_addr	<= 'b0;
+			s3_out_addr	<= 'b0;
+			s4_out_addr	<= 'b0;
+			out_addr   	<= 'b0;
 		end
 
 		else begin
-			s0_vec0  <= {REQ_DATA_WIDTH{in_valid}} & in_vec0;
-			s0_vec1  <= {REQ_DATA_WIDTH{in_valid}} & in_vec1;
-			s0_sew   <= {SEW_WIDTH{in_valid}} & in_sew;
-			s0_valid <= in_valid;
-			s0_opSel <= {OPSEL_WIDTH{in_valid}} & in_opSel;
+			s0_vec0  	<= {REQ_DATA_WIDTH{in_valid}} & in_vec0;
+			s0_vec1  	<= {REQ_DATA_WIDTH{in_valid}} & in_vec1;
+			s0_sew   	<= {SEW_WIDTH{in_valid}} & in_sew;
+			s0_valid 	<= in_valid;
+			s0_opSel 	<= {OPSEL_WIDTH{in_valid}} & in_opSel;
+			s0_out_addr	<= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
 
-			s1_vec0  <= s0_vec0;
-			s1_vec1  <= s0_vec1;
-			s1_sew   <= s0_sew;
-			s1_opSel <= s0_opSel;
-			s1_valid <= s0_valid;
+			s1_vec0  	<= s0_vec0;
+			s1_vec1  	<= s0_vec1;
+			s1_sew   	<= s0_sew;
+			s1_opSel 	<= s0_opSel;
+			s1_valid 	<= s0_valid;
+			s1_out_addr	<= s0_out_addr;
 
-			s2_valid   <= s1_valid;
-			s2_out_vec <= s1_opSel[4] ? w_minMax_result : w_s2_arith_result;
-			s2_equal   <= w_equal;
-			s2_gt      <= w_gt;
-			s2_lt      <= w_lt;
-			s2_opSel   <= s1_opSel;
-
-			s3_valid <= s2_valid;
+          	// min-max is combinational, so this returns the value a cycle early lol
+			s2_valid   	<= s0_valid;
+          	s2_opSel   	<= s0_opSel;
+			s2_out_addr	<= s0_out_addr;
+			s2_out_vec 	<= s1_opSel[4] ? w_minMax_result : w_s2_arith_result;
+			s2_equal   	<= w_equal;
+			s2_gt      	<= w_gt;
+			s2_lt      	<= w_lt;
+			
+			s3_valid   	<= s2_valid;
+			s3_out_addr	<= s2_out_addr;
 			case(s2_opSel[8:5])
-				4'b1000 : s3_out_vec <= s2_equal;
-				4'b1001 : s3_out_vec <= ~s2_equal;
-				4'b1101 : s3_out_vec <= (~s2_equal) & s2_gt;
-				4'b1100 : s3_out_vec <= s2_equal & s2_gt;
-				4'b1111 : s3_out_vec <= (~s2_equal) & s2_lt;
-				4'b1110 : s3_out_vec <= s2_equal & s2_lt;
-				default : s3_out_vec <= s2_out_vec;
+				4'b1000 : s3_out_vec 	<= s2_equal;
+				4'b1001 : s3_out_vec 	<= ~s2_equal;
+				4'b1101 : s3_out_vec 	<= (~s2_equal) & s2_gt;
+				4'b1100 : s3_out_vec 	<= s2_equal & s2_gt;
+				4'b1111 : s3_out_vec 	<= (~s2_equal) & s2_lt;
+				4'b1110 : s3_out_vec 	<= s2_equal & s2_lt;
+				default : s3_out_vec 	<= s2_out_vec;
 			endcase
 
-			s4_out_vec <= s3_out_vec;
-			s4_valid   <= s3_valid;
+// 			s4_out_vec <= s3_out_vec;
+// 			s4_valid   <= s3_valid;
+//          s4_out_addr <= s3_out_addr;
 
-			out_vec   <= s4_out_vec;
-			out_valid <= s4_valid;
+			out_vec   	<= s3_out_vec;
+			out_valid 	<= s3_valid;
+			out_addr  	<= s3_out_addr;
 		end
 	end
 
