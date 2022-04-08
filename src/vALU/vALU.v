@@ -7,9 +7,7 @@
 `include "vNarrow.v"
 `include "vPopc.v"
 `include "vRedAndOrXor.v"
-`include "vRedAndOrXor_unit_block.v"
 `include "vRedSum_min_max.v"
-`include "vRedSum_Min_Max_unit_block.v"
 `include "vSlide.v"
 `include "vWiden.v"
 
@@ -20,7 +18,7 @@ module vALU #(
     parameter SEW_WIDTH         = 2 ,
     parameter REQ_ADDR_WIDTH    = 32,
     parameter REQ_VL_WIDTH      = 8 ,
-    parameter REQ_BYTE_EN_WIDTH = 8 ,
+    parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH/8,
     parameter MIN_MAX_ENABLE    = 1 ,
     parameter AND_OR_XOR_ENABLE = 1 ,
     parameter ADD_SUB_ENABLE    = 1 ,
@@ -37,6 +35,7 @@ module vALU #(
     input                              clk         ,
     input                              rst         ,
     input                              req_valid   ,
+    input      [                  2:0] req_op_mnr  ,
     input      [REQ_FUNC_ID_WIDTH-1:0] req_func_id ,
     input      [        SEW_WIDTH-1:0] req_sew     ,
     input      [   REQ_DATA_WIDTH-1:0] req_data0   ,
@@ -77,28 +76,29 @@ wire                            vNarrow_en, vWiden_en;
 wire                            vSigned_op     ;
 wire                            vSlide_insert  ; //TODO: assign something
 
-wire [                 63:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec;
+wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid;
 wire [                  9:0]    vMOP_opSel, vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire                            vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en, vMove_en;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vNarrow_outAddr, vMerge_outAddr,
-                                vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr;
+                                vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr;
 
+// TODO: Update enable signals for FP instr later
 assign vAdd_en              = req_valid & ((req_func_id[5:3] == 3'b000) || (req_func_id[5:2] == 4'b1100));
 assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010);
 assign vMinMax_en           = req_valid & (req_func_id[5:2] == 4'b0001);
 assign vMul_en              = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
 assign vSlide_en            = req_valid & (req_func_id[5:1] == 5'b00111);
-assign vMove_en             = req_valid & (req_func_id == 6'b010111) & ~req_mask; // TODO: vmerge vs vmove
+assign vMove_en             = req_valid & (req_func_id == 6'b010111) & ~req_mask;
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
-assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & req_mask; // FIXME what is the op here?
-assign vMOP_en              = req_valid & (req_func_id == 'h3F); // todo
-assign vPopc_en             = req_valid & (req_func_id == 'h3F); //todo
-assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b010111 | req_func_id == 6'b000010 | req_func_id == 6'b000011);
-assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b00000    | req_func_id == 6'b000100 | req_func_id == 6'b000101
-                                | req_func_id == 6'b000110   | req_func_id == 6'b000111 );
+assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & req_mask;
+assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // todo
+assign vPopc_en             = 0; // req_valid & (req_func_id == 'h3F); //todo
+assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b000001 | req_func_id == 6'b000010 | req_func_id == 6'b000011) & (req_op_mnr == 3'h2);
+assign vRedSum_min_max_en   = req_valid & ((req_func_id == 6'b000000 | req_func_id == 6'b000100 | req_func_id == 6'b000101
+                                | req_func_id == 6'b000110   | req_func_id == 6'b000111 ) & (req_op_mnr == 3'h2));
 
 
 assign vSlide_sew           = req_data1[3] ? (req_sew + 2'b11) : (req_data1[2] ? (req_sew + 2'b10) : (req_data1[1] ? (req_sew + 2'b01) : (req_sew)));
@@ -366,7 +366,7 @@ generate
             .rst        (rst                    ),
             .in_vec0    (req_data0              ),
             .in_vec1    (req_data1              ),
-            .in_valid   (req_valid              ),
+            .in_valid   (vRedAndOrXor_en        ),
             .in_start   (req_start              ),
             .in_end     (req_end                ),
             .in_opSel   (vRedAndOrXor_opSel     ),
@@ -382,7 +382,7 @@ generate
             .rst        (rst                        ),
             .in_vec0    (req_data0                  ),
             .in_vec1    (req_data1                  ),
-            .in_valid   (req_valid                  ),
+            .in_valid   (vRedSum_min_max_en         ),
             .in_start   (req_start                  ),
             .in_end     (req_end                    ),
             .in_opSel   (vRedSum_min_max_opSel      ),

@@ -1,4 +1,4 @@
-`include "vRedSum_min_max_unit_block.v"
+`include "vRedSum_Min_Max_unit_block.v"
 
 module vRedSum_min_max #(
 	parameter REQ_DATA_WIDTH    = 64,
@@ -17,7 +17,8 @@ module vRedSum_min_max #(
 	input      	[	 OPSEL_WIDTH-1:0] 	in_opSel, 
 	input      	[	   SEW_WIDTH-1:0] 	in_sew,
 	input		[ REQ_ADDR_WIDTH-1:0] 	in_addr,
-	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec  ,
+	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec,
+	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr,
 	output reg                         	out_valid
 );
 
