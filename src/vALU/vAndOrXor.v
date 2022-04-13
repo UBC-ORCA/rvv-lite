@@ -6,15 +6,15 @@ module vAndOrXor #(
 ) (
 	input                              	clk     ,
 	input                              	rst     ,
-	input		[	REQ_ADDR_WIDTH-1:0] in_addr	,
-	input      	[	REQ_DATA_WIDTH-1:0] in_vec0 ,
-	input      	[	REQ_DATA_WIDTH-1:0] in_vec1 ,
+	input		[ REQ_ADDR_WIDTH-1:0] 	in_addr	,
+	input      	[ REQ_DATA_WIDTH-1:0] 	in_vec0 ,
+	input      	[ REQ_DATA_WIDTH-1:0] 	in_vec1 ,
 	input                              	in_valid,
-	input      	[	OPSEL_WIDTH-1:0] 	in_opSel, //01=and,10=or,11=xor
-	output reg 	[	RESP_DATA_WIDTH-1:0] out_vec,
-	output reg                         	out_valid,
-	output reg 	[	REQ_ADDR_WIDTH-1:0] out_addr,
-);
+	input      	[	 OPSEL_WIDTH-1:0] 	in_opSel, //01=and,10=or,11=xor
+	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec,
+	output reg							out_valid,
+	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr
+	);
 
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s0_vec1;
 	reg [    OPSEL_WIDTH-1:0] s0_opSel;

@@ -1,6 +1,6 @@
 module mask_regfile #(
     parameter VLEN          = 256,      // bit length of a vector
-    parameter VLEN_B        = VLEN/8    // byte length (mask length)
+    parameter VLEN_B        = VLEN/8,   // byte length (mask length)
     parameter ADDR_WIDTH    = 5,        // this gives us 32 vectors
     parameter DATA_WIDTH    = 64,       // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
     parameter PORTS         = 3,        // number of data ports

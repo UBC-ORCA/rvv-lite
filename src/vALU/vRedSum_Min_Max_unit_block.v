@@ -1,3 +1,6 @@
+`include "vMinMaxSelector.v"
+`include "vAdd_unit_block.v"
+
 module vRedSum_min_max_unit_block #(
 	parameter REQ_DATA_WIDTH  	= 32,
 	parameter RESP_DATA_WIDTH 	= 64,
@@ -23,6 +26,7 @@ module vRedSum_min_max_unit_block #(
 		.rst   	(rst 									),
 		.vec0  	(vec0[REQ_DATA_WIDTH-1:0]				),
 		.vec1  	(vec0[REQ_DATA_WIDTH*2-1:REQ_DATA_WIDTH]),
+		.carry	(1'b0 									),
 		.sew   	(sew									),
 		.opSel 	(opSel									),
 		.result	(result									)

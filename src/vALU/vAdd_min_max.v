@@ -1,5 +1,5 @@
-// `include "vMinMaxSelector.v"
-// `include "vAdd_unit_block.v"
+`include "vMinMaxSelector.v"
+`include "vAdd_unit_block.v"
 
 module vAdd_min_max #(
 	parameter REQ_DATA_WIDTH  = 64,
@@ -68,6 +68,7 @@ module vAdd_min_max #(
 		.rst   (rst      ),
 		.vec0  (s0_vec0  ),
 		.vec1  (s0_vec1  ),
+		.carry (1'b0	 ),
 		.sew   (s0_sew   ),
 		.opSel (s0_opSel ),
 		.result(s1_result)
