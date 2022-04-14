@@ -74,6 +74,9 @@ module vec_regfile #(
     reg                   ld_state;
     reg                   st_state;
 
+    // This better work lmfao
+    wire [      DW_B-1:0] wr_conflict;
+
     // --------------------------- DEBUG SIGNALS ------------------------------------
     wire [      VLEN-1:0] vec_data_0;
     wire [      VLEN-1:0] vec_data_1;
@@ -224,11 +227,20 @@ module vec_regfile #(
         assign rd_reg_2 = (MAX_IDX > 0 && rd_curr_idx_2 >= 0) ? rd_curr_reg_2 : rd_addr_2;
         assign wr_reg   = (MAX_IDX > 0 && wr_curr_idx   >= 0) ? wr_curr_reg : wr_addr;
 
+        // MEM PORTS
+        assign ld_reg   = (MAX_IDX > 0 && ld_curr_idx >= 0) ? ld_curr_reg : ld_addr;
+        assign st_reg   = (MAX_IDX > 0 && st_curr_idx >= 0) ? st_curr_reg : st_addr;
+
         // assign rd_mem_idx_1 =   rd_reg_1*DW_B   + rd_curr_idx_1;
         // assign rd_mem_idx_2 =   rd_reg_2*DW_B   + rd_curr_idx_2;
         // assign wr_mem_idx   =   wr_reg*DW_B     + wr_curr_idx;
 
+        // assign ld_mem_idx   =   ld_reg*DW_B + ld_curr_idx;
+        // assign st_mem_idx   =   st_reg*DW_B + st_curr_idx;
+
         for (j = 0; j < DW_B; j=j+1) begin
+            assign wr_conflict[j] = (wr_reg === ld_reg) && ((wr_en[j] | wr_state) & ((ld_en[j] | ld_state)));
+
             always @(posedge clk) begin
                 if (rst_n & (rd_en_1[j] | rd_state_1)) begin
                     rd_data_out_1[(j+1)*8-1:j*8]    <= vec_data[rd_reg_1][(j+1)*8-1:j*8];
@@ -237,27 +249,21 @@ module vec_regfile #(
                     rd_data_out_2[(j+1)*8-1:j*8]    <= vec_data[rd_reg_2][(j+1)*8-1:j*8];
                 end
 
-                if (rst_n & (wr_en[j] | wr_state)) begin
-                    vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
+                if (rst_n & ((wr_en[j] | wr_state) | (ld_en[j] | ld_state))) begin
+                    if (wr_conflict[j]) begin
+                        vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
+                    end else begin
+                        if (wr_en[j] | wr_state) begin
+                            vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
+                        end
+                        if (ld_en[j] | ld_state) begin
+                            vec_data[ld_reg][(j+1)*8-1:j*8] <= ld_data_in[(j+1)*8-1:j*8];
+                        end 
+                    end
                 end
-            end
-        end
 
-        // MEM PORTS
-        assign ld_reg   = (MAX_IDX > 0 && ld_curr_idx >= 0) ? ld_curr_reg : ld_addr;
-        assign st_reg   = (MAX_IDX > 0 && st_curr_idx >= 0) ? st_curr_reg : st_addr;
-
-        // assign ld_mem_idx   =   ld_reg*DW_B + ld_curr_idx;
-        // assign st_mem_idx   =   st_reg*DW_B + st_curr_idx;
-
-        for (j = 0; j < DW_B; j=j+1) begin
-            always @(posedge clk) begin
                 if (rst_n & (st_en[j] | st_state)) begin
                     st_data_out[(j+1)*8-1:j*8]  <= vec_data[st_reg][(j+1)*8-1:j*8];
-                end
-
-                if (rst_n & (ld_en[j] | ld_state)) begin
-                    vec_data[ld_reg][(j+1)*8-1:j*8] <= ld_data_in[(j+1)*8-1:j*8];
                 end
             end
         end

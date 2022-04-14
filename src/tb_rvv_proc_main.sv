@@ -1,4 +1,4 @@
-`define FILE_SIZE 20
+`define FILE_SIZE 22
 `define MEM_SIZE 100
 `define VLEN 64
 `define INSN_WIDTH 32

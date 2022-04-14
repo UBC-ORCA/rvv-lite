@@ -41,12 +41,15 @@ module rvv_proc_main #(
     wire  [      DW_B-1:0]  vr_rd_en_1;
     wire  [      DW_B-1:0]  vr_rd_en_2;
     wire  [      DW_B-1:0]  vr_wr_en;
+
     reg                     vr_rd_active_1;
     reg                     vr_rd_active_2;
+
     wire  [ADDR_WIDTH-1:0]  vr_rd_addr_1;
     wire  [ADDR_WIDTH-1:0]  vr_rd_addr_2;
     wire  [ADDR_WIDTH-1:0]  vr_wr_addr;
-    reg   [      VLEN-1:0]  vr_wr_data_in;
+
+    (* mark_debug = "true" *) reg   [      VLEN-1:0]  vr_wr_data_in;
     wire  [      VLEN-1:0]  vr_rd_data_out_1;
     wire  [      VLEN-1:0]  vr_rd_data_out_2; 
 
@@ -60,17 +63,6 @@ module rvv_proc_main #(
     reg   [INSN_WIDTH-1:0]  insn_in_f;
 
     wire                    stall;
-
-    // DEBUG
-    wire  [      VLEN-1:0]  vr_data_out_0;
-    wire  [      VLEN-1:0]  vr_data_out_1;
-    wire  [      VLEN-1:0]  vr_data_out_2;
-    wire  [      VLEN-1:0]  vr_data_in_0;
-    wire  [      VLEN-1:0]  vr_data_in_1;
-    wire  [      VLEN-1:0]  vr_data_in_2;
-    wire  [ADDR_WIDTH-1:0]  vr_addr_0;
-    wire  [ADDR_WIDTH-1:0]  vr_addr_1;
-    wire  [ADDR_WIDTH-1:0]  vr_addr_2;
 
     // insn decomposition -- mostly general
     wire  [           6:0]  opcode_mjr;
