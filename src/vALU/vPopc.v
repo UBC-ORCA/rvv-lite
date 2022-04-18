@@ -16,7 +16,7 @@ module vPopc #(
 	input 							 	in_start,
 	input 							 	in_end,
 	input 		[   REQ_ADDR_WIDTH-1:0] in_addr,
-	output reg 	[RESP_DATA_WIDTH/8-1:0] out_vec,
+	output reg 	[  RESP_DATA_WIDTH-1:0] out_vec,
 	output reg 	[   REQ_ADDR_WIDTH-1:0] out_addr,
 	output reg						 	out_valid
 	);
@@ -67,7 +67,7 @@ module vPopc #(
 		end
 
 		else begin
-			s0_mask 	<= in_m0 & {8{in_valid}};
+			s0_mask 	<= in_m0 & {(REQ_DATA_WIDTH/8){in_valid}};
 			s0_sew 		<= in_sew;
 			s1_mask 	<= w_s1_mask;
 			count 		<= s4_end ? 'b0 : w_count;

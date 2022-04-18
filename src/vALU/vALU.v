@@ -94,8 +94,8 @@ assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
-assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // todo
-assign vPopc_en             = 0; // req_valid & (req_func_id == 'h3F); //todo
+assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // TODO
+assign vPopc_en             = 0; // req_valid & (req_func_id == 'h3F); // TODO
 assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b000001 | req_func_id == 6'b000010 | req_func_id == 6'b000011) & (req_op_mnr == 3'h2);
 assign vRedSum_min_max_en   = req_valid & ((req_func_id == 6'b000000 | req_func_id == 6'b000100 | req_func_id == 6'b000101
                                 | req_func_id == 6'b000110   | req_func_id == 6'b000111 ) & (req_op_mnr == 3'h2));

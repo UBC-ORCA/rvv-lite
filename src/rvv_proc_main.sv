@@ -35,7 +35,8 @@ module rvv_proc_main #(
     output reg  [    DATA_WIDTH-1:0]    mem_port_out,
     output reg  [MEM_ADDR_WIDTH-1:0]    mem_port_addr_out,
     output reg                          mem_port_valid_out,
-    output                              proc_rdy
+    output                              proc_rdy,
+    output      [          VLEN-1:0]    zz_vr_input_data
     // TODO: add register config outputs?
 );
     wire  [      DW_B-1:0]  vr_rd_en_1;
@@ -49,7 +50,7 @@ module rvv_proc_main #(
     wire  [ADDR_WIDTH-1:0]  vr_rd_addr_2;
     wire  [ADDR_WIDTH-1:0]  vr_wr_addr;
 
-    (* mark_debug = "true" *) reg   [      VLEN-1:0]  vr_wr_data_in;
+    reg   [      VLEN-1:0]  vr_wr_data_in;
     wire  [      VLEN-1:0]  vr_rd_data_out_1;
     wire  [      VLEN-1:0]  vr_rd_data_out_2; 
 
@@ -412,6 +413,8 @@ module rvv_proc_main #(
     end
 
     assign vr_wr_en = {DW_B{~agu_idle_wr}}; // TODO: add byte masking
+
+    assign zz_vr_input_data = alu_data_out;
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
     assign no_bubble = hold_reg_group & ~(haz_src1 | haz_src2 | haz_str);

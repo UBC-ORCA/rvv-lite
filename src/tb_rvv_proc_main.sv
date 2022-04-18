@@ -22,6 +22,8 @@ logic                       mem_port_ready_out;
 logic [    `DATA_WIDTH-1:0] mem_port_out;
 logic [`MEM_ADDR_WIDTH-1:0] mem_port_addr_out;
 logic                       mem_port_valid_out;
+
+logic [          `VLEN-1:0] zz_vr_input_data;
   
 integer unsigned            idx;
 integer unsigned            t;
@@ -29,7 +31,8 @@ integer unsigned            t;
   rvv_proc_main #(.VLEN(`VLEN), .NUM_VEC(`NUM_VEC), .INSN_WIDTH(`INSN_WIDTH), .DATA_WIDTH(`DATA_WIDTH), .MEM_ADDR_WIDTH(`MEM_ADDR_WIDTH))
             DUT ( .clk(clk), .rst_n(rst_n), .insn_in(insn_in), .mem_port_in(mem_port_in), .mem_port_valid_in(mem_port_valid_in),
                   .mem_port_ready_out(mem_port_ready_out), .mem_port_out(mem_port_out), .mem_port_addr_out(mem_port_addr_out),
-                  .mem_port_valid_out(mem_port_valid_out), .proc_rdy(proc_ready), .insn_valid(insn_valid));
+                  .mem_port_valid_out(mem_port_valid_out), .proc_rdy(proc_ready), .insn_valid(insn_valid),
+                  .zz_vr_input_data(zz_vr_input_data)); // DEBUG SIGNALS
   
 initial begin
   clk = 0;
