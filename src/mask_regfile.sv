@@ -10,126 +10,94 @@ module mask_regfile #(
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                           clk,
     input                           rst_n,
-    input                           en      [0:PORTS-1],    // no action unless high
-    input                           ld_en,
-    input                           st_en,
-    input                           rw      [0:PORTS-1],    // 0 == read, 1 == write -- change this to separate read and write
-    input       [ADDR_WIDTH-1:0]    addr    [0:PORTS-1],    // 32 possible vector registers -- TODO: would like to make this SP eventually!
+    input       [      DW_B-1:0]    rd_en_1,
+    input       [      DW_B-1:0]    rd_en_2,
+    input       [      DW_B-1:0]    wr_en,
+    input       [      DW_B-1:0]    ld_en,
+    input       [      DW_B-1:0]    st_en,
+    input       [ADDR_WIDTH-1:0]    rd_addr_1,
+    input       [ADDR_WIDTH-1:0]    rd_addr_2,
+    input       [ADDR_WIDTH-1:0]    wr_addr,
     input       [ADDR_WIDTH-1:0]    ld_addr,
     input       [ADDR_WIDTH-1:0]    st_addr,
-    input       [      DW_B-1:0]    data_in [0:PORTS-1],    // write 8 mask bits at a time
-    input       [      DW_B-1:0]    ld_data_in,
-    output reg  [      DW_B-1:0]    st_data_out,
-    output reg  [      DW_B-1:0]    data_out[0:PORTS-1]     // read 8 mask bits at a time
+    input       [DATA_WIDTH-1:0]    wr_data_in, // write 64 bits at a time
+    input       [DATA_WIDTH-1:0]    ld_data_in,
+    // input [7:0] num_elems, // we can know this from vsetvli
+    output reg  [DATA_WIDTH-1:0]    st_data_out,
+    output reg  [DATA_WIDTH-1:0]    rd_data_out_1, // read 64 bits at a time
+    output reg  [DATA_WIDTH-1:0]    rd_data_out_2 
 );
 
     parameter MAX_IDX   = VLEN_B/DW_B - 1;
     parameter IDX_BITS  = $clog2(MAX_IDX + 1); // screw it I can't do the math rn
 
-    logic [  IDX_BITS-1:0] curr_idx     [0:PORTS-1];
-    logic [ADDR_WIDTH-1:0] curr_reg     [0:PORTS-1]; // latch current register just in case input changes!
+    reg [  IDX_BITS-1:0] rd_curr_idx_1;
+    reg [  IDX_BITS-1:0] rd_curr_idx_2; 
+    reg [  IDX_BITS-1:0] wr_curr_idx;
+    reg [  IDX_BITS-1:0] ld_curr_idx;
+    reg [  IDX_BITS-1:0] st_curr_idx;
 
-    logic [  IDX_BITS-1:0] ld_curr_idx;
-    logic [ADDR_WIDTH-1:0] ld_curr_reg;
+    // latch current register just in case input changes!
+    reg [ADDR_WIDTH-1:0] rd_curr_reg_1;
+    reg [ADDR_WIDTH-1:0] rd_curr_reg_2;
+    reg [ADDR_WIDTH-1:0] wr_curr_reg;
+    reg [ADDR_WIDTH-1:0] ld_curr_reg;
+    reg [ADDR_WIDTH-1:0] st_curr_reg;
 
-    logic [  IDX_BITS-1:0] st_curr_idx;
-    logic [ADDR_WIDTH-1:0] st_curr_reg;
-
-    logic [ADDR_WIDTH-1:0] rw_reg       [0:PORTS-1];
-    logic [ADDR_WIDTH-1:0] ld_reg;
-    logic [ADDR_WIDTH-1:0] st_reg;
-
-    logic [ADDR_WIDTH-1:0] rw_reg_2;
-
-    logic [ADDR_WIDTH-1:0] data_start   [0:PORTS-1];
-    logic [ADDR_WIDTH-1:0] data_end     [0:PORTS-1];
+    wire [ADDR_WIDTH-1:0] rd_reg_1;
+    wire [ADDR_WIDTH-1:0] rd_reg_2;
+    wire [ADDR_WIDTH-1:0] wr_reg; 
+    wire [ADDR_WIDTH-1:0] ld_reg;
+    wire [ADDR_WIDTH-1:0] st_reg;
 
     // TODO: add request queue (using num_elems and busy flag) so we don't have to wait on requests to return always
 
     // TODO: change to a byte-addressable space, for strided reads.
-    logic [VLEN_B/DW_B-1:0][DW_B-1:0] mask_data [0:NUM_VECS-1];
+    reg [     VLEN_B-1:0] mask_data [0:NUM_VECS-1];
 
-    logic [1:0] state [PORTS-1:0];  // STATES: IDLE, BUSY_R, BUSY_W
-    logic ld_state;
-    logic st_state;
+    // STATES: IDLE, BUSY
+    reg                   rd_state_1;
+    reg                   rd_state_2;
+    reg                   wr_state;
+    reg                   ld_state;
+    reg                   st_state;
+
+    // This better work lmfao
+    wire [       DW_B-1:0] wr_conflict;
 
     // --------------------------- DEBUG SIGNALS ------------------------------------
-    logic [1:0] state_0;
-    logic [1:0] state_1;
-    logic [1:0] state_2;
-
-    logic [DW_B-1:0] en_0;
-    logic [DW_B-1:0] en_1;
-    logic [DW_B-1:0] en_2;
-
-    logic rw_0;
-    logic rw_1;
-    logic rw_2;
-
-    logic [5:0] please;
-
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_0;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_1;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_2;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_3;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_4;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_5;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_6;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_7;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_8;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_9;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_10;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_11;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_12;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_13;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_14;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_15;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_16;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_17;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_18;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_19;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_20;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_21;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_22;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_23;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_24;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_25;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_26;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_27;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_28;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_29;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_30;
-    logic [VLEN_B/DW_B - 1:0][DW_B-1:0] mask_data_31;
-
-    logic [IDX_BITS - 1:0] curr_idx_0;
-    logic [IDX_BITS - 1:0] curr_idx_1;
-    logic [IDX_BITS - 1:0] curr_idx_2;
-
-    logic [ADDR_WIDTH-1:0] curr_reg_0;
-    logic [ADDR_WIDTH-1:0] curr_reg_1;
-    logic [ADDR_WIDTH-1:0] curr_reg_2;
-
-    assign curr_idx_0 = curr_idx[0];
-    assign curr_idx_1 = curr_idx[1];
-    assign curr_idx_2 = curr_idx[2];
-
-    assign curr_reg_0 = curr_reg[0];
-    assign curr_reg_1 = curr_reg[1];
-    assign curr_reg_2 = curr_reg[2];
-
-    assign rw_reg_2 = rw_reg[2];
-
-    assign state_0 = state[0];
-    assign state_1 = state[1];
-    assign state_2 = state[2];
-
-    assign en_0 = en[0];
-    assign en_1 = en[1];
-    assign en_2 = en[2];
-
-    assign rw_0 = rw[0];
-    assign rw_1 = rw[1];
-    assign rw_2 = rw[2];
+    wire  [    VLEN_B-1:0] mask_data_0;
+    wire  [    VLEN_B-1:0] mask_data_1;
+    wire  [    VLEN_B-1:0] mask_data_2;
+    wire  [    VLEN_B-1:0] mask_data_3;
+    wire  [    VLEN_B-1:0] mask_data_4;
+    wire  [    VLEN_B-1:0] mask_data_5;
+    wire  [    VLEN_B-1:0] mask_data_6;
+    wire  [    VLEN_B-1:0] mask_data_7;
+    wire  [    VLEN_B-1:0] mask_data_8;
+    wire  [    VLEN_B-1:0] mask_data_9;
+    wire  [    VLEN_B-1:0] mask_data_10;
+    wire  [    VLEN_B-1:0] mask_data_11;
+    wire  [    VLEN_B-1:0] mask_data_12;
+    wire  [    VLEN_B-1:0] mask_data_13;
+    wire  [    VLEN_B-1:0] mask_data_14;
+    wire  [    VLEN_B-1:0] mask_data_15;
+    wire  [    VLEN_B-1:0] mask_data_16;
+    wire  [    VLEN_B-1:0] mask_data_17;
+    wire  [    VLEN_B-1:0] mask_data_18;
+    wire  [    VLEN_B-1:0] mask_data_19;
+    wire  [    VLEN_B-1:0] mask_data_20;
+    wire  [    VLEN_B-1:0] mask_data_21;
+    wire  [    VLEN_B-1:0] mask_data_22;
+    wire  [    VLEN_B-1:0] mask_data_23;
+    wire  [    VLEN_B-1:0] mask_data_24;
+    wire  [    VLEN_B-1:0] mask_data_25;
+    wire  [    VLEN_B-1:0] mask_data_26;
+    wire  [    VLEN_B-1:0] mask_data_27;
+    wire  [    VLEN_B-1:0] mask_data_28;
+    wire  [    VLEN_B-1:0] mask_data_29;
+    wire  [    VLEN_B-1:0] mask_data_30;
+    wire  [    VLEN_B-1:0] mask_data_31;
 
     assign mask_data_0  = mask_data[0];
     assign mask_data_1  = mask_data[1];
@@ -173,31 +141,45 @@ module mask_regfile #(
     genvar i;
     genvar j;
 
+    integer c, d;
+
     generate
         initial begin
-            for (int c = 0; c < 4; c++) begin
-                for (int d = 0; d < MAX_IDX + 1; d++) begin
-                    mask_data[c][d] <= {DB_B{1'b1}};
-                end
+            for (c = 0; c < NUM_VECS; c=c+1) begin
+                mask_data[c] <= {DW_B{1'b1}};
             end
         end
     endgenerate
 
     // --------------------------- REGISTER TRACKING ------------------------------------
-    generate
-        for (i = 0; i < PORTS; i++) begin
-            always @(posedge clk or negedge rst_n) begin
-                curr_reg[i] <= {ADDR_WIDTH{rst_n}} & ((|en[i] && state[i] == 2'b00) ? addr[i] : curr_reg[i]);
+    // READ PORTS
+    always @(posedge clk or negedge rst_n) begin
+        rd_curr_reg_1 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_1 && rd_state_1 == 1'b0) ? rd_addr_1 : rd_curr_reg_1);
 
-                case(state[i])
-                    2'b00:  curr_idx[i] <= (rst_n & |en[i] & (MAX_IDX > 0)); // If any enable bits are high, we should update
-                    2'b01,
-                    2'b10:  curr_idx[i] <= (~rst_n || curr_idx[i] == MAX_IDX) ? 0 : curr_idx[i] + 1;
-                    default: curr_idx[i] <= 0;
-                endcase
-            end
-        end
-    endgenerate
+        case(rd_state_1)
+            1'b0:   rd_curr_idx_1 <= (rst_n & |rd_en_1 & (MAX_IDX > 0)); // If any enable bits are high, we should update
+            1'b1:   rd_curr_idx_1 <= (~rst_n || rd_curr_idx_1 == MAX_IDX) ? 0 : rd_curr_idx_1 + 1;
+        endcase
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        rd_curr_reg_2 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_2 && rd_state_2 == 1'b0) ? rd_addr_2 : rd_curr_reg_2);
+
+        case(rd_state_2)
+            1'b0:   rd_curr_idx_2 <= (rst_n & |rd_en_2 & (MAX_IDX > 0)); // If any enable bits are high, we should update
+            1'b1:   rd_curr_idx_2 <= (~rst_n || rd_curr_idx_2 == MAX_IDX) ? 0 : rd_curr_idx_2 + 1;
+        endcase
+    end
+
+    // WRITE PORTS
+    always @(posedge clk or negedge rst_n) begin
+        wr_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|wr_en && wr_state == 1'b0) ? wr_addr : wr_curr_reg);
+
+        case(ld_state)
+            1'b0:   wr_curr_idx <= (rst_n & |wr_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
+            1'b1:   wr_curr_idx <= (~rst_n || wr_curr_idx == MAX_IDX) ? 0 : wr_curr_idx + 1;
+        endcase
+    end
 
     // MEMORY PORT VERISONS -- LOAD
     always @(posedge clk or negedge rst_n) begin
@@ -225,76 +207,115 @@ module mask_regfile #(
 
     // --------------------------- READING AND WRITING ------------------------------------
     generate
-        for (i = 0; i < PORTS; i++) begin
-            assign rw_reg[i] = (MAX_IDX > 0 && curr_idx[i] >= 0) ? curr_reg[i] : addr[i];
+        // WHICH REG DO WE READ FROM NOW
+        // ALU PORTS
+        assign rd_reg_1 = (MAX_IDX > 0 && rd_curr_idx_1 >= 0) ? rd_curr_reg_1 : rd_addr_1;
+        assign rd_reg_2 = (MAX_IDX > 0 && rd_curr_idx_2 >= 0) ? rd_curr_reg_2 : rd_addr_2;
+        assign wr_reg   = (MAX_IDX > 0 && wr_curr_idx   >= 0) ? wr_curr_reg : wr_addr;
+
+        // MEM PORTS
+        assign ld_reg   = (MAX_IDX > 0 && ld_curr_idx >= 0) ? ld_curr_reg : ld_addr;
+        assign st_reg   = (MAX_IDX > 0 && st_curr_idx >= 0) ? st_curr_reg : st_addr;
+
+        // assign rd_mem_idx_1 =   rd_reg_1*DW_B   + rd_curr_idx_1;
+        // assign rd_mem_idx_2 =   rd_reg_2*DW_B   + rd_curr_idx_2;
+        // assign wr_mem_idx   =   wr_reg*DW_B     + wr_curr_idx;
+
+        // assign ld_mem_idx   =   ld_reg*DW_B + ld_curr_idx;
+        // assign st_mem_idx   =   st_reg*DW_B + st_curr_idx;
+
+        for (j = 0; j < DW_B; j=j+1) begin
+            assign wr_conflict[j] = (wr_reg === ld_reg) && ((wr_en[j] | wr_state) & ((ld_en[j] | ld_state)));
+
             always @(posedge clk) begin
-                if (~rst_n) begin
-                    data_out[i] <= {DW_B{1'b1}};    // reset to all high
-                end else begin
-                    if (en[i][j] && ~rw[i] || state[i] == 2'b01) begin // read
-                        data_out[i] <= mask_data[rw_reg[i]][curr_idx[i]];
-                    end else if (en[i] && rw[i] || state[i] == 2'b10) begin
-                        mask_data[rw_reg[i]][curr_idx[i]] <= data_in[i];
+                if (rst_n & (rd_en_1[j] | rd_state_1)) begin
+                    rd_data_out_1[j]    <= mask_data[rd_reg_1][j];
+                end
+                if (rst_n & (rd_en_2[j] | rd_state_2)) begin
+                    rd_data_out_2[j]    <= mask_data[rd_reg_2][j];
+                end
+
+                if (rst_n & ((wr_en[j] | wr_state) | (ld_en[j] | ld_state))) begin
+                    if (wr_conflict[j]) begin
+                        mask_data[wr_reg][j] <= wr_data_in[j];
+                    end else begin
+                        if (wr_en[j] | wr_state) begin
+                            mask_data[wr_reg][j] <= wr_data_in[j];
+                        end
+                        if (ld_en[j] | ld_state) begin
+                            mask_data[ld_reg][j] <= ld_data_in[j];
+                        end 
                     end
                 end
-            end
-        end
 
-        // LOAD WRITING AND STORE READING
-        assign ld_reg = (MAX_IDX > 0 && ld_curr_idx >= 0) ? ld_curr_reg : ld_addr;
-        assign st_reg = (MAX_IDX > 0 && st_curr_idx >= 0) ? st_curr_reg : st_addr;
-
-        always @(posedge clk) begin
-            if (rst_n & (st_en | st_state)) begin
-                st_data_out <= mask_data[st_reg][st_curr_idx];
-            end
-
-            if (rst_n & (ld_en | ld_state)) begin
-                mask_data[ld_reg][ld_curr_idx] <= ld_data_in;
+                if (rst_n & (st_en[j] | st_state)) begin
+                    st_data_out[j]  <= mask_data[st_reg][j];
+                end
             end
         end
     endgenerate
 
 
     // --------------------------- STATE MACHINES :) ---------------------------------------
-    generate
-        for (i = 0; i < PORTS; i++) begin
-            always @(posedge clk) begin
-                if (MAX_IDX > 0) begin
-                    case (state[i])
-                        2'b00: state[i] <= {2{(rst_n & |en[i])}} & (rw[i] ? 2'b10 : 2'b01); // IDLE
-                        2'b01, // BUSY_RD
-                            2'b10: state[i] <= {2{rst_n & (curr_idx[i] != MAX_IDX)}} & state[i]; // BUSY
-                        default : state[i] <= 2'b00;
-                    endcase
-                end else begin
-                    state[i] <= 2'b00;
-                end
-            end
+    // ALU PORT STATES
+    always @(posedge clk) begin
+        if (MAX_IDX > 0) begin
+            case (rd_state_1)
+                1'b0:       rd_state_1  <= rst_n & |rd_en_1; // IDLE
+                1'b1:       rd_state_1  <= rst_n & (rd_curr_idx_1 != MAX_IDX) & rd_state_1; // BUSY
+                default:    rd_state_1  <= 1'b0;
+            endcase
+        end else begin
+            rd_state_1  <= 2'b0;
         end
-    endgenerate
+    end
 
     always @(posedge clk) begin
         if (MAX_IDX > 0) begin
-            case (ld_state)
-                1'b0:   ld_state <= rst_n & |ld_en; // IDLE
-                1'b1:   ld_state <= rst_n & (ld_curr_idx != MAX_IDX) & ld_state; // BUSY
-                default: ld_state <= 1'b0;
+            case (rd_state_2)
+                1'b0:       rd_state_2  <= rst_n & |rd_en_2; // IDLE
+                1'b1:       rd_state_2  <= rst_n & (rd_curr_idx_2 != MAX_IDX) & rd_state_2; // BUSY
+                default:    rd_state_2  <= 1'b0;
             endcase
         end else begin
-            ld_state <= 2'b0;
+            rd_state_2  <= 2'b0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if (MAX_IDX > 0) begin
+            case (wr_state)
+                1'b0:       wr_state    <= rst_n & |wr_en; // IDLE
+                1'b1:       wr_state    <= rst_n & (wr_curr_idx != MAX_IDX) & wr_state; // BUSY
+                default:    wr_state    <= 1'b0;
+            endcase
+        end else begin
+            wr_state    <= 2'b0;
+        end
+    end
+
+    // MEM PORT STATES
+    always @(posedge clk) begin
+        if (MAX_IDX > 0) begin
+            case (ld_state)
+                1'b0:       ld_state    <= rst_n & |ld_en; // IDLE
+                1'b1:       ld_state    <= rst_n & (ld_curr_idx != MAX_IDX) & ld_state; // BUSY
+                default:    ld_state    <= 1'b0;
+            endcase
+        end else begin
+            ld_state    <= 2'b0;
         end
     end
 
     always @(posedge clk) begin
         if (MAX_IDX > 0) begin
             case (st_state)
-                1'b0:   st_state <= rst_n & |st_en; // IDLE
-                1'b1:   st_state <= rst_n & (st_curr_idx != MAX_IDX) & st_state; // BUSY
-                default: st_state <= 1'b0;
+                1'b0:       st_state    <= rst_n & |st_en; // IDLE
+                1'b1:       st_state    <= rst_n & (st_curr_idx != MAX_IDX) & st_state; // BUSY
+                default:    st_state    <= 1'b0;
             endcase
         end else begin
-            st_state <= 2'b0;
+            st_state    <= 2'b0;
         end
     end
 

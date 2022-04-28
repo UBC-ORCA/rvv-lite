@@ -2,7 +2,7 @@ import spinal.core._
 import vexriscv.plugin.Plugin
 import vexriscv.{Stageable, DecoderService, VexRiscv}
 
-class RVVLitePlugin extends Plugin[VexRiscv]{
+class RVVLitePlugin extends CfuPlugin[VexRiscv]{
   //Define the concept of IS_SIMD_ADD signals, which specify if the current instruction is destined for this plugin
   object IS_VECTOR extends Stageable(Bool)
 
@@ -122,6 +122,9 @@ class RVVLitePlugin extends Plugin[VexRiscv]{
         RS2_USE               -> True  // Same as above but for RS2.
       )
     )
+
+
+
 
   }
 

@@ -1,4 +1,5 @@
 `include "vec_regfile.sv"
+`include "mask_regfile.sv"
 `include "insn_decoder.sv"
 `include "addr_gen_unit.sv"
 `include "cfg_unit.sv"
@@ -23,7 +24,9 @@ module rvv_proc_main #(
     parameter DATA_WIDTH        = 64,
     parameter DW_B              = DATA_WIDTH/8, // DATA_WIDTH in bytes
     parameter ADDR_WIDTH        = 5,            //$clog2(NUM_VEC)
-    parameter MEM_ADDR_WIDTH    = 5            // WE ONLY HAVE MEM ADDRESSES AS REGISTER IDS RIGHT NOW
+    parameter MEM_ADDR_WIDTH    = 32,           // We need to get this from VexRiscV
+    parameter MEM_DATA_WIDTH    = 64,
+    parameter VEX_DATA_WIDTH    = 32
 ) (
     input                               clk,
     input                               rst_n,
@@ -31,28 +34,47 @@ module rvv_proc_main #(
     input                               insn_valid,
     input       [    DATA_WIDTH-1:0]    mem_port_in,
     input                               mem_port_valid_in,
+    input       [VEX_DATA_WIDTH-1:0]    vexrv_data_in_1,    // memory address from load/store command?
+    input       [VEX_DATA_WIDTH-1:0]    vexrv_data_in_2,
     output                              mem_port_ready_out,
-    output reg  [    DATA_WIDTH-1:0]    mem_port_out,
+    output reg  [MEM_DATA_WIDTH-1:0]    mem_port_out,
     output reg  [MEM_ADDR_WIDTH-1:0]    mem_port_addr_out,
+    output                              mem_port_req,       // signal dicating request vs write I guess?
     output reg                          mem_port_valid_out,
     output                              proc_rdy,
+    output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out,   // in theory anything writing to a scalar register should already know the dest register right?
     output      [          VLEN-1:0]    zz_vr_input_data
     // TODO: add register config outputs?
 );
     wire  [      DW_B-1:0]  vr_rd_en_1;
     wire  [      DW_B-1:0]  vr_rd_en_2;
     wire  [      DW_B-1:0]  vr_wr_en;
+    
+    wire  [      DW_B-1:0]  vm_rd_en_1;
+    wire  [      DW_B-1:0]  vm_rd_en_2;
+    wire  [      DW_B-1:0]  vm_wr_en;
 
     reg                     vr_rd_active_1;
     reg                     vr_rd_active_2;
+
+    reg                     vm_rd_active_1;
+    reg                     vm_rd_active_2;
 
     wire  [ADDR_WIDTH-1:0]  vr_rd_addr_1;
     wire  [ADDR_WIDTH-1:0]  vr_rd_addr_2;
     wire  [ADDR_WIDTH-1:0]  vr_wr_addr;
 
+    wire  [ADDR_WIDTH-1:0]  vm_rd_addr_1;
+    wire  [ADDR_WIDTH-1:0]  vm_rd_addr_2;
+    wire  [ADDR_WIDTH-1:0]  vm_wr_addr;
+
     reg   [      VLEN-1:0]  vr_wr_data_in;
     wire  [      VLEN-1:0]  vr_rd_data_out_1;
-    wire  [      VLEN-1:0]  vr_rd_data_out_2; 
+    wire  [      VLEN-1:0]  vr_rd_data_out_2;
+
+    reg   [      VLEN-1:0]  vm_wr_data_in;
+    wire  [      VLEN-1:0]  vm_rd_data_out_1;
+    wire  [      VLEN-1:0]  vm_rd_data_out_2; 
 
     wire  [      DW_B-1:0]  vr_ld_en;
     wire  [      DW_B-1:0]  vr_st_en;
@@ -60,6 +82,13 @@ module rvv_proc_main #(
     wire  [ADDR_WIDTH-1:0]  vr_st_addr;
     reg   [      VLEN-1:0]  vr_ld_data_in;
     wire  [      VLEN-1:0]  vr_st_data_out;
+
+    wire  [      DW_B-1:0]  vm_ld_en;
+    wire  [      DW_B-1:0]  vm_st_en;
+    wire  [ADDR_WIDTH-1:0]  vm_ld_addr;
+    wire  [ADDR_WIDTH-1:0]  vm_st_addr;
+    reg   [      VLEN-1:0]  vm_ld_data_in;
+    wire  [      VLEN-1:0]  vm_st_data_out;
 
     reg   [INSN_WIDTH-1:0]  insn_in_f;
 
@@ -77,6 +106,8 @@ module rvv_proc_main #(
     wire  [           1:0]  mop;
     wire                    mew;
     wire  [           2:0]  nf;
+
+    wire                    mask_en;
 
     // vcfg
     wire  [          10:0]  vtype_11;
@@ -211,6 +242,11 @@ module rvv_proc_main #(
                 .rd_en_1(vr_rd_en_1),.rd_en_2(vr_rd_en_2),.wr_en(vr_wr_en),.ld_en(vr_ld_en),.st_en(vr_st_en),
                 .rd_addr_1(vr_rd_addr_1),.rd_addr_2(vr_rd_addr_2),.wr_addr(vr_wr_addr),.ld_addr(vr_ld_addr),.st_addr(vr_st_addr),
                 .wr_data_in(vr_wr_data_in),.ld_data_in(vr_ld_data_in),.st_data_out(vr_st_data_out),.rd_data_out_1(vr_rd_data_out_1),.rd_data_out_2(vr_rd_data_out_2));
+
+    mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) vm (.clk(clk),.rst_n(rst_n),
+                .rd_en_1(vm_rd_en_1),.rd_en_2(vm_rd_en_2),.wr_en(vm_wr_en),.ld_en(vm_ld_en),.st_en(vm_st_en),
+                .rd_addr_1(vm_rd_addr_1),.rd_addr_2(vm_rd_addr_2),.wr_addr(vm_wr_addr),.ld_addr(vm_ld_addr),.st_addr(vr_st_addr),
+                .wr_data_in(vm_wr_data_in),.ld_data_in(vm_ld_data_in),.st_data_out(vm_st_data_out),.rd_data_out_1(vm_rd_data_out_1),.rd_data_out_2(vm_rd_data_out_2));
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .rst_n(rst_n), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1),
         .avl(avl), .sew(sew), .vlmul(vlmul), .vma(vma), .vta(vta), .vill(vill));
