@@ -3,4 +3,4 @@
 	url = git@github.com:SpinalHDL/VexRiscv.git
 [submodule "CFU-Playground"]
 	path = CFU-Playground
-	url = ./CFU-Playground
+	url = git@github.com:Carol-White/CFU-Playground.git
