@@ -33,5 +33,3 @@ module rvv_proc_wrapper #(
                            .mem_port_ready_out(mem_port_ready_out), .mem_port_out(mem_port_out), .mem_port_req(mem_port_req_out), .mem_port_addr_out(mem_port_addr_out), .mem_port_valid_out(mem_port_valid_out),
                            .proc_rdy(proc_rdy), .vexrv_data_in_1(vexrv_data_in_1), .vexrv_data_in_2(vexrv_data_in_2), .vexrv_data_out(vexrv_data_out));
 endmodule
-
-// TODO: change signals back to reg/wire in proc because vivado hates them :)

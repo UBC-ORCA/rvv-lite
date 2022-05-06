@@ -243,7 +243,7 @@ module rvv_proc_main #(
                 .rd_addr_1(vr_rd_addr_1),.rd_addr_2(vr_rd_addr_2),.wr_addr(vr_wr_addr),.ld_addr(vr_ld_addr),.st_addr(vr_st_addr),
                 .wr_data_in(vr_wr_data_in),.ld_data_in(vr_ld_data_in),.st_data_out(vr_st_data_out),.rd_data_out_1(vr_rd_data_out_1),.rd_data_out_2(vr_rd_data_out_2));
 
-    mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) vm (.clk(clk),.rst_n(rst_n),
+    mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) vmr (.clk(clk),.rst_n(rst_n),
                 .rd_en_1(vm_rd_en_1),.rd_en_2(vm_rd_en_2),.wr_en(vm_wr_en),.ld_en(vm_ld_en),.st_en(vm_st_en),
                 .rd_addr_1(vm_rd_addr_1),.rd_addr_2(vm_rd_addr_2),.wr_addr(vm_wr_addr),.ld_addr(vm_ld_addr),.st_addr(vr_st_addr),
                 .wr_data_in(vm_wr_data_in),.ld_data_in(vm_ld_data_in),.st_data_out(vm_st_data_out),.rd_data_out_1(vm_rd_data_out_1),.rd_data_out_2(vm_rd_data_out_2));
@@ -255,14 +255,14 @@ module rvv_proc_main #(
     // Read vector sources
     // TODO: add mask read logic
 
-    assign haz_0            = vec_has_hazard[0];
-    assign haz_1            = vec_has_hazard[1];
-    assign haz_2            = vec_has_hazard[2];
-    assign haz_3            = vec_has_hazard[3];
-    assign haz_4            = vec_has_hazard[4];
-    assign haz_5            = vec_has_hazard[5];
-    assign haz_6            = vec_has_hazard[6];
-    assign haz_7            = vec_has_hazard[7];
+    // assign haz_0            = vec_has_hazard[0];
+    // assign haz_1            = vec_has_hazard[1];
+    // assign haz_2            = vec_has_hazard[2];
+    // assign haz_3            = vec_has_hazard[3];
+    // assign haz_4            = vec_has_hazard[4];
+    // assign haz_5            = vec_has_hazard[5];
+    // assign haz_6            = vec_has_hazard[6];
+    // assign haz_7            = vec_has_hazard[7];
 
     // ------------------------- END DEBUG --------------------------
 
