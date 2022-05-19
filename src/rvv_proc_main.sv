@@ -141,6 +141,9 @@ module rvv_proc_main #(
     reg   [           5:0]  funct6_d;
     reg                     vm_d;
     reg   [`AVL_WIDTH-1:0]  avl_d;
+    reg   [VEX_DATA_WIDTH-1:0] vexrv_data_in_1_d;
+    reg   [VEX_DATA_WIDTH-1:0] vexrv_data_in_2_d;
+
 
     reg   [           6:0]  opcode_mjr_e;
     reg   [           2:0]  opcode_mnr_e;
@@ -149,6 +152,8 @@ module rvv_proc_main #(
     reg   [           4:0]  dest_e;   // rd, vd, or vs3 -- TODO make better name lol
     reg   [           5:0]  funct6_e;
     reg                     vm_e;
+    reg   [VEX_DATA_WIDTH-1:0] vexrv_data_in_1_e;
+    reg   [VEX_DATA_WIDTH-1:0] vexrv_data_in_2_e;
 
     reg   [           6:0]  opcode_mjr_m;
     reg   [           2:0]  opcode_mnr_m;
@@ -336,20 +341,25 @@ module rvv_proc_main #(
         end
     end
 
+
+
     // ALU INPUTS
     always @(posedge clk) begin
         alu_req_sew <= sew;
     end
 
-    assign alu_enable   = (((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == 3'b0)) || (opcode_mnr_e == 3'b011) || (opcode_mnr_e == 3'b100)) && (opcode_mjr_e === `OP_INSN);
+    assign alu_enable   = (((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == 3'b0 || opcode_mnr_e == 3'b010)) || (opcode_mnr_e == 3'b011) || (opcode_mnr_e == 3'b100)) && (opcode_mjr_e === `OP_INSN);
 
     // ASSIGNING FIRST SOURCE BASED ON OPCODE TYPE (VX vs VI vs VV)
+    // TODO: test scalar versions!
     always @(*) begin
         // enable ALU if ALU op AND ((VR enabled AND valu.vv) OR valu.vi OR valu.vx)
         // alu_enable  = (((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == 3'b0)) || (opcode_mnr_e == 3'b011) || (opcode_mnr_e == 3'b100)) && (opcode_mjr_e === `OP_INSN);
 
         case (opcode_mnr_e)
-            3'h0:   alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+            3'h0,
+            3'h1,
+            3'h2:   alu_data_in1    = vr_rd_data_out_1;  // valu.vv
             3'h3: begin // valu.vi
                 case (alu_req_sew)
                     2'b00:    alu_data_in1  = {DW_B{s_ext_imm_e[7:0]}};
@@ -357,6 +367,17 @@ module rvv_proc_main #(
                     2'b10:    alu_data_in1  = {(DW_B/4){s_ext_imm_e[31:0]}};
                     2'b11:    alu_data_in1  = {(DW_B/8){s_ext_imm_e[63:0]}};
                     default:  alu_data_in1  = {s_ext_imm_e};
+                endcase
+            end
+            3'h4,
+            3'h5,
+            3'h6: begin // valu.vx
+                case (alu_req_sew)
+                    2'b00:    alu_data_in1  = {DW_B{vexrv_data_in_1_e[7:0]}};
+                    2'b01:    alu_data_in1  = {(DW_B/2){vexrv_data_in_1_e[15:0]}};
+                    2'b10:    alu_data_in1  = {(DW_B/4){vexrv_data_in_1_e[31:0]}};
+                    2'b11:    alu_data_in1  = {(DW_B/8){vexrv_data_in_1_e[63:0]}};
+                    default:  alu_data_in1  = {vexrv_data_in_1_e};
                 endcase
             end
             default:  alu_data_in1  = 'hX;
@@ -462,6 +483,8 @@ module rvv_proc_main #(
             src_1_d         <= 'h0;
             ld_valid        <= 'h0;
             avl_d           <= 'h0; // FIXME
+            vexrv_data_in_1_d <= 'h0;
+            vexrv_data_in_2_d <= 'h0;
 
             opcode_mjr_e    <= 'h0;
             opcode_mnr_e    <= 'h0;
@@ -469,6 +492,8 @@ module rvv_proc_main #(
             funct6_e        <= 'h0;
             vm_e            <= 'b1;
             alu_req_avl     <= 'h0; // FIXME
+            vexrv_data_in_1_e <= 'h0;
+            vexrv_data_in_2_e <= 'h0;
 
             opcode_mjr_m    <= 'h0;
             opcode_mnr_m    <= 'h0;
@@ -484,6 +509,8 @@ module rvv_proc_main #(
             src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
             avl_d           <= ~stall ? avl         : avl_d;
+            vexrv_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){vexrv_data_in_1[VEX_DATA_WIDTH-1]}}, vexrv_data_in_1} : (no_bubble ? vexrv_data_in_1_d : 'h0);
+            vexrv_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){vexrv_data_in_1[VEX_DATA_WIDTH-1]}}, vexrv_data_in_2} : (no_bubble ? vexrv_data_in_2_d : 'h0);
 
             opcode_mjr_e    <= opcode_mjr_d;
             opcode_mnr_e    <= opcode_mnr_d;
@@ -491,6 +518,8 @@ module rvv_proc_main #(
             funct6_e        <= funct6_d;
             vm_e            <= vm_d;
             alu_req_avl     <= avl_d;
+            vexrv_data_in_1_e <= vexrv_data_in_1_d;
+            vexrv_data_in_2_e <= vexrv_data_in_2_d;
 
             opcode_mjr_m    <= opcode_mjr_d;
             opcode_mnr_m    <= opcode_mnr_d;
