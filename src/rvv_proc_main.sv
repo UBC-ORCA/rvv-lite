@@ -8,9 +8,12 @@
 `define LD_INSN 7'h07
 `define ST_INSN 7'h27
 `define OP_INSN 7'h57
-// `define VV_TYPE 3'h0
-// `define VX_TYPE 3'h4
-// `define VI_TYPE 3'h3
+// `define IVV_TYPE 3'h0
+// `define FVV_TYPE 3'h1
+// `define MVV_TYPE 3'h2
+// `define IVI_TYPE 3'h3
+// `define IVX_TYPE 3'h4
+// `define _TYPE 3'h3
 `define CF_TYPE 3'h7
 `define AVL_WIDTH 5
 
@@ -42,8 +45,7 @@ module rvv_proc_main #(
     output                              mem_port_req,       // signal dicating request vs write I guess?
     output reg                          mem_port_valid_out,
     output                              proc_rdy,
-    output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out,   // in theory anything writing to a scalar register should already know the dest register right?
-    output      [          VLEN-1:0]    zz_vr_input_data
+    output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out   // in theory anything writing to a scalar register should already know the dest register right?
     // TODO: add register config outputs?
 );
     wire  [      DW_B-1:0]  vr_rd_en_1;
@@ -360,11 +362,8 @@ module rvv_proc_main #(
             default:  alu_data_in1  = 'hX;
         endcase
 
-        alu_data_in2 = vr_rd_data_out_1;
+        alu_data_in2 = vr_rd_data_out_1; // source 2 is always source 2 for ALU
     end
-
-    // source 2 is always source 2 for ALU
-    // assign alu_data_in2 = vr_rd_data_out_1;
 
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(4))
@@ -380,7 +379,7 @@ module rvv_proc_main #(
     // );
 
     // used only for OPIVV, OPFVV, OPMVV
-    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr >= 3'h0 && opcode_mnr <= 3'h2);// && ~hold_reg_group;
+    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2);// && ~hold_reg_group;
 
     // used for all ALU and one each of load/store
     // TODO FOR LD/STR: Implement indexed address offsets (the only time vs2 actually used)
@@ -449,8 +448,6 @@ module rvv_proc_main #(
     end
 
     assign vr_wr_en = {DW_B{~agu_idle_wr}}; // TODO: add byte masking
-
-    assign zz_vr_input_data = alu_data_out;
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
     assign no_bubble = hold_reg_group & ~(haz_src1 | haz_src2 | haz_str);

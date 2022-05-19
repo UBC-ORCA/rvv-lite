@@ -10,6 +10,8 @@
 `include "vRedSum_min_max.v"
 `include "vSlide.v"
 `include "vWiden.v"
+`include "vMinMaxSelector.v"
+`include "vAdd_unit_block.v"
 
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,

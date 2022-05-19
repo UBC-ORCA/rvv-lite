@@ -1,5 +1,5 @@
-`include "vMinMaxSelector.v"
-`include "vAdd_unit_block.v"
+// `include "vMinMaxSelector.v"
+// `include "vAdd_unit_block.v"
 
 module vRedSum_min_max_unit_block #(
 	parameter REQ_DATA_WIDTH  	= 32,
@@ -50,11 +50,11 @@ module vRedSum_min_max_unit_block #(
 		end
 	endgenerate
 
-	assign op_out	= {result[78:71],result[68:61],result[58:51],result[48:41],result[38:31],result[28:21],result[18:11],result[8:1]};
-
 	generate
 		if(REQ_DATA_WIDTH<64) begin
 			assign op_out[RESP_DATA_WIDTH-1:REQ_DATA_WIDTH]	= 'b0;
+		end else begin
+			assign op_out	= {result[78:71],result[68:61],result[58:51],result[48:41],result[38:31],result[28:21],result[18:11],result[8:1]};
 		end
 	endgenerate
 

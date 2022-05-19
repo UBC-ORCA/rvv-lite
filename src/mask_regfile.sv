@@ -29,7 +29,7 @@ module mask_regfile #(
 );
 
     parameter MAX_IDX   = VLEN_B/DW_B - 1;
-    parameter IDX_BITS  = $clog2(MAX_IDX + 1); // screw it I can't do the math rn
+    parameter IDX_BITS  = ($clog2(MAX_IDX + 1) > 0) ? $clog2(MAX_IDX + 1) : 1; // screw it I can't do the math rn
 
     reg [  IDX_BITS-1:0] rd_curr_idx_1;
     reg [  IDX_BITS-1:0] rd_curr_idx_2; 
@@ -146,14 +146,14 @@ module mask_regfile #(
     generate
         initial begin
             for (c = 0; c < NUM_VECS; c=c+1) begin
-                mask_data[c] <= {DW_B{1'b1}};
+                mask_data[c] = {DW_B{1'b1}};
             end
         end
     endgenerate
 
     // --------------------------- REGISTER TRACKING ------------------------------------
     // READ PORTS
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         rd_curr_reg_1 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_1 && rd_state_1 == 1'b0) ? rd_addr_1 : rd_curr_reg_1);
 
         case(rd_state_1)
@@ -162,7 +162,7 @@ module mask_regfile #(
         endcase
     end
 
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         rd_curr_reg_2 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_2 && rd_state_2 == 1'b0) ? rd_addr_2 : rd_curr_reg_2);
 
         case(rd_state_2)
@@ -172,7 +172,7 @@ module mask_regfile #(
     end
 
     // WRITE PORTS
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         wr_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|wr_en && wr_state == 1'b0) ? wr_addr : wr_curr_reg);
 
         case(ld_state)
@@ -182,7 +182,7 @@ module mask_regfile #(
     end
 
     // MEMORY PORT VERISONS -- LOAD
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         ld_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|ld_en && ld_state == 1'b0) ? ld_addr : ld_curr_reg);
 
         case(ld_state)
@@ -192,7 +192,7 @@ module mask_regfile #(
     end
 
     // MEMORY PORT VERISONS -- STORE
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         st_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|st_en && st_state == 1'b0) ? st_addr : st_curr_reg);
 
         case(st_state)

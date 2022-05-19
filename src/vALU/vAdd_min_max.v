@@ -1,5 +1,5 @@
-`include "vMinMaxSelector.v"
-`include "vAdd_unit_block.v"
+// `include "vMinMaxSelector.v"
+// `include "vAdd_unit_block.v"
 
 module vAdd_min_max #(
 	parameter REQ_DATA_WIDTH  = 64,
