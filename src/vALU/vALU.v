@@ -97,11 +97,13 @@ assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
 assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // TODO
-assign vPopc_en             = 0; // req_valid & (req_func_id == 'h3F); // TODO
+assign vPopc_en             = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
 assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b000001 | req_func_id == 6'b000010 | req_func_id == 6'b000011) & (req_op_mnr == 3'h2);
 assign vRedSum_min_max_en   = req_valid & ((req_func_id == 6'b000000 | req_func_id == 6'b000100 | req_func_id == 6'b000101
                                 | req_func_id == 6'b000110   | req_func_id == 6'b000111 ) & (req_op_mnr == 3'h2));
 
+assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
+assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 
 assign vSlide_sew           = req_data1[3] ? (req_sew + 2'b11) : (req_data1[2] ? (req_sew + 2'b10) : (req_data1[1] ? (req_sew + 2'b01) : (req_sew)));
 assign vSlide_insert        = 1;
