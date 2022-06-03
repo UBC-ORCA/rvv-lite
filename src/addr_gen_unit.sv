@@ -8,16 +8,16 @@ module addr_gen_unit #(
     input   [2:0]               vlmul,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
-    output                      idle             // signal to processor that we can get another address
+    output                      idle      // signal to processor that we can get another address
 );
 
     reg [ADDR_WIDTH-1:0] curr_reg;
     reg [ADDR_WIDTH-1:0] max_reg;
     reg state;  // STATES: IDLE, BUSY
 
-//   assign reg_group = (vlmul > 3'b000 && vlmul < 3'b100);
+//   assign reg_group = (vlmul > 3'b000 && vlmul[2] === 1'b0);
     assign addr_out         = curr_reg;
-    assign idle_single_addr = (vlmul >= 3'b100 && ~en);
+    assign idle_single_addr = (vlmul[2] && ~en);
     assign idle             = ~state;
 
     // latching input values
@@ -28,14 +28,14 @@ module addr_gen_unit #(
         end else begin
             if (state == 1'b0) begin
                 if (en) begin
-                    curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-                    max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                    curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
+                    max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
                 end
             end else begin
                 if (curr_reg === max_reg) begin
                     if (en) begin
-                        curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-                        max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                        curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
+                        max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
                     end
                 end else begin
                     curr_reg <= curr_reg + 1;

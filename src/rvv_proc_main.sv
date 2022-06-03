@@ -16,9 +16,9 @@
 `define IVX_TYPE 3'h4
 `define FVF_TYPE 3'h5
 `define MVX_TYPE 3'h6
-`define CF_TYPE 3'h7
+`define CFG_TYPE 3'h7
 
-`define AVL_WIDTH 5
+`define AVL_WIDTH 64
 
 // TODO: change signals back to reg/wire in proc because vivado hates them :)
 
@@ -48,7 +48,8 @@ module rvv_proc_main #(
     output                              mem_port_req,       // signal dicating request vs write I guess?
     output reg                          mem_port_valid_out,
     output                              proc_rdy,
-    output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out   // in theory anything writing to a scalar register should already know the dest register right?
+    output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out,   // in theory anything writing to a scalar register should already know the dest register right?
+    output                              vexrv_valid_out
     // TODO: add register config outputs?
 );
     wire  [      DW_B-1:0]  vr_rd_en_1;
@@ -130,8 +131,8 @@ module rvv_proc_main #(
     wire                    req_vs3;
     wire                    req_vd;
 
-    wire   [VEX_DATA_WIDTH-1:0] sca_data_in_1;
-    wire   [VEX_DATA_WIDTH-1:0] sca_data_in_2;
+    reg   [VEX_DATA_WIDTH-1:0] sca_data_in_1;
+    reg   [VEX_DATA_WIDTH-1:0] sca_data_in_2;
 
     wire                    en_vs1;
     wire                    en_vs2;
@@ -146,9 +147,9 @@ module rvv_proc_main #(
     reg   [           4:0]  dest_d;    // rd, vd, or vs3 -- TODO make better name lol
     reg   [           5:0]  funct6_d;
     reg                     vm_d;
-    reg   [`AVL_WIDTH-1:0]  avl_d;
-    reg   [VEX_DATA_WIDTH-1:0] sca_data_in_1_d;
-    reg   [VEX_DATA_WIDTH-1:0] sca_data_in_2_d;
+    reg   [VEX_DATA_WIDTH-1:0]  avl_d;
+    reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_1_d;
+    reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_2_d;
 
 
     reg   [           6:0]  opcode_mjr_e;
@@ -176,7 +177,8 @@ module rvv_proc_main #(
     reg   [           5:0]  funct6_w;
 
     // CONFIG VALUES -- config unit flops them, these are just connector wires
-    wire  [`AVL_WIDTH-1:0]  avl; // Application Vector Length (vlen effective)
+    wire  [VEX_DATA_WIDTH-1:0]  avl; // Application Vector Length (vlen effective)
+    wire                        new_vl;
 
     // VTYPE values
     wire  [           2:0]  sew;
@@ -187,6 +189,7 @@ module rvv_proc_main #(
     wire                    vill;
 
     wire  [      XLEN-1:0]  vtype_nxt;
+    wire  [           1:0]  avl_set;
     reg   [           3:0]  reg_count;
 
     wire                    agu_idle_rd_1;
@@ -197,7 +200,7 @@ module rvv_proc_main #(
 
     wire                    alu_enable;
     reg   [           2:0]  alu_req_sew;
-    reg   [`AVL_WIDTH-1:0]  alu_req_avl;
+    reg   [VEX_DATA_WIDTH-1:0]  alu_req_avl;
     
     reg   [DATA_WIDTH-1:0]  s_ext_imm;
     reg   [DATA_WIDTH-1:0]  s_ext_imm_d;
@@ -214,8 +217,8 @@ module rvv_proc_main #(
 
     wire  [ADDR_WIDTH-1:0]  alu_req_addr_out;
     wire                    alu_valid_out;
-    wire  [`AVL_WIDTH-1:0]  alu_avl_out;
-    wire  [      DW_B-1:0]  alu_req_be;
+    wire  [VEX_DATA_WIDTH-1:0]  alu_avl_out;
+    reg   [      DW_B-1:0]  alu_req_be;
 
     wire                    hold_reg_group;
     reg                     vec_has_hazard  [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
@@ -262,8 +265,8 @@ module rvv_proc_main #(
                 .rd_addr_1(vm_rd_addr_1),.rd_addr_2(vm_rd_addr_2),.wr_addr(vm_wr_addr),.ld_addr(vm_ld_addr),.st_addr(vr_st_addr),
                 .wr_data_in(vm_wr_data_in),.ld_data_in(vm_ld_data_in),.st_data_out(vm_st_data_out),.rd_data_out_1(vm_rd_data_out_1),.rd_data_out_2(vm_rd_data_out_2));
   
-    cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .rst_n(rst_n), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1),
-        .avl(avl), .sew(sew), .vlmul(vlmul), .vma(vma), .vta(vta), .vill(vill));
+    cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .rst_n(rst_n), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1), .avl_set(avl_set),
+        .avl_new(vexrv_data_in_1), .avl(avl), .sew(sew), .vlmul(vlmul), .vma(vma), .vta(vta), .vill(vill), .new_vl(new_vl));
 
     // ------------------------- BEGIN DEBUG --------------------------
     // Read vector sources
@@ -293,7 +296,7 @@ module rvv_proc_main #(
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
-                vec_has_hazard[i] <= rst_n & (((dest === i) && (opcode_mjr === `OP_INSN && opcode_mnr != `CF_TYPE)) || (vec_has_hazard[i] && ~(((alu_req_addr_out === i) && alu_valid_out) || (dest_m === i && ld_valid)))); // FIXME opcode check
+                vec_has_hazard[i] <= rst_n & (((dest === i) && (opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE)) || (vec_has_hazard[i] && ~(((alu_req_addr_out === i) && alu_valid_out) || (dest_m === i && ld_valid)))); // FIXME opcode check
             end
         end
     endgenerate
@@ -314,12 +317,13 @@ module rvv_proc_main #(
     // VLEN AND VSEW
     // TODO: store AVL value in register
     assign vtype_nxt = cfg_type[1] ? {12'h0, vtype_10} : {11'h0, vtype_11};
-    assign cfg_en    = (opcode_mjr === `OP_INSN && opcode_mnr === `CF_TYPE);
+    assign cfg_en    = (opcode_mjr === `OP_INSN && opcode_mnr === `CFG_TYPE);
+    assign avl_set   = {(dest === 'h0),(src_1 === 'h0)}; // determines if rd and rs1 are non-zero, as AVL setting depends on this
 
     // ---------------------------------------- ALU --------------------------------------------------------------------------------
 
     // TODO: hold values steady while waiting for multiple register groupings...
-    assign hold_reg_group   = rst_n & ((reg_count > 0) || (reg_count == 0 && (opcode_mjr === `ST_INSN || opcode_mjr === `LD_INSN || (opcode_mjr === `OP_INSN && opcode_mnr != `CF_TYPE)) && vlmul > 0));
+    assign hold_reg_group   = rst_n & ((reg_count > 0) || (reg_count == 0 && (opcode_mjr === `ST_INSN || opcode_mjr === `LD_INSN || (opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE)) && vlmul > 0));
     // hold if we are starting a reg group or currently processing one
 
     // SIGN-EXTENDED IMMEDIATE FOR ALU
@@ -356,7 +360,7 @@ module rvv_proc_main #(
     end
 
     assign alu_enable   = (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
-                                                            (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   ) 
+                                                            (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   );
 
     // ASSIGNING FIRST SOURCE BASED ON OPCODE TYPE (VX vs VI vs VV)
     // TODO: test scalar versions!
@@ -384,7 +388,7 @@ module rvv_proc_main #(
                     2'b00:    alu_data_in1  = {DW_B{sca_data_in_1_e[7:0]}};
                     2'b01:    alu_data_in1  = {(DW_B/2){sca_data_in_1_e[15:0]}};
                     2'b10:    alu_data_in1  = {(DW_B/4){sca_data_in_1_e[31:0]}};
-                    2'b11:    alu_data_in1  = {(DW_B/8){sca_data_in_1_e[63:0]}};
+                    2'b11:    alu_data_in1  = {(DW_B/8){{32{sca_data_in_1_e[31]}},{sca_data_in_1_e[31:0]}}};
                     default:  alu_data_in1  = {sca_data_in_1_e};
                 endcase
             end
@@ -407,12 +411,12 @@ module rvv_proc_main #(
     //     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out
     // );
 
-    // used only for OPIVV, OPFVV, OPMVV
+    // used only for OPIVV, OPFVV, MVV_TYPE
     assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2);// && ~hold_reg_group;
 
     // used for all ALU and one each of load/store
     // TODO FOR LD/STR: Implement indexed address offsets (the only time vs2 actually used)
-    assign en_vs2   = (opcode_mjr === `OP_INSN && opcode_mnr !== `CF_TYPE && funct6 !== 'h17) || (opcode_mjr === `LD_INSN && mop[0]) || (opcode_mjr === `ST_INSN && mop[0]);//  && ~hold_reg_group;
+    assign en_vs2   = (opcode_mjr === `OP_INSN && opcode_mnr !== `CFG_TYPE && funct6 !== 'h17) || (opcode_mjr === `LD_INSN && mop[0]) || (opcode_mjr === `ST_INSN && mop[0]);//  && ~hold_reg_group;
 
     // used for ALU
     assign en_vd    = alu_valid_out;
@@ -483,8 +487,8 @@ module rvv_proc_main #(
 
 
     always @(*) begin
-        if (opcode_mnr == `OPMVV && funct6 == 'h10) begin
-            case (vs1)
+        if (opcode_mnr == `MVV_TYPE && funct6 == 'h10) begin
+          case (src_1)
                 'h0,
                 'h10,
                 'h11:       sca_data_in_1 = {{(VEX_DATA_WIDTH-ADDR_WIDTH){1'b0}},src_1};
@@ -495,8 +499,8 @@ module rvv_proc_main #(
         end
     end
     always @(*) begin
-        if (opcode_mnr == `OPMVX && funct6 == 'h10) begin
-            case (vs2)
+        if (opcode_mnr == `MVX_TYPE && funct6 == 'h10) begin
+          case (src_2)
                 'h0:        sca_data_in_2 = {{(VEX_DATA_WIDTH-ADDR_WIDTH){1'b0}},src_2};
                 default:    sca_data_in_2 = vexrv_data_in_2;
             endcase // vs2
@@ -507,7 +511,7 @@ module rvv_proc_main #(
 
     // Adding byte enable for ALU
     always @(*) begin
-        if (opcode_mnr == `OPMVX && funct6 == 'h10) begin
+        if (opcode_mnr == `MVX_TYPE && funct6 == 'h10) begin
             alu_req_be = {{(VEX_DATA_WIDTH/8){1'b1}},{(DW_B - VEX_DATA_WIDTH/8){1'b0}}}; // FIXME :) We want to operate on vd[0] bytes only
         end else begin // FIXME -- how do we use AVL when it's a variable??
             alu_req_be = {DW_B{1'b1}}; // FIXME :)
@@ -516,7 +520,7 @@ module rvv_proc_main #(
 
     wire    [DW_B-1:0] gen_avl_be;
 
-    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(`AVL_WIDTH)) gen_be_alu (.clk(clk), .rst_n (rst_n), .avl   (avl), .avl_be(gen_avl_be));
+    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VEX_DATA_WIDTH)) gen_be_alu (.clk(clk), .rst_n (rst_n), .avl   (avl), .avl_be(gen_avl_be));
 
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -562,15 +566,17 @@ module rvv_proc_main #(
             dest_e          <= dest_d;
             funct6_e        <= funct6_d;
             vm_e            <= vm_d;
+
             alu_req_avl     <= avl_d;
             sca_data_in_1_e <= sca_data_in_1_d;
             sca_data_in_2_e <= sca_data_in_2_d;
-
             opcode_mjr_m    <= opcode_mjr_d;
             opcode_mnr_m    <= opcode_mnr_d;
             dest_m          <= dest_d;
             src_1_m         <= src_1_d;
             ld_valid        <= (opcode_mjr_d === `LD_INSN);
+
+            vexrv_data_out  <= (opcode_mjr_d === `OP_INSN && opcode_mnr_d === `CFG_TYPE) ? avl : 'h0;
         end
     end
 
@@ -579,12 +585,12 @@ endmodule
 module generate_be #(
     parameter DATA_WIDTH        = 64,
     parameter DW_B              = DATA_WIDTH/8,
-    parameter AVL_WIDTH         = `AVL_WIDTH)
+    parameter AVL_WIDTH         = DATA_WIDTH)
     (
     input                       clk,
     input                       rst_n,
     input   [  AVL_WIDTH-1:0]   avl,
-    output  [       DW_B-1:0]   avl_be
+    output  reg [       DW_B-1:0]   avl_be
     );
 
     genvar i;
