@@ -303,7 +303,7 @@ module rvv_proc_main #(
 
     always @(posedge clk) begin
         insn_in_f       <= {INSN_WIDTH{rst_n}} & (stall ? insn_in_f : (insn_valid ? insn_in : 'h0));
-        insn_valid_f    <= rst_n & ~stall & insn_valid;
+        insn_valid_f    <= rst_n & ((stall && insn_valid_f) || insn_valid);
     end
 
     generate
@@ -581,7 +581,7 @@ module rvv_proc_main #(
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_2[VEX_DATA_WIDTH-1]}}, sca_data_in_2} : (no_bubble ? sca_data_in_2_d : 'h0);
-            out_finished_d  <= ~stall && no_bubble && insn_valid_f;
+            out_finished_d  <= (~stall && insn_valid_f);
 
             opcode_mjr_e    <= opcode_mjr_d;
             opcode_mnr_e    <= opcode_mnr_d;
