@@ -286,14 +286,15 @@ module rvv_proc_main #(
     // Read vector sources
     // TODO: add mask read logic
 
-    assign haz_0            = vec_has_haz_new[0];
-    assign haz_1            = vec_has_haz_new[1];
-    assign haz_2            = vec_has_haz_new[2];
-    assign haz_3            = vec_has_haz_new[3];
-    assign haz_4            = vec_has_haz_new[4];
-    assign haz_5            = vec_has_haz_new[5];
-    assign haz_6            = vec_has_haz_new[6];
-    assign haz_7            = vec_has_haz_new[7];
+//   assign haz_0_new            = vec_has_haz_new[24];
+//     assign haz_0 = vec_has_hazard[24];
+//      assign haz_1            = vec_has_haz_new[25];
+//   assign haz_2            = vec_has_haz_new[26] || vec_has_hazard[26];
+//      assign haz_3            = vec_has_haz_new[27];
+//   assign haz_4            = vec_has_haz_new[28] || vec_has_hazard[28];
+//      assign haz_5            = vec_has_haz_new[29];
+//     assign haz_6            = vec_has_haz_new[6];
+//     assign haz_7            = vec_has_haz_new[7];
 
     // ------------------------- END DEBUG --------------------------
 
@@ -303,12 +304,13 @@ module rvv_proc_main #(
 
     always @(posedge clk) begin
         insn_in_f       <= {INSN_WIDTH{rst_n}} & (stall ? insn_in_f : (insn_valid ? insn_in : 'h0));
-        insn_valid_f    <= rst_n & ((stall && insn_valid_f) || insn_valid);
+        insn_valid_f    <= rst_n & (stall ? insn_valid_f : insn_valid);
     end
 
+    // FIXME separate into "clear hazard" and "set hazard" logic so we can check hazards more easily lol
     generate
         for (i = 0; i < NUM_VEC; i=i+1) begin
-          assign vec_has_haz_new[i] = rst_n & (((dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN)) || (vec_has_hazard[i] && ~(((alu_req_addr_out === i) && alu_valid_out) || (dest_m_3 === i && ~mem_in_busy && agu_idle_ld))));
+          assign vec_has_haz_new[i] = rst_n & (((dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN)) || (vec_has_hazard[i] && ~(((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en))));
           //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
@@ -319,10 +321,11 @@ module rvv_proc_main #(
         end
     endgenerate
   
-    assign haz_src1         = vec_has_haz_new[src_1] && en_vs1;
-    assign haz_src2         = vec_has_haz_new[src_2] && en_vs2;
-    assign haz_str          = vec_has_haz_new[dest]  && en_vs3;
-    assign haz_ld           = vec_has_haz_new[dest]  && (opcode_mjr === `LD_INSN);
+    // FIXME this logic wouldn't work for v1 = v1 + v1
+    assign haz_src1         = ((vec_has_haz_new[src_1] || vec_has_hazard[src_1]) && dest !== src_1) && en_vs1;
+    assign haz_src2         = ((vec_has_haz_new[src_2] || vec_has_hazard[src_2]) && dest !== src_2) && en_vs2;
+    assign haz_str          = (vec_has_haz_new[dest]  || vec_has_hazard[dest]) && en_vs3;
+    assign haz_ld           = (vec_has_haz_new[dest]  || vec_has_hazard[dest]) && (opcode_mjr === `LD_INSN);
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
 
@@ -410,7 +413,7 @@ module rvv_proc_main #(
             default:  alu_data_in1  = 'hX;
         endcase
 
-        alu_data_in2 = vr_rd_data_out_1; // source 2 is always source 2 for ALU
+        alu_data_in2 = vr_rd_data_out_2; // source 2 is always source 2 for ALU
     end
 
     // TODO: update to use active low reset lol
@@ -581,7 +584,7 @@ module rvv_proc_main #(
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_2[VEX_DATA_WIDTH-1]}}, sca_data_in_2} : (no_bubble ? sca_data_in_2_d : 'h0);
-            out_finished_d  <= (~stall && insn_valid_f);
+            out_finished_d  <= ~stall && insn_valid_f;
 
             opcode_mjr_e    <= opcode_mjr_d;
             opcode_mnr_e    <= opcode_mnr_d;

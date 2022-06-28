@@ -28,14 +28,18 @@ module addr_gen_unit #(
         end else begin
             if (state == 1'b0) begin
                 if (en) begin
-                    curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
-                    max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                    // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
+                    curr_reg <= addr_in;
+                    // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                    max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in; 
                 end
             end else begin
                 if (curr_reg === max_reg) begin
                     if (en) begin
-                        curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
-                        max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                        // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
+                        // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
+                        curr_reg <= addr_in;
+                        max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in; 
                     end
                 end else begin
                     curr_reg <= curr_reg + 1;
