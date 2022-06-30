@@ -150,6 +150,7 @@ module rvv_proc_main #(
     wire                        en_vs2;
     reg                         en_vs2_d;
     wire                        en_vs3;
+    reg                         en_vs3_d;
     wire                        en_vd;
 
     // value propagation signals
@@ -276,7 +277,7 @@ module rvv_proc_main #(
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2_d), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_rd_addr_2), .idle(agu_idle_rd_2));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd), .vlmul(vlmul), .addr_in(alu_req_addr_out), .addr_out(vr_wr_addr), .idle(agu_idle_wr));
 
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st));
+  addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3_d), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid), .vlmul(vlmul), .addr_in(dest_m), .addr_out(vr_ld_addr), .idle(agu_idle_ld));
 
     // TODO: add normal regfile? connect to external one? what do here
@@ -340,11 +341,11 @@ module rvv_proc_main #(
   
     // FIXME this logic wouldn't work for v1 = v1 + v1
     assign haz_new_src1     = vec_haz_set[src_1] & ~vec_haz_clr[src_1] & en_vs1;
-    assign haz_src1         = vec_haz[src_1] & en_vs1;
+    assign haz_src1         = vec_haz[src_1] & ~vec_haz_clr[src_1] & en_vs1;
     assign haz_new_src2     = vec_haz_set[src_2] & ~vec_haz_clr[src_2] & en_vs2;
-    assign haz_src2         = vec_haz[src_2] & en_vs2;
-    assign haz_str          = vec_haz_set[dest] & en_vs3;
-    assign haz_new_str      = vec_haz[dest] & ~vec_haz_clr[dest] & en_vs3;
+    assign haz_src2         = vec_haz[src_2] & ~vec_haz_clr[src_2] & en_vs2;
+    assign haz_str          = vec_haz[dest] & ~vec_haz_clr[dest] & en_vs3;
+    assign haz_new_str      = vec_haz_set[dest] & ~vec_haz_clr[dest] & en_vs3;
     assign haz_ld           = ((vec_haz_set[dest] || vec_haz[dest]) && ~vec_haz_clr[dest]) && (opcode_mjr === `LD_INSN);
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
@@ -527,7 +528,7 @@ module rvv_proc_main #(
     assign vr_wr_en = {DW_B{~agu_idle_wr}}; // TODO: add byte masking
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
-    assign no_bubble = hold_reg_group;
+    assign no_bubble = hold_reg_group & (reg_count > 0);
 
 
     // FIXME timing is off lol
@@ -616,6 +617,7 @@ module rvv_proc_main #(
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
             en_vs1_d        <= en_vs1;
             en_vs2_d        <= en_vs2;
+            en_vs3_d        <= en_vs3;
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_2[VEX_DATA_WIDTH-1]}}, sca_data_in_2} : (no_bubble ? sca_data_in_2_d : 'h0);
