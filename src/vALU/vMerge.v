@@ -30,8 +30,9 @@ module vMerge #(
 	wire	[RESP_DATA_WIDTH-1:0] 	w_s1_out_vec;
 	
 
+	// FIXME - masks are not multi-register per the spec
 	for(i=0;i<8;i=i+1) begin
-		assign w_s1_out_vec[i*8+7:i*8] = s0_mask ? s0_vec1[i*8+7:i*8] : s0_vec0[i*8+7:i*8];
+		assign w_s1_out_vec[i*8+7:i*8] = s0_mask[i] ? s0_vec1[i*8+7:i*8] : s0_vec0[i*8+7:i*8];
 	end
 
 	always @(posedge clk) begin

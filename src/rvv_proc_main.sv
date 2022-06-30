@@ -146,7 +146,9 @@ module rvv_proc_main #(
     reg   [ VEX_DATA_WIDTH-1:0] sca_data_in_2;
 
     wire                        en_vs1;
+    reg                         en_vs1_d;
     wire                        en_vs2;
+    reg                         en_vs2_d;
     wire                        en_vs3;
     wire                        en_vd;
 
@@ -230,10 +232,12 @@ module rvv_proc_main #(
     wire                        alu_valid_out;
     wire  [VEX_DATA_WIDTH-1:0]  alu_avl_out;
     reg   [          DW_B-1:0]  alu_req_be;
+    reg   [               3:0]  alu_vr_idx;
 
     wire                        hold_reg_group;
-    reg                         vec_has_hazard  [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
-    wire                        vec_has_haz_new [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
+    reg                         vec_haz  [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
+    wire                        vec_haz_set     [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
+    wire                        vec_haz_clr     [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
     wire                        no_bubble;
 
     reg   [    ADDR_WIDTH-1:0]  ld_addr;
@@ -245,6 +249,11 @@ module rvv_proc_main #(
     wire                        haz_src2;
     wire                        haz_str;
     wire                        haz_ld;
+
+    wire                        haz_new_src1;
+    wire                        haz_new_src2;
+    wire                        haz_new_str;
+    wire                        haz_new_ld;
 
     genvar i;
 
@@ -263,8 +272,8 @@ module rvv_proc_main #(
 //         .width(width), .mop(mop), .mew(mew), .nf(nf), .vtype_11(vtype_11), .vtype_10(vtype_10), .vm(vm), .funct6(funct6), .cfg_type(cfg_type));
 
     // TODO: figure out how to make this single cycle, so we can fully pipeline lol
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst_n(rst_n), .en(en_vs1), .vlmul(vlmul), .addr_in(src_1), .addr_out(vr_rd_addr_1), .idle(agu_idle_rd_1));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_rd_addr_2), .idle(agu_idle_rd_2));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst_n(rst_n), .en(en_vs1_d), .vlmul(vlmul), .addr_in(src_1), .addr_out(vr_rd_addr_1), .idle(agu_idle_rd_1));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2_d), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_rd_addr_2), .idle(agu_idle_rd_2));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd), .vlmul(vlmul), .addr_in(alu_req_addr_out), .addr_out(vr_wr_addr), .idle(agu_idle_wr));
 
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st));
@@ -288,15 +297,18 @@ module rvv_proc_main #(
     // Read vector sources
     // TODO: add mask read logic
 
-    assign haz_0_new        = vec_has_haz_new[24];
-    assign haz_0            = vec_has_hazard[24];
-    assign haz_1            = vec_has_haz_new[25];
-    assign haz_2            = vec_has_haz_new[26] || vec_has_hazard[26];
-    assign haz_3            = vec_has_haz_new[27];
-    assign haz_4            = vec_has_haz_new[28] || vec_has_hazard[28];
-    assign haz_5            = vec_has_haz_new[29];
-    assign haz_6            = vec_has_haz_new[6];
-    assign haz_7            = vec_has_haz_new[7];
+    assign haz_24_new        = vec_haz_set[24];
+    assign haz_24_clr        = vec_haz_clr[24];
+    assign haz_24            = vec_haz[24];
+    assign haz_25_new        = vec_haz_set[25];
+    assign haz_25_clr        = vec_haz_clr[25];
+    assign haz_25            = vec_haz[25];
+    assign haz_26_new        = vec_haz_set[26];
+    assign haz_26_clr        = vec_haz_clr[26];
+    assign haz_26            = vec_haz[26];
+    assign haz_27_new        = vec_haz_set[27];
+    assign haz_27_clr        = vec_haz_clr[27];
+    assign haz_27            = vec_haz[27];
 
     // ------------------------- END DEBUG --------------------------
 
@@ -307,28 +319,33 @@ module rvv_proc_main #(
     always @(posedge clk) begin
         insn_in_f       <= {INSN_WIDTH{rst_n}} & (stall ? insn_in_f : (insn_valid ? insn_in : 'h0));
         insn_valid_f    <= rst_n & (stall ? insn_valid_f : insn_valid);
-        data_in_1_f  <= {VEX_DATA_WIDTH{rst_n}} & (stall ? data_in_1_f : (insn_valid ? vexrv_data_in_1 : 'h0));
-        data_in_2_f  <= {VEX_DATA_WIDTH{rst_n}} & (stall ? data_in_2_f : (insn_valid ? vexrv_data_in_2 : 'h0));
+        data_in_1_f     <= {VEX_DATA_WIDTH{rst_n}} & (stall ? data_in_1_f : (insn_valid ? vexrv_data_in_1 : 'h0));
+        data_in_2_f     <= {VEX_DATA_WIDTH{rst_n}} & (stall ? data_in_2_f : (insn_valid ? vexrv_data_in_2 : 'h0));
     end
 
     // FIXME separate into "clear hazard" and "set hazard" logic so we can check hazards more easily lol
     generate
         for (i = 0; i < NUM_VEC; i=i+1) begin
-          assign vec_has_haz_new[i] = rst_n & (((dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN)) || (vec_has_hazard[i] && ~(((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en))));
-          //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
+            // we shouldn't set the hazard unless we are actually processing a new instruction I think
+            assign vec_haz_set[i] = (~stall & dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
+            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en);
+            //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
-                vec_has_hazard[i] <= vec_has_haz_new[i];
+                vec_haz[i] <= rst_n & (vec_haz_set[i] | vec_haz[i]) & ~vec_haz_clr[i];
             end
         end
     endgenerate
   
     // FIXME this logic wouldn't work for v1 = v1 + v1
-    assign haz_src1         = ((vec_has_haz_new[src_1] || vec_has_hazard[src_1]) && dest !== src_1) && en_vs1;
-    assign haz_src2         = ((vec_has_haz_new[src_2] || vec_has_hazard[src_2]) && dest !== src_2) && en_vs2;
-    assign haz_str          = (vec_has_haz_new[dest]  || vec_has_hazard[dest]) && en_vs3;
-    assign haz_ld           = (vec_has_haz_new[dest]  || vec_has_hazard[dest]) && (opcode_mjr === `LD_INSN);
+    assign haz_new_src1     = vec_haz_set[src_1] & ~vec_haz_clr[src_1] & en_vs1;
+    assign haz_src1         = vec_haz[src_1] & en_vs1;
+    assign haz_new_src2     = vec_haz_set[src_2] & ~vec_haz_clr[src_2] & en_vs2;
+    assign haz_src2         = vec_haz[src_2] & en_vs2;
+    assign haz_str          = vec_haz_set[dest] & en_vs3;
+    assign haz_new_str      = vec_haz[dest] & ~vec_haz_clr[dest] & en_vs3;
+    assign haz_ld           = ((vec_haz_set[dest] || vec_haz[dest]) && ~vec_haz_clr[dest]) && (opcode_mjr === `LD_INSN);
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
 
@@ -378,11 +395,15 @@ module rvv_proc_main #(
 
     // ALU INPUTS
     always @(posedge clk) begin
-        alu_req_sew <= sew;
+        alu_req_sew     <= sew;
+        alu_vr_idx      <= ((1'b1 << vlmul) - 1) - reg_count;
     end
 
     assign alu_enable   = (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
-                                                            (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   );
+                                                            (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   ||
+                                                            (opcode_mnr_e == `MVV_TYPE && funct6_e == 'h14));
+
+    // assign alu_vr_idx   = {3{alu_enable}} & ((1'b1 << vlmul) - 1) - reg_count;
 
     // ASSIGNING FIRST SOURCE BASED ON OPCODE TYPE (VX vs VI vs VV)
     // TODO: test scalar versions!
@@ -391,7 +412,12 @@ module rvv_proc_main #(
         case (opcode_mnr_e)
             3'h0,
             3'h1,
-            3'h2:   alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+            3'h2:
+                case (funct6_e)
+                    // vid.v
+                    6'h14:    alu_data_in1    = {{(DATA_WIDTH-5){1'b0}},s_ext_imm_e[4:0]}; // use s_ext_imm because it already exists
+                    default:  alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+                endcase
             3'h3: begin // valu.vi
                 case (alu_req_sew)
                     2'b00:    alu_data_in1  = {DW_B{s_ext_imm_e[7:0]}};
@@ -420,7 +446,7 @@ module rvv_proc_main #(
 
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(4))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_e), .req_func_id(funct6_e), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out));
     //  MISSING PORT CONNECTIONS:
@@ -430,12 +456,12 @@ module rvv_proc_main #(
     //     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out
     // );
 
-    // used only for OPIVV, OPFVV, MVV_TYPE
-    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2);// && ~hold_reg_group;
+    // used only for OPIVV, OPFVV, MVV_TYPE (excl VID)
+    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2 && funct6 != 'h14);// && ~hold_reg_group;
 
-    // used for all ALU and one each of load/store
+    // used for all ALU (not move or id) and one each of load/store
     // TODO FOR LD/STR: Implement indexed address offsets (the only time vs2 actually used)
-    assign en_vs2   = (opcode_mjr === `OP_INSN && opcode_mnr !== `CFG_TYPE && funct6 !== 'h17) || (opcode_mjr === `LD_INSN && mop[0]) || (opcode_mjr === `ST_INSN && mop[0]);//  && ~hold_reg_group;
+    assign en_vs2   = (opcode_mjr === `OP_INSN && opcode_mnr !== `CFG_TYPE && funct6 !== 'h17 && funct6 != 'h14) || (opcode_mjr === `LD_INSN && mop[0]) || (opcode_mjr === `ST_INSN && mop[0]);//  && ~hold_reg_group;
 
     // used for ALU
     assign en_vd    = alu_valid_out;
@@ -501,7 +527,7 @@ module rvv_proc_main #(
     assign vr_wr_en = {DW_B{~agu_idle_wr}}; // TODO: add byte masking
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
-    assign no_bubble = hold_reg_group & ~(haz_src1 | haz_src2 | haz_str);
+    assign no_bubble = hold_reg_group;
 
 
     // FIXME timing is off lol
@@ -588,6 +614,8 @@ module rvv_proc_main #(
             funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
             src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
+            en_vs1_d        <= en_vs1;
+            en_vs2_d        <= en_vs2;
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_2[VEX_DATA_WIDTH-1]}}, sca_data_in_2} : (no_bubble ? sca_data_in_2_d : 'h0);
