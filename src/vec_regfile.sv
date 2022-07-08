@@ -1,7 +1,7 @@
 // TODO: change signals back to reg/wire in proc because vivado hates them :)
 
 module vec_regfile #(
-    parameter VLEN          = 64,           // bit length of a vector
+    parameter VLEN          = 128,           // bit length of a vector
     parameter ADDR_WIDTH    = 5,            // this gives us 32 vectors
     parameter DATA_WIDTH    = 64,           // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
     parameter DW_B          = DATA_WIDTH/8, // DATA_WIDTH in bytes

@@ -26,8 +26,8 @@ module vID #(
     generate
         // Assign each element to the appropriate spot in the vector
         // FIXME lmul < 1?
-        for (j = 0; j < 4; j++) begin
-            for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i++) begin
+        for (j = 0; j < 4; j = j + 1) begin
+            for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i = i + 1) begin
                 assign s0_data[j][((i+1)<<(j+3))-1:i<<(j+3)] = {(8<<j){(in_mask[i])}} & (i + in_start_idx);
             end
         end

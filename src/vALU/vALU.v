@@ -22,18 +22,18 @@ module vALU #(
     parameter REQ_ADDR_WIDTH    = 32,
     parameter REQ_VL_WIDTH      = 8 ,
     parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH/8,
-    parameter MIN_MAX_ENABLE    = 1 ,
     parameter AND_OR_XOR_ENABLE = 1 ,
     parameter ADD_SUB_ENABLE    = 1 ,
-    parameter SHIFT_ENABLE      = 1 ,
-    parameter MULT_ENABLE       = 1 ,
-    parameter MULT64_ENABLE     = 1 ,
-    parameter SLIDE_ENABLE      = 1 ,
+    parameter MIN_MAX_ENABLE    = 1 ,
+    parameter VEC_MOVE_ENABLE   = 1 ,
     parameter WIDEN_ENABLE      = 1 ,
     parameter NARROW_ENABLE     = 1 ,
-    parameter MASK_ENABLE       = 1 ,
     parameter REDUCTION_ENABLE  = 1 ,
-    parameter VEC_MOVE_ENABLE   = 1
+    parameter MULT_ENABLE       = 1 ,
+    parameter MULT64_ENABLE     = 1 ,
+    parameter SHIFT_ENABLE      = 1 ,
+    parameter SLIDE_ENABLE      = 1 ,
+    parameter MASK_ENABLE       = 1 
 ) (
     input                              clk         ,
     input                              rst         ,
@@ -55,7 +55,8 @@ module vALU #(
     output                             req_ready   ,
     output reg [   REQ_ADDR_WIDTH-1:0] req_addr_out,
     output reg [     REQ_VL_WIDTH-1:0] req_vl_out  ,
-    output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out
+    output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out  ,
+    output reg                         req_mask_out
 );
 
 reg [   REQ_ADDR_WIDTH-1:0]     s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
@@ -84,7 +85,7 @@ wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAn
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
                                 vID_outValid;
 wire [                  9:0]    vMOP_opSel, vRedAndOrXor_opSel, vRedSum_min_max_opSel;
-wire                            vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en, vMove_en, vID_en;
+wire                            vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en, vMove_en;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vNarrow_outAddr, vMerge_outAddr,
                                 vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr;
@@ -99,19 +100,18 @@ assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
-assign vMOP_en              = 0; // req_valid & (req_func_id == 'h3F); // TODO
+assign vMOP_en              = req_valid & (req_func_id[5:3] == 3'b011);
 assign vPopc_en             = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
 assign vID_en               = req_valid & (req_func_id == 'h14) & (req_data0 == 'h11); // vid uses VMUNARY0
-assign vRedAndOrXor_en      = req_valid & (req_func_id == 6'b000001 | req_func_id == 6'b000010 | req_func_id == 6'b000011) & (req_op_mnr == 3'h2);
-assign vRedSum_min_max_en   = req_valid & ((req_func_id == 6'b000000 | req_func_id == 6'b000100 | req_func_id == 6'b000101
-                                | req_func_id == 6'b000110   | req_func_id == 6'b000111 ) & (req_op_mnr == 3'h2));
+assign vRedAndOrXor_en      = req_valid & (|req_func_id[1:0] & req_func_id[5:2] == 4'b0000) & (req_op_mnr == 3'h2);
+assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr == 3'h2);
 
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 
 assign vSlide_sew           = req_data1[3] ? (req_sew + 2'b11) : (req_data1[2] ? (req_sew + 2'b10) : (req_data1[1] ? (req_sew + 2'b01) : (req_sew)));
 assign vSlide_insert        = 1;
-assign req_ready            = 1'b1; //TODO: contr000110 | ol
+assign req_ready            = 1'b1; //TODO: control
 
 assign vAdd_sew             = vWiden_en ? vWiden_sew : req_sew;
 assign vMul_sew             = vWiden_en ? vWiden_sew : req_sew;
@@ -133,7 +133,7 @@ assign vMOP_opSel           = req_func_id[3:0];
 assign vRedAndOrXor_opSel   = req_func_id[1:0];
 assign vRedSum_min_max_opSel= req_func_id[0];
 
-// This needs no enable, it's considered a very base insn...
+// This needs no enable, it's considered a base insn...
 
 vID #(
     .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
@@ -154,7 +154,7 @@ vID_0 (
 
 generate
     if(WIDEN_ENABLE) begin
-        assign vWiden_en    = (req_func_id[5:2] == 4'b1100 || req_func_id[5:2] == 4'b1110);
+        assign vWiden_en    = (&req_func_id[5:4] & ~req_func_id[2]); // (req_func_id[5:2] == 4'b1100 || req_func_id[5:2] == 4'b1110) 
 
         vWiden vWiden_0 (
             .in_vec0    (req_data0  ),
@@ -512,6 +512,8 @@ always @(posedge clk) begin
         req_addr_out    <= vMove_outAddr    | vAdd_outAddr  | vAndOrXor_outAddr | vMul_outAddr  | vSlide_outAddr | vNarrow_outAddr
                             | vMerge_outAddr    | vMOP_outAddr  | vPopc_outAddr | vRedAndOrXor_outAddr  | vRedSum_min_max_outAddr
                             | vID_outAddr;
+
+        req_mask_out    <= vMOP_outValid;
 
         if(req_end)
             turn        <= 'b0;
