@@ -239,6 +239,7 @@ module rvv_proc_main #(
     wire  [VEX_DATA_WIDTH-1:0]  alu_avl_out;
     wire                        alu_mask_out;
     reg   [          DW_B-1:0]  alu_req_be;
+    reg   [          DW_B-1:0]  alu_be_out;
     reg   [               3:0]  alu_vr_idx;
 
     wire                        hold_reg_group;
@@ -340,7 +341,7 @@ module rvv_proc_main #(
         for (i = 0; i < NUM_VEC; i=i+1) begin
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
-            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en);
+            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en) || ((vm_wr_addr === i) && |vm_wr_en) || (vm_ld_addr === i && |vm_ld_en);
             //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
@@ -485,7 +486,7 @@ module rvv_proc_main #(
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(4))
             alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_e), .req_func_id(funct6_e), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
-        .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out));
+        .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out), .req_be_out(alu_be_out));
     //  MISSING PORT CONNECTIONS:
     //     input                              req_start   ,
     //     input                              req_end     ,
@@ -502,7 +503,7 @@ module rvv_proc_main #(
 
     // used for ALU
     assign en_vd    = alu_valid_out & ~alu_mask_out;    // write data
-    assign vm_wr_en = alu_valid_out & alu_mask_out;     // write mask
+    assign vm_wr_en = {DW_B{alu_valid_out & alu_mask_out}} & alu_be_out;     // write mask
     // used for LOAD
     assign en_ld    = (opcode_mjr_m === `LD_INSN);
 
@@ -513,11 +514,11 @@ module rvv_proc_main #(
 
     // TODO: and with mask -- actually maybe dont idk it'll save cycles
     // FIXME can increase mask op throughput by skipping agu, but this simplifies for now
-    assign vr_rd_en_1 = {DW_B{~agu_idle_rd_1 & funct6_d[5:3] != 3'b011}}; // don't actually read data if it's a mask op!
-    assign vm_rd_en_1 = {DW_B{~agu_idle_rd_1 & funct6_d[5:3] == 3'b011}}; // only enable if it's a mask op!
+    assign vr_rd_en_1 = {DW_B{~agu_idle_rd_1 & ~(funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE)}}; // don't actually read data if it's a mask op!
+    assign vm_rd_en_1 = {DW_B{~agu_idle_rd_1 & (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE)}}; // only enable if it's a mask op!
 
-    assign vr_rd_en_2 = {DW_B{~agu_idle_rd_2 & funct6_d[5:3] != 3'b011}}; // don't actually read data if it's a mask op!
-    assign vm_rd_en_2 = {DW_B{~agu_idle_rd_2 & funct6_d[5:3] == 3'b011}}; // only enable if it's a mask op!
+    assign vr_rd_en_2 = {DW_B{~agu_idle_rd_2 & ~(funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE)}}; // don't actually read data if it's a mask op!
+    assign vm_rd_en_2 = {DW_B{~agu_idle_rd_2 & (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE)}}; // only enable if it's a mask op!
 
     // FIXME this is not to spec -- vm should return only the bits corresponding to the elements we want (vm doesn't do grouping!)
     // TODO merge vm and vr and just add another port for the mask probably (simplifies logic!)
@@ -526,8 +527,9 @@ module rvv_proc_main #(
     assign vm_wr_addr   = alu_req_addr_out;
 
     always @(posedge clk) begin
-        vr_rd_active_1 <= rst_n & |vr_rd_en_1;
-        vr_rd_active_2 <= rst_n & |vr_rd_en_2;
+        // set "active" if we're reading mask or data -- all this does is enable the alu so it's fine. rename later.
+        vr_rd_active_1 <= rst_n & (|vr_rd_en_1 | |vm_rd_en_1);
+        vr_rd_active_2 <= rst_n & (|vr_rd_en_2 | |vm_rd_en_2);
     end
 
     // TODO: and with mask
@@ -567,13 +569,17 @@ module rvv_proc_main #(
     // --------------------------------------------------- WRITEBACK STAGE LOGIC --------------------------------------------------------------
     // This one is registered because we have to wait for the agu to give us our initial address
     always @(posedge clk) begin
-        if (alu_valid_out) begin
+        if (alu_valid_out & ~alu_mask_out) begin
             vr_wr_data_in   <= {DATA_WIDTH{rst_n}} & alu_data_out;
+        end
+        if (alu_valid_out & alu_mask_out) begin
+            vm_wr_data_in   <= {DATA_WIDTH{rst_n}} & alu_data_out;
         end
     end
 
-    // WE may be able to reduce to 1 bit because we use AGNOSTIC ops only
-    assign vr_wr_en = {DW_B{~agu_idle_wr}}; // TODO: add byte masking
+    // WE may be able to reduce to 1 bit because we use AGNOSTIC ops only right?
+    // Nah, combining mask and enable saves some logic overall
+    assign vr_wr_en = {DW_B{~agu_idle_wr}} & alu_be_out;
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
     assign no_bubble = hold_reg_group & (reg_count > 0);
@@ -631,6 +637,7 @@ module rvv_proc_main #(
             funct6_d        <= 'h0;
             vm_d            <= 'b1; // unmasked by default?
             src_1_d         <= 'h0;
+            src_2_d         <= 'h0;
             ld_valid        <= 'h0;
             avl_d           <= 'h0; // FIXME
             sca_data_in_1_d <= 'h0;
@@ -665,6 +672,7 @@ module rvv_proc_main #(
             dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
             funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
             src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
+            src_2_d         <= ~stall ? src_2       : (no_bubble ? src_2_d      : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
             en_vs1_d        <= en_vs1;
             en_vs2_d        <= en_vs2;

@@ -31,17 +31,6 @@ module vID #(
                 assign s0_data[j][((i+1)<<(j+3))-1:i<<(j+3)] = {(8<<j){(in_mask[i])}} & (i + in_start_idx);
             end
         end
-            // case (in_sew)
-            //     3'h0:   s0_data[(i+1)*8-1:i*8] = i + in_start_idx;
-            //     3'h1:   s0_data[(i+1)*8-1:i*8] = i[0] ? (i + in_start_idx)[15:8] : (i + in_start_idx)[7:0];
-            //     3'h2:   s0_data[(i+1)*8-1:i*8] = i[1] ? (i[0] ? (i + in_start_idx)[31:24] : (i + in_start_idx)[23:0]) :
-            //                                             (i[0] ? (i + in_start_idx)[15:8] : (i + in_start_idx)[7:0]);
-            //     3'h3:   s0_data[(i+1)*8-1:i*8] = i[2] ? (i[1] ? (i[0] ? (i + in_start_idx)[63:56] : (i + in_start_idx)[55:48]) :
-            //                                             (i[0] ? (i + in_start_idx)[47:40] : (i + in_start_idx)[39:32])) :
-            //                                             (i[1] ? (i[0] ? (i + in_start_idx)[31:24] : (i + in_start_idx)[23:0]) :
-            //                                             (i[0] ? (i + in_start_idx)[15:8] : (i + in_start_idx)[7:0]));
-            //     default: s0_data[(i+1)*8-1:i*8] = 'h0;
-            // endcase
     endgenerate
 
     always @(posedge clk) begin
