@@ -348,8 +348,8 @@ module rvv_proc_main #(
     generate
         for (i = 0; i < NUM_VEC; i=i+1) begin
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
-            assign vec_haz_set[i] = (~stall & dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
-            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en) || ((vm_wr_addr === i) && |vm_wr_en & alu_end_out) || (vm_ld_addr === i && |vm_ld_en);
+            assign vec_haz_set[i] = (~stall & dest === i) & ((opcode_mjr === `OP_INSN & opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
+            assign vec_haz_clr[i] = ((vr_wr_addr === i) & |vr_wr_en) | (vr_ld_addr === i & |vr_ld_en) | ((vm_wr_addr === i) & |vm_wr_en & alu_end_out) | (vm_ld_addr === i & |vm_ld_en);
             //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
@@ -360,12 +360,12 @@ module rvv_proc_main #(
     endgenerate
   
     // FIXME this logic wouldn't work for v1 = v1 + v1
-    assign haz_new_src1     = vec_haz_set[src_1] & ~vec_haz_clr[src_1] & en_vs1;
+    // assign haz_new_src1     = vec_haz_set[src_1] & ~vec_haz_clr[src_1] & en_vs1;
     assign haz_src1         = vec_haz[src_1] & ~vec_haz_clr[src_1] & en_vs1;
-    assign haz_new_src2     = vec_haz_set[src_2] & ~vec_haz_clr[src_2] & en_vs2;
+    // assign haz_new_src2     = vec_haz_set[src_2] & ~vec_haz_clr[src_2] & en_vs2;
     assign haz_src2         = vec_haz[src_2] & ~vec_haz_clr[src_2] & en_vs2;
     assign haz_str          = vec_haz[dest] & ~vec_haz_clr[dest] & en_vs3;
-    assign haz_new_str      = vec_haz_set[dest] & ~vec_haz_clr[dest] & en_vs3;
+    // assign haz_new_str      = vec_haz_set[dest] & ~vec_haz_clr[dest] & en_vs3;
     assign haz_ld           = ((vec_haz_set[dest] || vec_haz[dest]) && ~vec_haz_clr[dest]) && (opcode_mjr === `LD_INSN);
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
