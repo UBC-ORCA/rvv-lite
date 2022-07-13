@@ -45,16 +45,16 @@ module vMCmp #(
             for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i = i + 1) begin
             	// assign val1 = s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)]
 
-				assign lt_u[i][j] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] < s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
+				assign lt_u[j][i] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] < s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
 
 				// FIXME is representation sign and magnitude or 2's comp? This changes rep
-				assign lt_s[i][j] = (s0_vec0[((i+1)<<(j+3))-1] > s0_vec1[((i+1)<<(j+3))-1]) | 
+				assign lt_s[j][i] = (s0_vec0[((i+1)<<(j+3))-1] > s0_vec1[((i+1)<<(j+3))-1]) | 
 										((s0_vec0[((i+1)<<(j+3))-1] === s0_vec1[((i+1)<<(j+3))-1]) &
 										(s0_vec0[((i+1)<<(j+3))-2:i<<(j+3)] < s0_vec1[((i+1)<<(j+3))-2:i<<(j+3)]));
 
-				assign eq[i][j] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] === s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
+				assign eq[j][i] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] === s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
 
-				assign be[i][j] = (i >= s0_start_idx && i < s0_start_idx + (REQ_BYTE_EN_WIDTH >> j)) & s0_valid;	// set bits to 0 if input is invalid!!!
+				assign be[j][i] = s0_valid;	// set bits to 0 if input is invalid!!!
 			end
 		end
 	endgenerate
@@ -96,16 +96,18 @@ module vMCmp #(
 			s0_sew 		<= in_sew 	& {SEW_WIDTH{in_valid}};
 			s0_start_idx <= in_start_idx & {3{in_valid}};
 
-			case(s0_opSel)
-				3'b000: s1_out_vec 	<=   eq[s0_sew];
-				3'b001: s1_out_vec 	<=  ~eq[s0_sew];
-				3'b010: s1_out_vec 	<=   lt_u[s0_sew];
-				3'b011: s1_out_vec 	<=   lt_s[s0_sew];
-				3'b100: s1_out_vec 	<=   lt_u[s0_sew] | eq[s0_sew];
-				3'b101: s1_out_vec 	<=   lt_s[s0_sew] | eq[s0_sew];
-				3'b110: s1_out_vec 	<= ~(lt_u[s0_sew] | eq[s0_sew]);
-				3'b111: s1_out_vec 	<= ~(lt_s[s0_sew] | eq[s0_sew]);
-			endcase
+			if (s0_valid) begin
+				case(s0_opSel)
+					3'b000: s1_out_vec 	<=   eq[s0_sew] << s0_start_idx;
+					3'b001: s1_out_vec 	<=  ~eq[s0_sew] << s0_start_idx;
+					3'b010: s1_out_vec 	<=   lt_u[s0_sew] << s0_start_idx;
+					3'b011: s1_out_vec 	<=   lt_s[s0_sew] << s0_start_idx;
+					3'b100: s1_out_vec 	<=  (lt_u[s0_sew] | eq[s0_sew]) << s0_start_idx;
+					3'b101: s1_out_vec 	<=  (lt_s[s0_sew] | eq[s0_sew]) << s0_start_idx;
+					3'b110: s1_out_vec 	<= ~(lt_u[s0_sew] | eq[s0_sew]) << s0_start_idx;
+					3'b111: s1_out_vec 	<= ~(lt_s[s0_sew] | eq[s0_sew]) << s0_start_idx;
+				endcase
+			end
 			s2_out_vec 	<= s1_out_vec;
 			s3_out_vec 	<= s2_out_vec;
 			s4_out_vec 	<= s3_out_vec;
@@ -125,7 +127,7 @@ module vMCmp #(
 			s4_out_addr	<= s3_out_addr;
 			out_addr  	<= s4_out_addr;
 
-			s1_out_be 	<= be[s0_sew];
+			s1_out_be 	<= be[s0_sew] << s0_start_idx;
 			s2_out_be 	<= s1_out_be;
 			s3_out_be 	<= s2_out_be;
 			s4_out_be 	<= s3_out_be;

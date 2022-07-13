@@ -8,6 +8,8 @@ module addr_gen_unit #(
     input   [2:0]               vlmul,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
+    output  reg                 addr_start,
+    output  reg                 addr_end,
     output                      idle      // signal to processor that we can get another address
 );
 
@@ -20,18 +22,23 @@ module addr_gen_unit #(
     assign idle_single_addr = (vlmul[2] && ~en);
     assign idle             = ~state;
 
+    // assign addr_start       = (~state | curr_reg === max_reg) & en; // start of addr when en in idle state or when en while resetting
+    // assign addr_end         = ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === max_reg);
+
     // latching input values
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
             curr_reg <= 0;
             max_reg <= 0;
+            addr_start <= 0;
+            addr_end <= 0;
         end else begin
             if (state == 1'b0) begin
                 if (en) begin
                     // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
                     curr_reg <= addr_in;
                     // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-                    max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in; 
+                    max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in;
                 end
             end else begin
                 if (curr_reg === max_reg) begin
@@ -39,12 +46,15 @@ module addr_gen_unit #(
                         // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
                         // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
                         curr_reg <= addr_in;
-                        max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in; 
+                        max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in;
                     end
                 end else begin
                     curr_reg <= curr_reg + 1;
                 end
             end
+
+            addr_start  <= (~state | curr_reg === max_reg) & en;
+            addr_end    <= ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === max_reg);
         end
     end
 
@@ -52,7 +62,7 @@ module addr_gen_unit #(
     always @(posedge clk) begin
         case (state)
             1'b0: state <= rst_n & en; // IDLE
-            1'b1: state <= rst_n & (curr_reg !== max_reg) | en; // BUSY
+            1'b1: state <= rst_n & ((curr_reg !== max_reg) | en); // BUSY
             default : state <= 1'b0;
         endcase
     end

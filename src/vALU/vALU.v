@@ -52,6 +52,8 @@ module vALU #(
     input                              req_end     ,
     input                              req_mask    ,
     output reg                         resp_valid  ,
+    output reg                         resp_start  ,
+    output reg                         resp_end    ,
     output reg [  RESP_DATA_WIDTH-1:0] resp_data   ,
     output                             req_ready   ,
     output reg [   REQ_ADDR_WIDTH-1:0] req_addr_out,
@@ -62,6 +64,8 @@ module vALU #(
 
 reg [   REQ_ADDR_WIDTH-1:0]     s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
 reg [REQ_BYTE_EN_WIDTH-1:0]     s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
+reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start;
+reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
 reg [     REQ_VL_WIDTH-1:0]     s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
 reg [REQ_FUNC_ID_WIDTH-1:0]     s0_func_id, s1_func_id, s2_func_id, s3_func_id, s4_func_id;
 reg                             turn;
@@ -525,6 +529,22 @@ always @(posedge clk) begin
         s3_be           <= s2_be;
         s4_be           <= s3_be;
         s5_be           <= s4_be;
+
+        s0_start        <= req_start & req_valid;
+        s1_start        <= s0_start;
+        s2_start        <= s1_start;
+        s3_start        <= s2_start;
+        s4_start        <= s3_start;
+        s5_start        <= s4_start;
+        resp_start      <= s5_start;
+
+        s0_end           <= req_end & req_valid;
+        s1_end           <= s0_end;
+        s2_end           <= s1_end;
+        s3_end           <= s2_end;
+        s4_end           <= s3_end;
+        s5_end           <= s4_end;
+        resp_end         <= s5_end;
 
         req_be_out      <= vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
 

@@ -83,7 +83,7 @@ module rvv_proc_main #(
     wire  [          VLEN-1:0]  vr_rd_data_out_1;
     wire  [          VLEN-1:0]  vr_rd_data_out_2;
 
-    reg   [          VLEN-1:0]  vm_wr_data_in;
+    wire  [          VLEN-1:0]  vm_wr_data_in;
     wire  [          VLEN-1:0]  vm_rd_data_out_1;
     wire  [          VLEN-1:0]  vm_rd_data_out_2; 
 
@@ -263,15 +263,23 @@ module rvv_proc_main #(
     wire                        haz_new_str;
     wire                        haz_new_ld;
 
+    wire                        logic_mop;
+
+    wire                        agu_addr_start_rd_1, agu_addr_start_rd_2, agu_addr_start_wr, agu_addr_start_ld, agu_addr_start_st;
+    wire                        agu_addr_end_rd_1, agu_addr_end_rd_2, agu_addr_end_wr, agu_addr_end_ld, agu_addr_end_st;
+    wire                        alu_req_start, alu_start_out;
+    wire                        alu_req_end, alu_end_out;
+
     genvar i,j;
 
     //   wire alu_req_start;
     //   wire alu_req_end;
     //   wire alu_req_ready;
     //   wire alu_req_vl_out;
-    //   wire alu_req_be_out;
 
     // -------------------------------------------------- CONNECTED MODULES ---------------------------------------------------------------------------------
+
+    assign logic_mop = (opcode_mnr === `MVV_TYPE) & (funct6[5:3] === 3'b011);
 
     insn_decoder #(.INSN_WIDTH(INSN_WIDTH)) id (.clk(clk), .rst_n(rst_n), .insn_in(insn_in_f), .opcode_mjr(opcode_mjr), .opcode_mnr(opcode_mnr), .dest(dest), .src_1(src_1), .src_2(src_2),
         .width(width), .mop(mop), .mew(mew), .nf(nf), .vtype_11(vtype_11), .vtype_10(vtype_10), .vm(vm), .funct6(funct6), .cfg_type(cfg_type));
@@ -280,12 +288,12 @@ module rvv_proc_main #(
 //         .width(width), .mop(mop), .mew(mew), .nf(nf), .vtype_11(vtype_11), .vtype_10(vtype_10), .vm(vm), .funct6(funct6), .cfg_type(cfg_type));
 
     // TODO: figure out how to make this single cycle, so we can fully pipeline lol
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst_n(rst_n), .en(en_vs1_d), .vlmul(vlmul), .addr_in(src_1), .addr_out(vr_rd_addr_1), .idle(agu_idle_rd_1));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2_d), .vlmul(vlmul), .addr_in(src_2), .addr_out(vr_rd_addr_2), .idle(agu_idle_rd_2));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd), .vlmul(vlmul), .addr_in(alu_req_addr_out), .addr_out(vr_wr_addr), .idle(agu_idle_wr));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst_n(rst_n), .en(en_vs1 & ~stall), .vlmul({3{~logic_mop}} & vlmul), .addr_in(src_1), .addr_out(vr_rd_addr_1), .idle(agu_idle_rd_1), .addr_start(agu_addr_start_rd_1), .addr_end(agu_addr_end_rd_1));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall), .vlmul({3{~logic_mop}} & vlmul), .addr_in(src_2), .addr_out(vr_rd_addr_2), .idle(agu_idle_rd_2), .addr_start(agu_addr_start_rd_2), .addr_end(agu_addr_end_rd_2));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd), .vlmul({3{~alu_mask_out}} & vlmul), .addr_in(alu_req_addr_out), .addr_out(vr_wr_addr), .idle(agu_idle_wr), .addr_start(agu_addr_start_wr), .addr_end(agu_addr_end_wr));
 
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3_d), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid), .vlmul(vlmul), .addr_in(dest_m), .addr_out(vr_ld_addr), .idle(agu_idle_ld));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3 & ~stall), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st), .addr_start(agu_addr_start_st), .addr_end(agu_addr_end_st));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid), .vlmul(vlmul), .addr_in(dest_m), .addr_out(vr_ld_addr), .idle(agu_idle_ld), .addr_start(agu_addr_start_ld), .addr_end(agu_addr_end_ld));
 
     // TODO: add normal regfile? connect to external one? what do here
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) vr (.clk(clk),.rst_n(rst_n),
@@ -310,18 +318,18 @@ module rvv_proc_main #(
     // Read vector sources
     // TODO: add mask read logic
 
-    assign haz_24_new        = vec_haz_set[24];
-    assign haz_24_clr        = vec_haz_clr[24];
-    assign haz_24            = vec_haz[24];
-    assign haz_25_new        = vec_haz_set[25];
-    assign haz_25_clr        = vec_haz_clr[25];
-    assign haz_25            = vec_haz[25];
-    assign haz_26_new        = vec_haz_set[26];
-    assign haz_26_clr        = vec_haz_clr[26];
-    assign haz_26            = vec_haz[26];
-    assign haz_27_new        = vec_haz_set[27];
-    assign haz_27_clr        = vec_haz_clr[27];
-    assign haz_27            = vec_haz[27];
+    // assign haz_24_new        = vec_haz_set[24];
+    // assign haz_24_clr        = vec_haz_clr[24];
+    // assign haz_24            = vec_haz[24];
+    // assign haz_25_new        = vec_haz_set[25];
+    // assign haz_25_clr        = vec_haz_clr[25];
+    // assign haz_25            = vec_haz[25];
+    // assign haz_26_new        = vec_haz_set[26];
+    // assign haz_26_clr        = vec_haz_clr[26];
+    // assign haz_26            = vec_haz[26];
+    // assign haz_27_new        = vec_haz_set[27];
+    // assign haz_27_clr        = vec_haz_clr[27];
+    // assign haz_27            = vec_haz[27];
 
     // ------------------------- END DEBUG --------------------------
 
@@ -341,7 +349,7 @@ module rvv_proc_main #(
         for (i = 0; i < NUM_VEC; i=i+1) begin
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest === i) && ((opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
-            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en) || ((vm_wr_addr === i) && |vm_wr_en) || (vm_ld_addr === i && |vm_ld_en);
+            assign vec_haz_clr[i] = ((vr_wr_addr === i) && |vr_wr_en) || (vr_ld_addr === i && |vr_ld_en) || ((vm_wr_addr === i) && |vm_wr_en & alu_end_out) || (vm_ld_addr === i && |vm_ld_en);
             //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
@@ -376,7 +384,7 @@ module rvv_proc_main #(
     // ---------------------------------------- ALU --------------------------------------------------------------------------------
 
     // TODO: hold values steady while waiting for multiple register groupings...
-    assign hold_reg_group   = rst_n & ((reg_count > 0) || (reg_count == 0 && (opcode_mjr === `ST_INSN || opcode_mjr === `LD_INSN || (opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE)) && vlmul > 0));
+    assign hold_reg_group   = rst_n & ((reg_count > 0) || (reg_count == 0 && (opcode_mjr === `ST_INSN || opcode_mjr === `LD_INSN || (opcode_mjr === `OP_INSN && opcode_mnr != `CFG_TYPE && ~(logic_mop))) && vlmul > 0));
     // hold if we are starting a reg group or currently processing one
 
     // SIGN-EXTENDED IMMEDIATE FOR ALU
@@ -426,6 +434,9 @@ module rvv_proc_main #(
     always @(posedge clk) begin
         alu_req_sew     <= sew;
         alu_vr_idx      <= ((1'b1 << vlmul) - 1) - reg_count;
+        // alu_enable      <= (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
+        //                                                     (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   ||
+                                                            // (opcode_mnr_e == `MVV_TYPE && funct6_e == 'h14));
     end
 
     assign alu_enable   = (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
@@ -440,7 +451,12 @@ module rvv_proc_main #(
         // enable ALU if ALU op AND ((VR enabled AND valu.vv) OR valu.vi OR valu.vx)
         case (opcode_mnr_e)
             3'h0,
-            3'h1,
+            3'h1:
+                case (funct6_e)
+                    // vid.v
+                    6'b010100:  alu_data_in1    = {{(DATA_WIDTH-5){1'b0}},s_ext_imm_e[4:0]}; // use s_ext_imm because it already exists
+                    default:    alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+                endcase
             3'h2:
                 case (funct6_e[5:3])
                     3'b010: begin
@@ -477,25 +493,31 @@ module rvv_proc_main #(
         endcase
 
         case (funct6_e[5:3])
-            3'b011:     alu_data_in2 = vm_rd_data_out_2;    // mask function
+            3'b011: begin
+                case (opcode_mnr_e)
+                    3'h2:       alu_data_in2 = vm_rd_data_out_2;    // mask function
+                    default:    alu_data_in2 = vr_rd_data_out_2;
+                endcase
+            end
             default:    alu_data_in2 = vr_rd_data_out_2; // source 2 is always source 2 for ALU
         endcase
     end
 
+    assign alu_req_start = agu_addr_start_rd_1 | agu_addr_start_rd_2;
+    assign alu_req_end   = agu_addr_end_rd_1 | agu_addr_end_rd_2;
+
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(4))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(req_start), .req_end(req_end),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_e), .req_func_id(funct6_e), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
-        .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out), .req_be_out(alu_be_out));
+        .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out), .req_be_out(alu_be_out),
+        .resp_start(alu_start_out), .resp_end(alu_end_out));
     //  MISSING PORT CONNECTIONS:
-    //     input                              req_start   ,
-    //     input                              req_end     ,
     //     output                             req_ready   ,
-    //     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out
     // );
 
     // used only for OPIVV, OPFVV, MVV_TYPE (excl VID)
-    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2 && funct6 != 'h14 && funct6);// && ~hold_reg_group;
+    assign en_vs1   = (opcode_mjr === `OP_INSN && opcode_mnr <= 3'h2 && funct6 != 'h14);// && ~hold_reg_group;
 
     // used for all ALU (not move or id) and one each of load/store
     // TODO FOR LD/STR: Implement indexed address offsets (the only time vs2 actually used)
@@ -572,14 +594,16 @@ module rvv_proc_main #(
         if (alu_valid_out & ~alu_mask_out) begin
             vr_wr_data_in   <= {DATA_WIDTH{rst_n}} & alu_data_out;
         end
-        if (alu_valid_out & alu_mask_out) begin
-            vm_wr_data_in   <= {DATA_WIDTH{rst_n}} & alu_data_out;
-        end
+        // if (alu_valid_out & alu_mask_out) begin
+            // vm_wr_data_in   <= {DATA_WIDTH{rst_n}} & alu_data_out;
+        // end
     end
 
     // WE may be able to reduce to 1 bit because we use AGNOSTIC ops only right?
     // Nah, combining mask and enable saves some logic overall
     assign vr_wr_en = {DW_B{~agu_idle_wr}} & alu_be_out;
+
+    assign vm_wr_data_in    = {DATA_WIDTH{rst_n & alu_valid_out & alu_mask_out}} & alu_data_out;
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
     assign no_bubble = hold_reg_group & (reg_count > 0);
@@ -620,8 +644,8 @@ module rvv_proc_main #(
         if (opcode_mnr_e == `MVX_TYPE && funct6_e == 'h10) begin
             alu_req_be = {{(VEX_DATA_WIDTH/8){1'b1}},{(DW_B - VEX_DATA_WIDTH/8){1'b0}}}; // FIXME :) We want to operate on vd[0] bytes only
         end else begin // FIXME -- how do we use AVL when it's a variable??
-            // FIXME how the f do we decide which mask to use?
-            alu_req_be = {DW_B{vm}} | vm_src_1; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
+            // Next mask will always come from v0, we really only need to read and write masks for mask manipulation instructions
+            alu_req_be = {DW_B{vm_e}} | vm_0; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
         end
     end
 
@@ -664,6 +688,7 @@ module rvv_proc_main #(
             vmask_ext_m     <= 'b1;
 
             mem_addr_out    <= 'b0;
+            vm_0            <= {DW_B{1'b1}};
         end else begin
             // all stalling should happen here
             // FIXME circular stall logic
@@ -674,9 +699,9 @@ module rvv_proc_main #(
             src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
             src_2_d         <= ~stall ? src_2       : (no_bubble ? src_2_d      : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
-            en_vs1_d        <= en_vs1;
-            en_vs2_d        <= en_vs2;
-            en_vs3_d        <= en_vs3;
+            // en_vs1_d        <= ~stall & en_vs1;
+            // en_vs2_d        <= ~stall & en_vs2;
+            en_vs3_d        <= ~stall & en_vs3;
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_2[VEX_DATA_WIDTH-1]}}, sca_data_in_2} : (no_bubble ? sca_data_in_2_d : 'h0);
@@ -704,7 +729,10 @@ module rvv_proc_main #(
             vexrv_data_out  <= (opcode_mjr_d === `OP_INSN && opcode_mnr_d === `CFG_TYPE) ? avl : 'h0;
             vexrv_valid_out <= out_ack_e || out_ack_m;
 
-            vm_0            <= {DW_B{alu_mask_out}} & alu_data_out; // FIXME this will need to be multi-cycle for VLEN > DW
+            // update
+            if (alu_valid_out & alu_mask_out & alu_req_addr_out === 'h0) begin
+                vm_0    <= (vm_0 & ~alu_be_out) | (alu_data_out[DW_B-1:0] & alu_be_out); // FIXME this will need to be multi-cycle for VLEN > DW
+            end
         end
     end
 
