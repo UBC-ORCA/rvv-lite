@@ -67,7 +67,7 @@ reg [REQ_BYTE_EN_WIDTH-1:0]     s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
 reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start;
 reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
 reg [     REQ_VL_WIDTH-1:0]     s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
-reg [REQ_FUNC_ID_WIDTH-1:0]     s0_func_id, s1_func_id, s2_func_id, s3_func_id, s4_func_id;
+// reg [REQ_FUNC_ID_WIDTH-1:0]     s0_func_id, s1_func_id, s2_func_id, s3_func_id, s4_func_id;
 reg                             turn;
 
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
@@ -108,7 +108,7 @@ assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
 assign vMOP_en              = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h2);
-assign vMCmp_en              = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h0 | req_op_mnr === 3'h3 | req_op_mnr === 3'h4);
+assign vMCmp_en             = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h0 | req_op_mnr === 3'h3 | req_op_mnr === 3'h4);
 assign vPopc_en             = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
 assign vID_en               = req_valid & (req_func_id == 'h14) & (req_data0 == 'h11); // vid uses VMUNARY0
 assign vRedAndOrXor_en      = req_valid & (|req_func_id[1:0] & req_func_id[5:2] == 4'b0000) & (req_op_mnr == 3'h2);
@@ -487,11 +487,11 @@ always @(posedge clk) begin
         resp_data       <= 'b0;
         resp_valid      <= 'b0;
 
-        s0_func_id      <= 'b0;
-        s1_func_id      <= 'b0;
-        s2_func_id      <= 'b0;
-        s3_func_id      <= 'b0;
-        s4_func_id      <= 'b0;
+        // s0_func_id      <= 'b0;
+        // s1_func_id      <= 'b0;
+        // s2_func_id      <= 'b0;
+        // s3_func_id      <= 'b0;
+        // s4_func_id      <= 'b0;
 
         s0_be           <= 'b0;
         s1_be           <= 'b0;
@@ -509,11 +509,11 @@ always @(posedge clk) begin
         turn            <= 'b0;
     end
     else begin
-        s0_func_id      <= req_func_id;
-        s1_func_id      <= s0_func_id;
-        s2_func_id      <= s1_func_id;
-        s3_func_id      <= s2_func_id;
-        s4_func_id      <= s3_func_id;
+        // s0_func_id      <= req_func_id;
+        // s1_func_id      <= s0_func_id;
+        // s2_func_id      <= s1_func_id;
+        // s3_func_id      <= s2_func_id;
+        // s4_func_id      <= s3_func_id;
 
         s0_vl           <= req_vl;
         s1_vl           <= s0_vl;
@@ -523,7 +523,7 @@ always @(posedge clk) begin
         s5_vl           <= s4_vl;
         req_vl_out      <= s5_vl;
 
-        s0_be           <= req_be & (vWiden_en ? vWiden_be : {REQ_BYTE_EN_WIDTH{~(vSlide_en | vNarrow_en | vMCmp_en)}});
+        s0_be           <= req_be & (vWiden_en ? vWiden_be : {REQ_BYTE_EN_WIDTH{~(vSlide_en | vNarrow_en | vMCmp_en)}});// & {REQ_BYTE_EN_WIDTH{req_valid}};
         s1_be           <= s0_be;
         s2_be           <= s1_be;
         s3_be           <= s2_be;
@@ -546,7 +546,7 @@ always @(posedge clk) begin
         s5_end        <= s4_end;
         resp_end      <= s5_end;
 
-        req_be_out      <= vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
+        req_be_out      <=  vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
 
         resp_valid      <= vMove_outValid   | vAdd_outValid | vAndOrXor_outValid| vMul_outValid | vSlide_outValid | vNarrow_outValid
                             | vMerge_outValid   | vMOP_outValid | vPopc_outValid| vRedAndOrXor_outValid | vRedSum_min_max_outValid

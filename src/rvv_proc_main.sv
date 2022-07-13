@@ -240,6 +240,7 @@ module rvv_proc_main #(
     wire                        alu_mask_out;
     reg   [          DW_B-1:0]  alu_req_be;
     reg   [          DW_B-1:0]  alu_be_out;
+    reg   [          DW_B-1:0]  alu_be_out_w; // we need to hold it because of the agu cycle delay -- maybe should just feed into agu?
     reg   [               3:0]  alu_vr_idx;
 
     wire                        hold_reg_group;
@@ -267,8 +268,8 @@ module rvv_proc_main #(
 
     wire                        agu_addr_start_rd_1, agu_addr_start_rd_2, agu_addr_start_wr, agu_addr_start_ld, agu_addr_start_st;
     wire                        agu_addr_end_rd_1, agu_addr_end_rd_2, agu_addr_end_wr, agu_addr_end_ld, agu_addr_end_st;
-    wire                        alu_req_start, alu_start_out;
-    wire                        alu_req_end, alu_end_out;
+    reg                         alu_req_start, alu_start_out;
+    reg                         alu_req_end, alu_end_out;
 
     genvar i,j;
 
@@ -309,10 +310,12 @@ module rvv_proc_main #(
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .rst_n(rst_n), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1), .avl_set(avl_set),
         .avl_new(data_in_1_f), .avl(avl), .sew(sew), .vlmul(vlmul), .vma(vma), .vta(vta), .vill(vill), .new_vl(new_vl));
 
-    extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_s1 (.clk(clk), .rst_n(rst_n), .vmask_in(vm_rd_data_out_1), .sew(sew), .reg_count(reg_count), .vmask_out(vm_src_1));
-    extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_s2 (.clk(clk), .rst_n(rst_n), .vmask_in(vm_rd_data_out_2), .sew(sew), .reg_count(reg_count), .vmask_out(vm_src_2));
+    // extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_s1 (.clk(clk), .rst_n(rst_n), .vmask_in(vm_rd_data_out_1), .sew(sew), .reg_count(reg_count), .vmask_out(vm_src_1));
+    // extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_s2 (.clk(clk), .rst_n(rst_n), .vmask_in(vm_rd_data_out_2), .sew(sew), .reg_count(reg_count), .vmask_out(vm_src_2));
     // FIXME lol unsure which mask we're supposed to use tbh. v0? idk.
-    extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_alu (.clk(clk), .rst_n(rst_n), .vmask_in(vm_0), .sew(sew), .reg_count(reg_count), .vmask_out(vmask_ext_e));
+    extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_alu (.clk(clk), .rst_n(rst_n), .vmask_in(vm_0), .sew(sew), .reg_count((1<<vlmul - 1)-reg_count), .vmask_out(vmask_ext_e));
+
+    // extract_mask #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH)) vm_s1 (.clk(clk), .rst_n(rst_n), .vmask_in(vm_rd_data_out_1), .sew(sew), .reg_count(reg_count), .vmask_out(vm_src_1));
 
     // ------------------------- BEGIN DEBUG --------------------------
     // Read vector sources
@@ -344,13 +347,20 @@ module rvv_proc_main #(
         data_in_2_f     <= {VEX_DATA_WIDTH{rst_n}} & (stall ? data_in_2_f : (insn_valid ? vexrv_data_in_2 : 'h0));
     end
 
+    // assign eq_0 = (vm_wr_addr === 0);
+
+    wire eq_i [0:NUM_VEC];
+    wire clr_vm [0:NUM_VEC];
+
     // FIXME separate into "clear hazard" and "set hazard" logic so we can check hazards more easily lol
     generate
         for (i = 0; i < NUM_VEC; i=i+1) begin
+            assign eq_i[i] = (vm_wr_addr === i);
+            assign clr_vm[i] = ((vm_wr_addr == i) & (|vm_wr_en) & (alu_end_out));
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest === i) & ((opcode_mjr === `OP_INSN & opcode_mnr != `CFG_TYPE) || opcode_mjr === `LD_INSN);
-            assign vec_haz_clr[i] = ((vr_wr_addr === i) & |vr_wr_en) | (vr_ld_addr === i & |vr_ld_en) | ((vm_wr_addr === i) & |vm_wr_en & alu_end_out) | (vm_ld_addr === i & |vm_ld_en);
-            //(dest_m === i && opcode_mjr_m === `LD_INSN)))); // FIXME opcode check
+            assign vec_haz_clr[i] = ((vr_wr_addr == i) & (|vr_wr_en)) | ((vr_ld_addr == i) & (|vr_ld_en)) |
+                                    (((vm_wr_addr == i) & (|vm_wr_en)) | ((vm_ld_addr == i) & (|vm_ld_en))) & (alu_end_out); // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
@@ -437,6 +447,8 @@ module rvv_proc_main #(
         // alu_enable      <= (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
         //                                                     (opcode_mnr_e == `IVI_TYPE) || (opcode_mnr_e == `IVX_TYPE) || (opcode_mnr_e == `MVX_TYPE)   ||
                                                             // (opcode_mnr_e == `MVV_TYPE && funct6_e == 'h14));
+        alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2;
+        alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2;
     end
 
     assign alu_enable   = (opcode_mjr_e === `OP_INSN) && (  ((vr_rd_active_1 || vr_rd_active_2) && (opcode_mnr_e == `IVV_TYPE || opcode_mnr_e == `MVV_TYPE)) ||
@@ -503,12 +515,9 @@ module rvv_proc_main #(
         endcase
     end
 
-    assign alu_req_start = agu_addr_start_rd_1 | agu_addr_start_rd_2;
-    assign alu_req_end   = agu_addr_end_rd_1 | agu_addr_end_rd_2;
-
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(4))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(req_start), .req_end(req_end),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_e), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_e), .req_func_id(funct6_e), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_e),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_req_addr_out), .req_vl(alu_req_avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out), .req_be_out(alu_be_out),
         .resp_start(alu_start_out), .resp_end(alu_end_out));
@@ -544,6 +553,7 @@ module rvv_proc_main #(
 
     // FIXME this is not to spec -- vm should return only the bits corresponding to the elements we want (vm doesn't do grouping!)
     // TODO merge vm and vr and just add another port for the mask probably (simplifies logic!)
+
     assign vm_rd_addr_1 = src_1_d;
     assign vm_rd_addr_2 = src_2_d;
     assign vm_wr_addr   = alu_req_addr_out;
@@ -599,9 +609,9 @@ module rvv_proc_main #(
         // end
     end
 
-    // WE may be able to reduce to 1 bit because we use AGNOSTIC ops only right?
+    // We may be able to reduce to 1 bit because we use AGNOSTIC ops only right?
     // Nah, combining mask and enable saves some logic overall
-    assign vr_wr_en = {DW_B{~agu_idle_wr}} & alu_be_out;
+    assign vr_wr_en = {DW_B{~agu_idle_wr}} & alu_be_out_w;
 
     assign vm_wr_data_in    = {DATA_WIDTH{rst_n & alu_valid_out & alu_mask_out}} & alu_data_out;
 
@@ -645,7 +655,7 @@ module rvv_proc_main #(
             alu_req_be = {{(VEX_DATA_WIDTH/8){1'b1}},{(DW_B - VEX_DATA_WIDTH/8){1'b0}}}; // FIXME :) We want to operate on vd[0] bytes only
         end else begin // FIXME -- how do we use AVL when it's a variable??
             // Next mask will always come from v0, we really only need to read and write masks for mask manipulation instructions
-            alu_req_be = {DW_B{vm_e}} | vm_0; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
+            alu_req_be = {DW_B{vm_e}} | vmask_ext_e; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
         end
     end
 
@@ -733,6 +743,8 @@ module rvv_proc_main #(
             if (alu_valid_out & alu_mask_out & alu_req_addr_out === 'h0) begin
                 vm_0    <= (vm_0 & ~alu_be_out) | (alu_data_out[DW_B-1:0] & alu_be_out); // FIXME this will need to be multi-cycle for VLEN > DW
             end
+
+            alu_be_out_w    <= alu_be_out;
         end
     end
 
@@ -780,7 +792,7 @@ module extract_mask #(
     
     // FIXME
     initial begin
-        vmask_out = {VLEN>>3{1'b1}};
+        vmask_out = {(VLEN>>3){1'b1}};
     end
 
     // Generate mask byte enable based on SEW and current index in vector
@@ -794,8 +806,8 @@ module extract_mask #(
         end
     endgenerate
 
-    always @(posedge clk) begin
-        vmask_out <= {DW_B{~rst_n}} & vmask_sew[sew];
+    always @(*) begin
+        vmask_out = {DW_B{rst_n}} & vmask_sew[sew];
     end
 
 endmodule

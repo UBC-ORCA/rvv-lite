@@ -27,13 +27,13 @@ module vAdd_min_max #(
 
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
-	reg [RESP_DATA_WIDTH-1:0] s2_out_vec, s3_out_vec, s4_out_vec;
+	reg [RESP_DATA_WIDTH-1:0] s2_out_vec, s3_out_vec, s4_out_vec, s5_out_vec;
 	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew;
 	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel, s2_opSel;
-	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
+	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid, s5_valid;
 	reg [                7:0] s2_gt, s2_lt, s2_equal;
 
-	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
+	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr, s5_out_addr;
 
 	wire [REQ_DATA_WIDTH+16:0] s1_result;
 
@@ -84,6 +84,7 @@ module vAdd_min_max #(
 			s2_out_vec 	<= 'b0;
 			s3_out_vec 	<= 'b0;
 			s4_out_vec 	<= 'b0;
+			s5_out_vec	<= 'b0;
 			out_vec    	<= 'b0;
 
 			s0_sew     	<= 'b0;
@@ -98,6 +99,7 @@ module vAdd_min_max #(
 			s2_valid   	<= 'b0;
 			s3_valid   	<= 'b0;
 			s4_valid   	<= 'b0;
+			s5_valid 	<= 'b0;
 			out_valid  	<= 'b0;
 
 			s2_equal   	<= 'b0;
@@ -109,6 +111,7 @@ module vAdd_min_max #(
 			s2_out_addr	<= 'b0;
 			s3_out_addr	<= 'b0;
 			s4_out_addr	<= 'b0;
+			s5_out_addr <= 'b0;
 			out_addr   	<= 'b0;
 		end
 
@@ -148,13 +151,17 @@ module vAdd_min_max #(
 				default : s3_out_vec 	<= s2_out_vec;
 			endcase
 
-// 			s4_out_vec <= s3_out_vec;
-// 			s4_valid   <= s3_valid;
-//          s4_out_addr <= s3_out_addr;
+			s4_out_vec 	<= s3_out_vec;
+			s4_valid   	<= s3_valid;
+         	s4_out_addr <= s3_out_addr;
 
-			out_vec   	<= s3_out_vec;
-			out_valid 	<= s3_valid;
-			out_addr  	<= s3_out_addr;
+         	s5_out_vec 	<= s4_out_vec;
+			s5_valid   	<= s4_valid;
+         	s5_out_addr <= s4_out_addr;
+
+			out_vec   	<= s5_out_vec;
+			out_valid 	<= s5_valid;
+			out_addr  	<= s5_out_addr;
 		end
 	end
 

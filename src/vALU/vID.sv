@@ -60,23 +60,23 @@ module vID #(
         else begin
             s0_valid    <= in_valid;
             s1_valid    <= s0_valid;
-//          s2_valid    <= s1_valid;
-//          s3_valid    <= s2_valid;
-            s4_valid    <= s1_valid;
+            s2_valid    <= s1_valid;
+            s3_valid    <= s2_valid;
+            s4_valid    <= s3_valid;
             out_valid   <= s4_valid;
           
             s0_out_vec  <= {RESP_DATA_WIDTH{in_valid}} & s0_data[in_sew];
             s1_out_vec  <= s0_out_vec;
-//          s2_out_vec  <= s1_out_vec;
-//          s3_out_vec  <= s2_out_vec;
-            s4_out_vec  <= s1_out_vec;
+            s2_out_vec  <= s1_out_vec;
+            s3_out_vec  <= s2_out_vec;
+            s4_out_vec  <= s3_out_vec;
             out_vec     <= s4_out_vec;
           
             s0_out_addr <= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
             s1_out_addr <= s0_out_addr;
-//          s2_out_addr <= s1_out_addr;
-//          s3_out_addr <= s2_out_addr;
-            s4_out_addr <= s1_out_addr;
+            s2_out_addr <= s1_out_addr;
+            s3_out_addr <= s2_out_addr;
+            s4_out_addr <= s3_out_addr;
             out_addr    <= s4_out_addr;
         end
     end

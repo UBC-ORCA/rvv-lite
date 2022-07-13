@@ -54,7 +54,7 @@ module addr_gen_unit #(
             end
 
             addr_start  <= (~state | curr_reg === max_reg) & en;
-            addr_end    <= ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === max_reg);
+            addr_end    <= ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === (max_reg-1));
         end
     end
 
