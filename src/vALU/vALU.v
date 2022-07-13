@@ -538,13 +538,13 @@ always @(posedge clk) begin
         s5_start        <= s4_start;
         resp_start      <= s5_start;
 
-        s0_end           <= req_end & req_valid;
-        s1_end           <= s0_end;
-        s2_end           <= s1_end;
-        s3_end           <= s2_end;
-        s4_end           <= s3_end;
-        s5_end           <= s4_end;
-        resp_end         <= s5_end;
+        s0_end        <= req_end & req_valid;
+        s1_end        <= s0_end;
+        s2_end        <= s1_end;
+        s3_end        <= s2_end;
+        s4_end        <= s3_end;
+        s5_end        <= s4_end;
+        resp_end      <= s5_end;
 
         req_be_out      <= vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
 
