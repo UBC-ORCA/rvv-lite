@@ -33,10 +33,10 @@ module vMCmp #(
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_be, s2_out_be, s3_out_be, s4_out_be;
 	reg [ REQ_ADDR_WIDTH-1:0] 	s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
-	reg [RESP_DATA_WIDTH-1:0] 	lt_u	[0:3];
-	reg [RESP_DATA_WIDTH-1:0]	lt_s	[0:3];
-	reg [RESP_DATA_WIDTH-1:0]	eq 		[0:3];
-	reg [RESP_DATA_WIDTH-1:0]	be 		[0:3];
+	wire [RESP_DATA_WIDTH-1:0] 	lt_u	[0:3];
+	wire [RESP_DATA_WIDTH-1:0]	lt_s	[0:3];
+	wire [RESP_DATA_WIDTH-1:0]	eq 		[0:3];
+	wire [RESP_DATA_WIDTH-1:0]	be 		[0:3];
 
 	// reg [REQ_BYTE_EN_WIDTH-1:0] val1[0:3], val2 [0:3];
 

@@ -73,6 +73,7 @@ reg                             turn;
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAdd_outVec, vAndOrXor_outVec, vMul_outVec, vSlide_outVec, vNarrow_outVec;
+wire [   REQ_DATA_WIDTH-1:0]    vAvAdd_outVec, vScShift_outVec;
 wire [                  1:0]    vAndOrXor_opSel, vMul_opSel, vAdd_opSel;
 wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1      ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_mult    ;
@@ -523,6 +524,7 @@ always @(posedge clk) begin
         s5_vl           <= s4_vl;
         req_vl_out      <= s5_vl;
 
+        // TODO pipe these through modules instead, so timing of outputs is guaranteed
         s0_be           <= req_be & (vWiden_en ? vWiden_be : {REQ_BYTE_EN_WIDTH{~(vSlide_en | vNarrow_en | vMCmp_en)}});// & {REQ_BYTE_EN_WIDTH{req_valid}};
         s1_be           <= s0_be;
         s2_be           <= s1_be;

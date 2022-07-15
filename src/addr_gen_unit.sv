@@ -8,63 +8,55 @@ module addr_gen_unit #(
     input   [2:0]               vlmul,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
-    output  reg                 addr_start,
-    output  reg                 addr_end,
+    output                      addr_start,
+    output                      addr_end,
     output                      idle      // signal to processor that we can get another address
 );
 
-    reg [ADDR_WIDTH-1:0] curr_reg;
-    reg [ADDR_WIDTH-1:0] max_reg;
-    reg state;  // STATES: IDLE, BUSY
+    reg  [ADDR_WIDTH-1:0]   base_reg;
+    reg  [           2:0]   curr_reg;
+    reg  [           2:0]   max_reg;
+    reg                     state;  // STATES: IDLE, BUSY
+    wire                    reg_group, new_addr, state_next;
+    wire                    addr_start_out, addr_end_out;
+    wire [ADDR_WIDTH-1:0]   base_reg_out;
+    wire [           2:0]   curr_reg_out, max_reg_out;
 
-//   assign reg_group = (vlmul > 3'b000 && vlmul[2] === 1'b0);
-    assign addr_out         = curr_reg;
-    assign idle_single_addr = (vlmul[2] && ~en);
-    assign idle             = ~state;
+    assign reg_group        = ~vlmul[2] & (vlmul[1] | vlmul[0]);
+    assign addr_out         = base_reg_out + curr_reg_out;
+    assign idle             = ~state_next;
 
-    // assign addr_start       = (~state | curr_reg === max_reg) & en; // start of addr when en in idle state or when en while resetting
-    // assign addr_end         = ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === max_reg);
+    assign state_next       = rst_n & (en | (state & curr_reg !== max_reg));
+
+    assign new_addr         = (~state | curr_reg === max_reg) & en;
+
+    assign addr_start       = (~state | curr_reg === max_reg) & en; // start of addr when en in idle state or when en while resetting
+    assign addr_end         = ((vlmul[2] | vlmul === 'b0) & en) | (state_next & curr_reg_out === max_reg);
+
+    // always@(*) begin
+    assign base_reg_out    = {ADDR_WIDTH{rst_n}} & (new_addr ? addr_in : base_reg);
+    assign curr_reg_out    = {3{rst_n & ~new_addr}} & (curr_reg + (curr_reg !== max_reg));
+    assign max_reg_out     = {3{rst_n}} & (new_addr ? ({3{~vlmul[2]}} & {vlmul[1] & vlmul[0], vlmul[1], vlmul[1] | vlmul[0]}) : max_reg);
+    // end
 
     // latching input values
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
-            curr_reg <= 0;
-            max_reg <= 0;
-            addr_start <= 0;
-            addr_end <= 0;
-        end else begin
-            if (state == 1'b0) begin
-                if (en) begin
-                    // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
-                    curr_reg <= addr_in;
-                    // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-                    max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in;
-                end
-            end else begin
-                if (curr_reg === max_reg) begin
-                    if (en) begin
-                        // curr_reg <= (vlmul[2] === 1'b0) ? addr_in << vlmul : addr_in;
-                        // max_reg <= (vlmul[2] === 1'b0) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-                        curr_reg <= addr_in;
-                        max_reg <= (vlmul[2] === 1'b0) ? addr_in + (1'b1 << vlmul) - 1'b1 : addr_in;
-                    end
-                end else begin
-                    curr_reg <= curr_reg + 1;
-                end
-            end
+    always @(posedge clk) begin
+        base_reg    <= base_reg_out; // {ADDR_WIDTH{rst_n}} & (new_addr ? addr_in : base_reg);
+        curr_reg    <= curr_reg_out; // {3{rst_n & ~new_addr}} & (curr_reg + (curr_reg < max_reg));
+        max_reg     <= max_reg_out; // {3{rst_n}} & (new_addr ? ({3{~vlmul[2]}} & {vlmul[1] & vlmul[0], vlmul[1], vlmul[1] | vlmul[0]}) : max_reg);
 
-            addr_start  <= (~state | curr_reg === max_reg) & en;
-            addr_end    <= ((vlmul[2] | vlmul === 'b0) & en) | (state & curr_reg === (max_reg-1));
-        end
+        state       <= state_next;
+        // addr_start  <= rst_n & new_addr;
+        // addr_end    <= rst_n & ((~reg_group & en) | (state & curr_reg === (max_reg-1)));
     end
 
     // STATE MACHINE :)
-    always @(posedge clk) begin
-        case (state)
-            1'b0: state <= rst_n & en; // IDLE
-            1'b1: state <= rst_n & ((curr_reg !== max_reg) | en); // BUSY
-            default : state <= 1'b0;
-        endcase
-    end
+    // always @(posedge clk) begin
+    //     case (state)
+    //         1'b0: state <= rst_n & en; // IDLE
+    //         1'b1: state <= rst_n & ((curr_reg !== max_reg) | en); // BUSY
+    //         default : state <= 1'b0;
+    //     endcase
+    // end
 
 endmodule
