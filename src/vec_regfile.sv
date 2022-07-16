@@ -242,28 +242,38 @@ module vec_regfile #(
             assign wr_conflict[j] = (wr_reg === ld_reg) && ((wr_en[j] | wr_state) & ((ld_en[j] | ld_state)));
 
             always @(posedge clk) begin
-                if (rst_n & (rd_en_1[j] | rd_state_1)) begin
-                    rd_data_out_1[(j+1)*8-1:j*8]    <= vec_data[rd_reg_1][(j+1)*8-1:j*8];
+                if (rd_en_1[j] | rd_state_1) begin
+                    rd_data_out_1[(j+1)*8-1:j*8]    <= {DATA_WIDTH{rst_n}} & vec_data[rd_reg_1][(j+1)*8-1:j*8];
                 end
-                if (rst_n & (rd_en_2[j] | rd_state_2)) begin
-                    rd_data_out_2[(j+1)*8-1:j*8]    <= vec_data[rd_reg_2][(j+1)*8-1:j*8];
-                end
-
-                if (rst_n & ((wr_en[j] | wr_state) | (ld_en[j] | ld_state))) begin
-                    if (wr_conflict[j]) begin
-                        vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
-                    end else begin
-                        if (wr_en[j] | wr_state) begin
-                            vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
-                        end
-                        if (ld_en[j] | ld_state) begin
-                            vec_data[ld_reg][(j+1)*8-1:j*8] <= ld_data_in[(j+1)*8-1:j*8];
-                        end 
-                    end
+                if (rd_en_2[j] | rd_state_2) begin
+                    rd_data_out_2[(j+1)*8-1:j*8]    <= {DATA_WIDTH{rst_n}} & vec_data[rd_reg_2][(j+1)*8-1:j*8];
                 end
 
-                if (rst_n & (st_en[j] | st_state)) begin
-                    st_data_out[(j+1)*8-1:j*8]  <= vec_data[st_reg][(j+1)*8-1:j*8];
+                // if (rst_n & ((wr_en[j] | wr_state) | (ld_en[j] | ld_state))) begin
+                //     if (wr_conflict[j]) begin
+                //         vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
+                //     end else begin
+                //         if (wr_en[j] | wr_state) begin
+                //             vec_data[wr_reg][(j+1)*8-1:j*8] <= wr_data_in[(j+1)*8-1:j*8];
+                //         end
+                //         if (ld_en[j] | ld_state) begin
+                //             vec_data[ld_reg][(j+1)*8-1:j*8] <= ld_data_in[(j+1)*8-1:j*8];
+                //         end 
+                //     end
+                // end
+
+                // Prioritize reg writeback over load writeback. Realistically we shouldn't allow conflicts, but this is to be safe
+                // FIXME: queue load if this happens
+                if (wr_en[j] | wr_state) begin
+                    vec_data[wr_reg][(j+1)*8-1:j*8] <= {DATA_WIDTH{rst_n}} & wr_data_in[(j+1)*8-1:j*8];
+                end else begin
+                    if (ld_en[j] | ld_state) begin
+                        vec_data[ld_reg][(j+1)*8-1:j*8] <= {DATA_WIDTH{rst_n}} & ld_data_in[(j+1)*8-1:j*8];
+                    end 
+                end
+
+                if (st_en[j] | st_state) begin
+                    st_data_out[(j+1)*8-1:j*8]  <= {DATA_WIDTH{rst_n}} & vec_data[st_reg][(j+1)*8-1:j*8];
                 end
             end
         end

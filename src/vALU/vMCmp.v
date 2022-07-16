@@ -27,7 +27,7 @@ module vMCmp #(
 	reg 						s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
 	reg [	 OPSEL_WIDTH-1:0] 	s0_opSel;
 	reg [ 	   SEW_WIDTH-1:0]	s0_sew;
-	reg [    		     2:0]	s0_start_idx;
+	reg [    		     2:0]	s0_start_idx, s1_start_idx;
 	reg [ REQ_DATA_WIDTH-1:0] 	s0_vec0, s0_vec1;
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_be, s2_out_be, s3_out_be, s4_out_be;
@@ -74,6 +74,9 @@ module vMCmp #(
 			s4_out_vec 	<= 'b0;
 			out_vec    	<= 'b0;
 
+			s0_start_idx <= 'b0;
+			s1_start_idx <= 'b0;
+
 			s0_valid 	<= 'b0;
 			s1_valid 	<= 'b0;
 			s2_valid 	<= 'b0;
@@ -94,21 +97,23 @@ module vMCmp #(
 			s0_vec1 	<= in_vec1 	& {REQ_DATA_WIDTH{in_valid}};
 			s0_opSel 	<= in_opSel & {OPSEL_WIDTH{in_valid}};
 			s0_sew 		<= in_sew 	& {SEW_WIDTH{in_valid}};
+
 			s0_start_idx <= in_start_idx & {3{in_valid}};
+			s1_start_idx <= s0_start_idx;
 
 			if (s0_valid) begin
 				case(s0_opSel)
-					3'b000: s1_out_vec 	<=   eq[s0_sew] << s0_start_idx;
-					3'b001: s1_out_vec 	<=  ~eq[s0_sew] << s0_start_idx;
-					3'b010: s1_out_vec 	<=   lt_u[s0_sew] << s0_start_idx;
-					3'b011: s1_out_vec 	<=   lt_s[s0_sew] << s0_start_idx;
-					3'b100: s1_out_vec 	<=  (lt_u[s0_sew] | eq[s0_sew]) << s0_start_idx;
-					3'b101: s1_out_vec 	<=  (lt_s[s0_sew] | eq[s0_sew]) << s0_start_idx;
-					3'b110: s1_out_vec 	<= ~(lt_u[s0_sew] | eq[s0_sew]) << s0_start_idx;
-					3'b111: s1_out_vec 	<= ~(lt_s[s0_sew] | eq[s0_sew]) << s0_start_idx;
+					3'b000: s1_out_vec 	<=   eq[s0_sew];
+					3'b001: s1_out_vec 	<=  ~eq[s0_sew];
+					3'b010: s1_out_vec 	<=   lt_u[s0_sew];
+					3'b011: s1_out_vec 	<=   lt_s[s0_sew];
+					3'b100: s1_out_vec 	<=  (lt_u[s0_sew] | eq[s0_sew]);
+					3'b101: s1_out_vec 	<=  (lt_s[s0_sew] | eq[s0_sew]);
+					3'b110: s1_out_vec 	<= ~(lt_u[s0_sew] | eq[s0_sew]);
+					3'b111: s1_out_vec 	<= ~(lt_s[s0_sew] | eq[s0_sew]);
 				endcase
 			end
-			s2_out_vec 	<= s1_out_vec;
+			s2_out_vec 	<= s1_out_vec << s1_start_idx;
 			s3_out_vec 	<= s2_out_vec;
 			s4_out_vec 	<= s3_out_vec;
 			out_vec 	<= s4_out_vec;
