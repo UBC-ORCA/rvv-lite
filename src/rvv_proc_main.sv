@@ -39,6 +39,8 @@ module rvv_proc_main #(
     input                               insn_valid,
     input       [    DATA_WIDTH-1:0]    mem_port_data_in,
     input                               mem_port_valid_in,
+    input                               mem_port_done_ld,
+    input                               mem_port_done_st,
     input       [VEX_DATA_WIDTH-1:0]    vexrv_data_in_1,    // memory address from load/store command
     input       [VEX_DATA_WIDTH-1:0]    vexrv_data_in_2,
     output      [MEM_DATA_WIDTH-1:0]    mem_port_data_out,
@@ -46,6 +48,7 @@ module rvv_proc_main #(
     output reg                          mem_port_req_out,       // signal dicating request vs write I guess?
     output                              mem_port_valid_out,
     output      [      MEM_DW_B-1:0]    mem_port_be_out,
+    output reg                          mem_port_start_out,
     output                              proc_rdy,
     output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out,   // in theory anything writing to a scalar register should already know the dest register right?
     output reg                          vexrv_valid_out
@@ -523,6 +526,9 @@ module rvv_proc_main #(
     // memory could just run load/store in parallel with ALU if we implement queue
   
     // STORE
+    // always @(posedge clk) begin
+    //     mem_port_end_out <= agu_addr_end_st; 
+    // end
 
     // TODO update with mask ld/st
     assign mem_port_valid_out   = rst_n & en_mem_out;
@@ -626,9 +632,8 @@ module rvv_proc_main #(
             mem_addr_in_d   <= ~stall ? ({VEX_DATA_WIDTH{en_vs3 | en_req_mem}} & data_in_1_f) :
                                         (no_bubble ? (mem_addr_in_d + (DATA_WIDTH/8)) : 'h0);
 
-            out_ack_e       <= out_ack_d;
-            out_ack_m       <= out_ack_d;
-            // out_ack_m       <= agu_addr_end_ld | agu_addr_end_st; // this would indicate that we are done reading/writing -- maybe send it when we start processing? unsure
+            out_ack_e       <= (opcode_mjr_d === `OP_INSN & opcode_mnr_d === `CFG_TYPE) || (alu_valid_out & alu_resp_end);
+            out_ack_m       <= (mem_port_valid_in & mem_port_done_ld) | (mem_port_done_st);
 
             // FIXME timing is off -- hold these values until we get a response
             opcode_mjr_m    <= opcode_mjr_d;
@@ -653,9 +658,9 @@ module generate_be #(
     parameter DW_B              = DATA_WIDTH/8,
     parameter AVL_WIDTH         = DATA_WIDTH)
     (
-    input                       clk,
-    input                       rst_n,
-    input   [  AVL_WIDTH-1:0]   avl,
+    input                           clk,
+    input                           rst_n,
+    input       [  AVL_WIDTH-1:0]   avl,
     output  reg [       DW_B-1:0]   avl_be
     );
 
