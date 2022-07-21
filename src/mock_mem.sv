@@ -16,37 +16,26 @@ module mock_mem #(
 );
     parameter DW_B = DATA_WIDTH/8;
 
-    reg [7:0] mem [MEM_BYTES-1:0]; // byte addressable :)
+    reg [DATA_WIDTH-1:0] mem [(MEM_BYTES>>3)-1:0]; // word addressable I guess????
 
     wire [ADDR_WIDTH-1:0] rd_addr_base;
     wire [ADDR_WIDTH-1:0] wr_addr_base;
 
     // ------------------------------- MEMORY INIT ----------------------------------------
-    genvar i;
     genvar j;
 
-    generate
-        for (i = 0; i < MEM_BYTES; i=i+1) begin
-            initial begin
-                mem[i] = 'hFF;
-            end
-        end
-    endgenerate
-
-    assign rd_addr_base = rd_addr - ADDR_OFFSET;
-    assign wr_addr_base = wr_addr - ADDR_OFFSET;
+    assign rd_addr_base = (rd_addr - ADDR_OFFSET) >> 3;
+    assign wr_addr_base = (wr_addr - ADDR_OFFSET) >> 3;
 
     // --------------------------- READING AND WRITING ------------------------------------
     generate
-        for (j = 0; j < DW_B; j=j+1) begin
-            always @(posedge clk) begin
-                if (rd_en) begin
-                    rd_data_out[((j+1)<<3)-1 : (j<<3)] <= {8{rst_n}} & mem[rd_addr_base + j];
-                end
+        always @(posedge clk) begin
+            if (rd_en) begin
+                rd_data_out <= {DATA_WIDTH{rst_n}} & mem[rd_addr_base];
+            end
 
-                if (wr_en) begin
-                    mem[wr_addr_base + j] <= {8{rst_n}} & wr_data_in[((j+1)<<3)-1 : (j<<3)];
-                end
+            if (wr_en) begin
+                mem[wr_addr_base] <= {DATA_WIDTH{rst_n}} & wr_data_in;
             end
         end
     endgenerate

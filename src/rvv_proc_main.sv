@@ -21,15 +21,16 @@
 `define AVL_WIDTH 64
 
 module rvv_proc_main #(
-    parameter VLEN              = 128,           // vector length in bits
-    parameter XLEN              = 32,           // not sure, data width maybe?
-    parameter NUM_VEC           = 32,           // number of available vector registers
-    parameter INSN_WIDTH        = 32,           // width of a single instruction
+    parameter VLEN              = 128,              // vector length in bits
+    parameter XLEN              = 32,               // not sure, data width maybe?
+    parameter NUM_VEC           = 32,               // number of available vector registers
+    parameter INSN_WIDTH        = 32,               // width of a single instruction
     parameter DATA_WIDTH        = 64,
-    parameter DW_B              = DATA_WIDTH/8, // DATA_WIDTH in bytes
-    parameter ADDR_WIDTH        = 5,            //$clog2(NUM_VEC)
-    parameter MEM_ADDR_WIDTH    = 32,           // We need to get this from VexRiscV
+    parameter DW_B              = DATA_WIDTH>>3,    // DATA_WIDTH in bytes
+    parameter ADDR_WIDTH        = 5,                //$clog2(NUM_VEC)
+    parameter MEM_ADDR_WIDTH    = 32,               // We need to get this from VexRiscV
     parameter MEM_DATA_WIDTH    = 64,
+    parameter MEM_DW_B          = MEM_DATA_WIDTH>>3,
     parameter VEX_DATA_WIDTH    = 32
 ) (
     input                               clk,
@@ -44,6 +45,7 @@ module rvv_proc_main #(
     output      [MEM_ADDR_WIDTH-1:0]    mem_port_addr_out,
     output reg                          mem_port_req_out,       // signal dicating request vs write I guess?
     output                              mem_port_valid_out,
+    output      [      MEM_DW_B-1:0]    mem_port_be_out,
     output                              proc_rdy,
     output reg  [VEX_DATA_WIDTH-1:0]    vexrv_data_out,   // in theory anything writing to a scalar register should already know the dest register right?
     output reg                          vexrv_valid_out
@@ -152,8 +154,8 @@ module rvv_proc_main #(
     // value propagation signals
     reg   [               6:0]  opcode_mjr_d;
     reg   [               2:0]  opcode_mnr_d;
-    reg   [               4:0]  src_1_d;
-    reg   [               4:0]  src_2_d;
+    // reg   [               4:0]  src_1_d;
+    // reg   [               4:0]  src_2_d;
     reg   [               4:0]  dest_d;    // rd, vd, or vs3 -- TODO make better name lol
     reg   [               5:0]  funct6_d;
     reg                         vm_d;
@@ -172,7 +174,7 @@ module rvv_proc_main #(
     // reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_1_e;
     // reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_2_e;
 
-    // reg   [               6:0]  opcode_mjr_m;
+    reg   [               6:0]  opcode_mjr_m;
     reg   [               2:0]  opcode_mnr_m;
     reg   [               4:0]  src_1_m;
     reg   [               4:0]  src_2_m;
@@ -247,12 +249,12 @@ module rvv_proc_main #(
     // Detect hazards for operands
     wire                        haz_src1;
     wire                        haz_src2;
-    wire                        haz_str;
+    wire                        haz_st;
     wire                        haz_ld;
 
     wire                        haz_new_src1;
     wire                        haz_new_src2;
-    wire                        haz_new_str;
+    wire                        haz_new_st;
     wire                        haz_new_ld;
 
     wire                        logic_mop;
@@ -280,7 +282,7 @@ module rvv_proc_main #(
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd), .vlmul({3{~alu_mask_out}} & vlmul), .addr_in(alu_req_addr_out), .addr_out(vr_wr_addr), .idle(agu_idle_wr), .addr_start(agu_addr_start_wr), .addr_end(agu_addr_end_wr));
 
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3 & ~stall), .vlmul(vlmul), .addr_in(dest), .addr_out(vr_st_addr), .idle(agu_idle_st), .addr_start(agu_addr_start_st), .addr_end(agu_addr_end_st));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid), .vlmul(vlmul), .addr_in(dest_m), .addr_out(vr_ld_addr), .idle(agu_idle_ld), .addr_start(agu_addr_start_ld), .addr_end(agu_addr_end_ld));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid & mem_port_valid_in), .vlmul(vlmul), .addr_in(dest_m), .addr_out(vr_ld_addr), .idle(agu_idle_ld), .addr_start(agu_addr_start_ld), .addr_end(agu_addr_end_ld));
 
     // TODO: add normal regfile? connect to external one? what do here
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) vr (.clk(clk),.rst_n(rst_n),
@@ -359,13 +361,13 @@ module rvv_proc_main #(
     assign haz_waw          = vec_haz[dest] & (en_vs1 | en_vs2 | en_req_mem);
     assign haz_src1         = vec_haz[src_1] & en_vs1;
     assign haz_src2         = vec_haz[src_2] & en_vs2;
-    assign haz_str          = vec_haz[dest] & en_vs3;
+    assign haz_st           = vec_haz[dest] & en_vs3;
 
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
 
     // Just stall for WAW hazards for now
-    assign stall    = ~rst_n | (hold_reg_group & reg_count > 0) | haz_src1 | haz_src2 | haz_str | haz_waw;// | haz_ld;
+    assign stall    = ~rst_n | (hold_reg_group & reg_count > 0) | haz_src1 | haz_src2 | haz_st | haz_waw;// | haz_ld;
 
     assign proc_rdy = ~stall;
     // ----------------------------------------- VTYPE CONTROL SIGNALS -------------------------------------------------------------------
@@ -526,10 +528,11 @@ module rvv_proc_main #(
     assign mem_port_valid_out   = rst_n & en_mem_out;
     assign mem_port_data_out    = {MEM_DATA_WIDTH{en_mem_out}} & vr_st_data_out;
     assign mem_port_addr_out    = ({MEM_DATA_WIDTH{en_mem_out}} & mem_addr_in_d) | ({MEM_DATA_WIDTH{mem_port_req_out}} & mem_addr_in_d);
+    assign mem_port_be_out      = {(MEM_DW_B){1'b1}};// & vr_st_en;
 
     // LOAD
     assign vr_ld_data_in    = {DATA_WIDTH{rst_n & en_ld & mem_port_valid_in}} & mem_port_data_in; // FIXME this assumes no delay in receiving data!
-    assign vr_ld_en         = {DW_B{~agu_idle_ld}};
+    assign vr_ld_en         = {DW_B{en_ld}};
 
     // --------------------------------------------------- WRITEBACK STAGE LOGIC --------------------------------------------------------------
     assign vr_wr_data_in    = {DATA_WIDTH{rst_n & alu_valid_out & ~alu_mask_out}} & alu_data_out;
@@ -545,7 +548,7 @@ module rvv_proc_main #(
     assign no_bubble = hold_reg_group & (reg_count > 0);
 
     always @(*) begin
-        if (opcode_mnr == `MVV_TYPE && funct6 == 'h10) begin
+        if (opcode_mnr === `MVV_TYPE && funct6 === 'h10) begin
             case (src_1)
                 'h0,
                 'h10,
@@ -565,17 +568,25 @@ module rvv_proc_main #(
 
     // Adding byte enable for ALU
     always @(*) begin
-        if (opcode_mnr_d == `MVX_TYPE && funct6_d == 'h10) begin
-            alu_req_be = {{(VEX_DATA_WIDTH/8){1'b1}},{(DW_B - VEX_DATA_WIDTH/8){1'b0}}}; // FIXME :) We want to operate on vd[0] bytes only
+        if ((opcode_mnr_d[1]^opcode_mnr_d[0]) & (funct6_d === 'h10)) begin // vmv.s.x (mvx) vmv.x.s (mvv)
+            case (sew)
+                'h0: alu_req_be = {{(DW_B-1){1'b0}},{1'b1}};
+                'h1: alu_req_be = {{(DW_B-2){1'b0}},{2'b11}};
+                'h2: alu_req_be = {{(DW_B-4){1'b0}},{4'hF}};
+                'h3: alu_req_be = {{(DW_B-8){1'b1}},{8'hFF}};
+            endcase
+            // alu_req_be = {{(VEX_DATA_WIDTH/8){1'b1}},{(DW_B - VEX_DATA_WIDTH/8){1'b0}}}; // FIXME :) We want to operate on vd[0] bytes only
         end else begin // FIXME -- how do we use AVL when it's a variable??
             // Next mask will always come from v0, we really only need to read and write masks for mask manipulation instructions
             alu_req_be = {DW_B{vm_d}} | vmask_ext; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
         end
     end
 
-    wire    [DW_B-1:0] gen_avl_be;
+    // wire    [DW_B-1:0] gen_avl_be;
 
-    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VEX_DATA_WIDTH)) gen_be_alu (.clk(clk), .rst_n (rst_n), .avl   (avl), .avl_be(gen_avl_be));
+    // generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VEX_DATA_WIDTH)) gen_be_alu (.clk(clk), .rst_n (rst_n), .avl   (avl), .avl_be(gen_avl_be));
+
+    reg wait_mem;
 
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -584,8 +595,8 @@ module rvv_proc_main #(
             dest_d          <= 'h0;
             funct6_d        <= 'h0;
             vm_d            <= 'b1; // unmasked by default
-            src_1_d         <= 'h0;
-            src_2_d         <= 'h0;
+            // src_1_d         <= 'h0;
+            // src_2_d         <= 'h0;
             ld_valid        <= 'h0;
             avl_d           <= 'h0; // FIXME
             sca_data_in_1_d <= 'h0;
@@ -603,8 +614,8 @@ module rvv_proc_main #(
             opcode_mnr_d    <= ~stall ? opcode_mnr  : (no_bubble ? opcode_mnr_d : 'h0);
             dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
             funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
-            src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
-            src_2_d         <= ~stall ? src_2       : (no_bubble ? src_2_d      : 'h0);
+            // src_1_d         <= ~stall ? src_1       : (no_bubble ? src_1_d      : 'h0);
+            // src_2_d         <= ~stall ? src_2       : (no_bubble ? src_2_d      : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
             avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? {{(DATA_WIDTH-VEX_DATA_WIDTH){sca_data_in_1[VEX_DATA_WIDTH-1]}}, sca_data_in_1} : (no_bubble ? sca_data_in_1_d : 'h0);
@@ -613,14 +624,17 @@ module rvv_proc_main #(
 
             mem_port_req_out <= ~stall ? en_req_mem : (no_bubble & mem_port_req_out);
             mem_addr_in_d   <= ~stall ? ({VEX_DATA_WIDTH{en_vs3 | en_req_mem}} & data_in_1_f) :
-                                        (no_bubble ? (mem_addr_in_d + MEM_DATA_WIDTH) : 'h0);
+                                        (no_bubble ? (mem_addr_in_d + (DATA_WIDTH/8)) : 'h0);
 
             out_ack_e       <= out_ack_d;
             out_ack_m       <= out_ack_d;
             // out_ack_m       <= agu_addr_end_ld | agu_addr_end_st; // this would indicate that we are done reading/writing -- maybe send it when we start processing? unsure
 
-            dest_m          <= dest_d;
-            ld_valid        <= (opcode_mjr_d === `LD_INSN);
+            // FIXME timing is off -- hold these values until we get a response
+            opcode_mjr_m    <= opcode_mjr_d;
+            dest_m          <= wait_mem ? dest_m : dest_d;
+            ld_valid        <= wait_mem;
+            wait_mem        <= (opcode_mjr_m === `LD_INSN) | (wait_mem & ~mem_port_valid_in);
 
             vexrv_data_out  <= (opcode_mjr_d === `OP_INSN && opcode_mnr_d === `CFG_TYPE) ? avl : 'h0;
             vexrv_valid_out <= out_ack_e || out_ack_m;
