@@ -13,7 +13,7 @@ module vMCmp #(
 	input      [   REQ_DATA_WIDTH-1:0] 	in_vec0,
 	input      [   REQ_DATA_WIDTH-1:0] 	in_vec1,
 	input      [                  2:0] 	in_sew,
-	input      [                  2:0] 	in_start_idx,
+	input      [                  7:0] 	in_start_idx,
 	input                            	in_valid,
 	input      [      OPSEL_WIDTH-1:0] 	in_opSel,
 	output reg [   REQ_ADDR_WIDTH-1:0] 	out_addr,
@@ -27,7 +27,7 @@ module vMCmp #(
 	reg 						s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
 	reg [	 OPSEL_WIDTH-1:0] 	s0_opSel;
 	reg [ 	   SEW_WIDTH-1:0]	s0_sew;
-	reg [    		     2:0]	s0_start_idx, s1_start_idx;
+	reg [    		     7:0]	s0_start_idx, s1_start_idx;
 	reg [ REQ_DATA_WIDTH-1:0] 	s0_vec0, s0_vec1;
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_be, s2_out_be, s3_out_be, s4_out_be;

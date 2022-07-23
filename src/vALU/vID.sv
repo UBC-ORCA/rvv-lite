@@ -8,7 +8,7 @@ module vID #(
     input       [   REQ_ADDR_WIDTH-1:0] in_addr,
     input       [                  2:0] in_sew,
     input                               in_valid,
-    input       [                  2:0] in_start_idx,
+    input       [                  7:0] in_start_idx,
     input       [REQ_BYTE_EN_WIDTH-1:0] in_mask,
     output reg  [   REQ_ADDR_WIDTH-1:0] out_addr,
     output reg  [  RESP_DATA_WIDTH-1:0] out_vec,

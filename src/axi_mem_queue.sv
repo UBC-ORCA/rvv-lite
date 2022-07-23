@@ -76,7 +76,6 @@ module mem_queue #(
     input                           mbus_b_valid ,
     output                          mbus_b_ready ,
     
-  
     output  [  RVV_DATA_WIDTH-1:0]  rvv_data_in,
     output                          rvv_valid_in,
     input   [ MBUS_ADDR_WIDTH-1:0]  rvv_addr_out,
@@ -218,8 +217,8 @@ module mem_queue #(
     always @(posedge clk) begin
         w_turn          <= mbus_aw_ready^w_turn;
 
-        write_count     <= rvv_valid_out ? (rvv_start_out ? 1 : write_count + 1) : (ack_count === (write_count << 2) ? 0 : write_count);
-        ack_count       <= (ack_count < write_count) ? (mbus_b_resp & mbus_b_valid ? ack_count + 1 : ack_count) : 0;
+        write_count     <= rvv_valid_out ? (rvv_start_out ? 2 : write_count + 2) : (ack_count === write_count ? 0 : write_count);
+        ack_count       <= (ack_count < write_count) ? (mbus_b_valid ? ack_count + 1 : ack_count) : 0;
     end
 
     assign w_w_en           = rvv_valid_out;
@@ -239,5 +238,5 @@ module mem_queue #(
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty | ~w_h_empty;
 
-    assign rvv_done_st      = (ack_count === write_count);
+    assign rvv_done_st      = (ack_count === write_count) & (write_count > 0);
 endmodule

@@ -47,26 +47,30 @@ module vALU #(
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
     input      [     REQ_VL_WIDTH-1:0] req_vl      ,
-    input      [                  2:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
+    input      [                  7:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
     input                              req_mask    ,
+    input      [                  7:0] req_off     ,
     output reg                         resp_valid  ,
     output reg                         resp_start  ,
     output reg                         resp_end    ,
     output reg [  RESP_DATA_WIDTH-1:0] resp_data   ,
     output                             req_ready   ,
     output reg [   REQ_ADDR_WIDTH-1:0] req_addr_out,
+    output reg [                  7:0] resp_off    ,
     output reg [     REQ_VL_WIDTH-1:0] req_vl_out  ,
     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out  ,
     output reg                         req_mask_out
 );
 
-reg [   REQ_ADDR_WIDTH-1:0]     s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
-reg [REQ_BYTE_EN_WIDTH-1:0]     s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
+reg  [   REQ_ADDR_WIDTH-1:0]    s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
+reg  [REQ_BYTE_EN_WIDTH-1:0]    s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
 reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start;
 reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
-reg [     REQ_VL_WIDTH-1:0]     s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
+reg  [     REQ_VL_WIDTH-1:0]    s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
+
+reg  [                  7:0]    s0_off, s1_off, s2_off, s3_off, s4_off, s5_off; // TODO pipe through modules
 // reg [REQ_FUNC_ID_WIDTH-1:0]     s0_func_id, s1_func_id, s2_func_id, s3_func_id, s4_func_id;
 reg                             turn;
 
@@ -87,7 +91,7 @@ wire                            vNarrow_en, vWiden_en;
 wire                            vSigned_op     ;
 wire                            vSlide_insert  ; //TODO: assign something
 
-wire [                  2:0]    vStartIdx;
+wire [                  7:0]    vStartIdx;
 
 wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec, vMCmp_outVec;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
@@ -547,6 +551,14 @@ always @(posedge clk) begin
         s4_end        <= s3_end;
         s5_end        <= s4_end;
         resp_end      <= s5_end;
+
+        s0_off        <= req_off & {8{req_valid}};
+        s1_off        <= s0_off;
+        s2_off        <= s1_off;
+        s3_off        <= s2_off;
+        s4_off        <= s3_off;
+        s5_off        <= s4_off;
+        resp_off      <= s5_off;
 
         req_be_out      <=  vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
 

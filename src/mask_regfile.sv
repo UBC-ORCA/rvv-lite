@@ -3,10 +3,9 @@ module mask_regfile #(
     parameter VLEN_B        = VLEN/8,   // byte length (mask length)
     parameter ADDR_WIDTH    = 5,        // this gives us 32 vectors
     parameter DATA_WIDTH    = 64,       // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
-    parameter PORTS         = 3,        // number of data ports
-    parameter DW_B          = DATA_WIDTH/8,   // DATA_WIDTH in bytes
-    parameter NUM_VECS      = (1 << ADDR_WIDTH)
-) (
+    parameter DW_B          = DATA_WIDTH/8, // DATA_WIDTH in bytes
+    parameter OFF_BITS      = 8             // 2048/64 needs 8 bits
+    )(
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                           clk,
     input                           rst_n,
@@ -20,6 +19,11 @@ module mask_regfile #(
     input       [ADDR_WIDTH-1:0]    wr_addr,
     input       [ADDR_WIDTH-1:0]    ld_addr,
     input       [ADDR_WIDTH-1:0]    st_addr,
+    input       [  OFF_BITS-1:0]    rd_off_1, // offsets (because data_width < vlen)
+    input       [  OFF_BITS-1:0]    rd_off_2,
+    input       [  OFF_BITS-1:0]    wr_off,
+    input       [  OFF_BITS-1:0]    ld_off,
+    input       [  OFF_BITS-1:0]    st_off,
     input       [DATA_WIDTH-1:0]    wr_data_in, // write 64 bits at a time
     input       [DATA_WIDTH-1:0]    ld_data_in,
     // input [7:0] num_elems, // we can know this from vsetvli
@@ -28,32 +32,10 @@ module mask_regfile #(
     output reg  [DATA_WIDTH-1:0]    rd_data_out_2 
 );
 
-    parameter MAX_IDX   = VLEN_B/DW_B - 1;
-    parameter IDX_BITS  = ($clog2(MAX_IDX + 1) > 0) ? $clog2(MAX_IDX + 1) : 1; // screw it I can't do the math rn
-
-    reg [  IDX_BITS-1:0] rd_curr_idx_1;
-    reg [  IDX_BITS-1:0] rd_curr_idx_2; 
-    reg [  IDX_BITS-1:0] wr_curr_idx;
-    reg [  IDX_BITS-1:0] ld_curr_idx;
-    reg [  IDX_BITS-1:0] st_curr_idx;
-
-    // latch current register just in case input changes!
-    reg [ADDR_WIDTH-1:0] rd_curr_reg_1;
-    reg [ADDR_WIDTH-1:0] rd_curr_reg_2;
-    reg [ADDR_WIDTH-1:0] wr_curr_reg;
-    reg [ADDR_WIDTH-1:0] ld_curr_reg;
-    reg [ADDR_WIDTH-1:0] st_curr_reg;
-
-    wire [ADDR_WIDTH-1:0] rd_reg_1;
-    wire [ADDR_WIDTH-1:0] rd_reg_2;
-    wire [ADDR_WIDTH-1:0] wr_reg; 
-    wire [ADDR_WIDTH-1:0] ld_reg;
-    wire [ADDR_WIDTH-1:0] st_reg;
-
     // TODO: add request queue (using num_elems and busy flag) so we don't have to wait on requests to return always
 
     // TODO: change to a byte-addressable space, for strided reads?
-    reg [     VLEN_B-1:0] mask_data [0:NUM_VECS-1];
+    reg [(VLEN/DATA_WIDTH)-1:0][DW_B-1:0] mask_data [0:(1 << ADDR_WIDTH)-1];
 
     // STATES: IDLE, BUSY
     reg                   rd_state_1;
@@ -130,7 +112,7 @@ module mask_regfile #(
     // assign mask_data_31 = mask_data[31];
 
     // TODO: continuous register data
-//     assign data_start = curr_reg + curr_idx;
+//     assign data_start = curr_addr + curr_idx;
 
     // TODO: make this hardcoded 2 read 1 write i guess
 
@@ -142,130 +124,39 @@ module mask_regfile #(
 
     generate
         initial begin
-            for (c = 0; c < NUM_VECS; c=c+1) begin
-                mask_data[c] = {DW_B{1'b1}};
+            for (d = 0; d < (VLEN/DATA_WIDTH); d++) begin
+                for (c = 0; c < (1 << ADDR_WIDTH); c=c+1) begin
+                    mask_data[c][d] = {DW_B{1'b1}};
+                end
             end
         end
     endgenerate
 
-    // --------------------------- REGISTER TRACKING ------------------------------------
-    // READ PORTS
-    always @(posedge clk) begin
-        rd_curr_reg_1 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_1 && rd_state_1 == 1'b0) ? rd_addr_1 : rd_curr_reg_1);
-
-        case(rd_state_1)
-            1'b0:   rd_curr_idx_1 <= (rst_n & |rd_en_1 & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   rd_curr_idx_1 <= (~rst_n || rd_curr_idx_1 == MAX_IDX) ? 0 : rd_curr_idx_1 + 1;
-        endcase
-    end
-
-    always @(posedge clk) begin
-        rd_curr_reg_2 <= {ADDR_WIDTH{rst_n}} & ((|rd_en_2 && rd_state_2 == 1'b0) ? rd_addr_2 : rd_curr_reg_2);
-
-        case(rd_state_2)
-            1'b0:   rd_curr_idx_2 <= (rst_n & |rd_en_2 & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   rd_curr_idx_2 <= (~rst_n || rd_curr_idx_2 == MAX_IDX) ? 0 : rd_curr_idx_2 + 1;
-        endcase
-    end
-
-    // WRITE PORTS
-    always @(posedge clk) begin
-        wr_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|wr_en && wr_state == 1'b0) ? wr_addr : wr_curr_reg);
-
-        case(ld_state)
-            1'b0:   wr_curr_idx <= (rst_n & |wr_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   wr_curr_idx <= (~rst_n || wr_curr_idx == MAX_IDX) ? 0 : wr_curr_idx + 1;
-        endcase
-    end
-
-    // MEMORY PORT VERISONS -- LOAD
-    always @(posedge clk) begin
-        ld_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|ld_en && ld_state == 1'b0) ? ld_addr : ld_curr_reg);
-
-        case(ld_state)
-            1'b0:   ld_curr_idx <= (rst_n & |ld_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   ld_curr_idx <= (~rst_n || ld_curr_idx == MAX_IDX) ? 0 : ld_curr_idx + 1;
-        endcase
-    end
-
-    // MEMORY PORT VERISONS -- STORE
-    always @(posedge clk) begin
-        st_curr_reg <= {ADDR_WIDTH{rst_n}} & ((|st_en && st_state == 1'b0) ? st_addr : st_curr_reg);
-
-        case(st_state)
-            1'b0:   st_curr_idx <= (rst_n & |st_en & (MAX_IDX > 0)); // If any enable bits are high, we should update
-            1'b1:   st_curr_idx <= (~rst_n || st_curr_idx == MAX_IDX) ? 0 : st_curr_idx + 1;
-        endcase
-    end
-
-    // TODO: implement multi-cycle read/write more like this somehow
-//   assign data_start = curr_idx*VLEN;
-//   assign data_end = data_start + VLEN - 1;
-
     // --------------------------- READING AND WRITING ------------------------------------
     generate
-        // WHICH REG DO WE READ FROM NOW
-        // ALU PORTS
-        assign rd_reg_1 = (MAX_IDX > 0 && rd_curr_idx_1 >= 0) ? rd_curr_reg_1 : rd_addr_1;
-        assign rd_reg_2 = (MAX_IDX > 0 && rd_curr_idx_2 >= 0) ? rd_curr_reg_2 : rd_addr_2;
-        assign wr_reg   = (MAX_IDX > 0 && wr_curr_idx   >= 0) ? wr_curr_reg : wr_addr;
-
-        // MEM PORTS
-        assign ld_reg   = (MAX_IDX > 0 && ld_curr_idx >= 0) ? ld_curr_reg : ld_addr;
-        assign st_reg   = (MAX_IDX > 0 && st_curr_idx >= 0) ? st_curr_reg : st_addr;
-
-        // assign rd_mem_idx_1 =   rd_reg_1*DW_B   + rd_curr_idx_1;
-        // assign rd_mem_idx_2 =   rd_reg_2*DW_B   + rd_curr_idx_2;
-        // assign wr_mem_idx   =   wr_reg*DW_B     + wr_curr_idx;
-
-        // assign ld_mem_idx   =   ld_reg*DW_B + ld_curr_idx;
-        // assign st_mem_idx   =   st_reg*DW_B + st_curr_idx;
+        assign wr_conflict = (wr_addr === ld_addr);
 
         for (j = 0; j < DW_B; j=j+1) begin
             always @(posedge clk) begin
-                if (rd_en_1[j] | rd_state_1) begin
-                    rd_data_out_1[j]    <= {DW_B{rst_n}} & mask_data[rd_reg_1][j];
+                if (rd_en_1[j]) begin
+                    rd_data_out_1[j]    <= {DW_B{rst_n}} & mask_data[rd_addr_1][rd_off_1][j];
                 end
-                if (rd_en_2[j] | rd_state_2) begin
-                    rd_data_out_2[j]    <= {DW_B{rst_n}} & mask_data[rd_reg_2][j];
+                if (rd_en_2[j]) begin
+                    rd_data_out_2[j]    <= {DW_B{rst_n}} & mask_data[rd_addr_2][rd_off_2][j];
                 end
 
                 // Prioritize reg writeback over load writeback. Realistically we shouldn't have conflicts, this is just to be safe
                 // FIXME
-                if (wr_en[j] | wr_state) begin
-                    mask_data[wr_reg][j] <= {DW_B{rst_n}} & wr_data_in[j];
-                end else begin
-                    if (ld_en[j] | ld_state) begin
-                        mask_data[ld_reg][j] <= {DW_B{rst_n}} & ld_data_in[j];
-                    end
+                if (wr_en[j]) begin
+                    mask_data[wr_addr][wr_off][j] <= {DW_B{rst_n}} & wr_data_in[j];
+                end
+                if (ld_en[j] & ~wr_conflict) begin
+                    mask_data[ld_addr][ld_off][j] <= {DW_B{rst_n}} & ld_data_in[j];
                 end
 
-                if (st_en[j] | st_state) begin
-                    st_data_out[j]  <= {DW_B{rst_n}} & mask_data[st_reg][j];
+                if (st_en[j]) begin
+                    st_data_out[j]  <= {DW_B{rst_n}} & mask_data[st_addr][st_off][j];
                 end
-            end
-        end
-    endgenerate
-
-
-    // --------------------------- STATE MACHINES :) ---------------------------------------
-    // ALU PORT STATES
-    generate
-        if (MAX_IDX > 0) begin
-            always @(posedge clk) begin
-                rd_state_1  <= rst_n & ((|rd_en_1) | ((rd_curr_idx_1 !== MAX_IDX) & rd_state_1));
-                rd_state_2  <= rst_n & ((|rd_en_2) | ((rd_curr_idx_2 !== MAX_IDX) & rd_state_2));
-                wr_state    <= rst_n & ((|wr_en) | ((wr_curr_idx !== MAX_IDX) & wr_state));
-                ld_state    <= rst_n & ((|ld_en) | ((ld_curr_idx !== MAX_IDX) & ld_state));
-                st_state    <= rst_n & ((|st_en) | ((st_curr_idx !== MAX_IDX) & st_state));
-            end
-        end else begin
-            always @(posedge clk) begin
-                rd_state_1  <= 1'b0;
-                rd_state_2  <= 1'b0;
-                wr_state    <= 1'b0;
-                ld_state    <= 1'b0;
-                st_state    <= 1'b0;
             end
         end
     endgenerate
