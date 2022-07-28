@@ -14,7 +14,7 @@ module FIFObuffer#(
     output     [DEPTH_BITS-1:0] POP,
 
     input      [DATA_WIDTH-1:0] data_in,
-    output reg [DATA_WIDTH-1:0] data_out
+    output     [DATA_WIDTH-1:0] data_out
 );
 // internal registers
 
@@ -84,66 +84,22 @@ module mem_queue #(
     input                           rvv_req_out,
     input                           rvv_start_out,
     input   [        RVV_DW_B-1:0]  rvv_be_out,
+    input                           rvv_ready_out,
 
     output                          rvv_done_ld,
     output                          rvv_done_st
     );
 
-    wire                        aw_l_r_en, aw_h_r_en, w_l_r_en, w_h_r_en, w_w_en, ar_h_r_en, ar_l_r_en, ar_w_en, r_r_en, r_l_w_en, r_h_w_en;
-    wire [MBUS_DATA_WIDTH-1:0]  ar_l_din;
-    wire [MBUS_DATA_WIDTH-1:0]  ar_l_dout;
-    // wire                        ar_l_r_en;
-    wire                        ar_l_full;
-    wire                        ar_l_empty;
+    wire                        ar_l_r_en,  ar_h_r_en,  aw_l_r_en,  aw_h_r_en,  r_r_en,     w_l_r_en,   w_h_r_en;
+    wire                        ar_w_en,    w_w_en,     r_l_w_en,   r_h_w_en;
 
-    wire [MBUS_DATA_WIDTH-1:0]  ar_h_din;
-    wire [MBUS_DATA_WIDTH-1:0]  ar_h_dout;
-    // wire                        ar_h_r_en;
-    wire                        ar_h_full;
-    wire                        ar_h_empty;
-
-    wire [MBUS_DATA_WIDTH-1:0]  aw_l_din;
-    wire [MBUS_DATA_WIDTH-1:0]  aw_l_dout;
-    // wire                        aw_l_r_en;
-    wire                        aw_l_full;
-    wire                        aw_l_empty;
-
-    wire [MBUS_DATA_WIDTH-1:0]  aw_h_din;
-    wire [MBUS_DATA_WIDTH-1:0]  aw_h_dout;
-    // wire                        aw_h_r_en;
-    wire                        aw_h_full;
-    wire                        aw_h_empty;
-
-    wire                        w_w_en;
-    wire [MBUS_DATA_WIDTH-1:0]  w_l_din;
-    wire [MBUS_DATA_WIDTH-1:0]  w_l_dout;
-    // wire                        w_l_r_en;
-    wire                        w_l_full;
-    wire                        w_l_empty;
-
-    wire [MBUS_DATA_WIDTH-1:0]  w_h_din;
-    wire [MBUS_DATA_WIDTH-1:0]  w_h_dout;
-    // wire                        w_h_r_en;
-    wire                        w_h_full;
-    wire                        w_h_empty;
-
-    wire                        r_r_en;
-
-    wire [MBUS_DATA_WIDTH-1:0]  r_l_din;
-    wire [MBUS_DATA_WIDTH-1:0]  r_l_dout;
-    // wire                        r_l_w_en;
-    wire                        r_l_full;
-    wire                        r_l_empty;
-
-    wire [MBUS_DATA_WIDTH-1:0]  r_h_din;
-    wire [MBUS_DATA_WIDTH-1:0]  r_h_dout;
-    // wire                        r_h_w_en;
-    wire                        r_h_full;
-    wire                        r_h_empty;
+    wire [MBUS_DATA_WIDTH-1:0]  ar_l_din,   ar_h_din,   aw_l_din,   aw_h_din,   r_l_din,    r_h_din,    w_l_din,    w_h_din;
+    wire [MBUS_DATA_WIDTH-1:0]  ar_l_dout,  ar_h_dout,  aw_l_dout,  aw_h_dout,  r_l_dout,   r_h_dout,   w_l_dout,   w_h_dout;
+    wire                        ar_l_full,  ar_h_full,  aw_l_full,  aw_h_full,  r_l_full,   r_h_full,   w_l_full,   w_h_full;
+    wire                        ar_l_empty, ar_h_empty, aw_l_empty, aw_h_empty, r_l_empty,  r_h_empty,  w_l_empty,  w_h_empty;
 
     reg [  FIFO_DEPTH_BITS-1:0] burst_len;   // it's entirely possible we get 2048 element burst eventually, right?
-    reg [  FIFO_DEPTH_BITS-1:0] r_l_pop;
-    reg [  FIFO_DEPTH_BITS-1:0] r_h_pop;
+    wire [  FIFO_DEPTH_BITS-1:0] r_l_pop,    r_h_pop;
 
     // track what turn we're on
     reg                         r_turn = 0;
@@ -167,14 +123,14 @@ module mem_queue #(
     FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_h    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_h_w_en),.data_in(r_h_din),  .data_out(r_h_dout),    .FULL(r_h_full),    .EMPTY(r_h_empty),  .POP(r_h_pop));
     FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_l_w_en),.data_in(r_l_din),  .data_out(r_l_dout),    .FULL(r_l_full),    .EMPTY(r_l_empty),  .POP(r_l_pop));
 
-    assign ar_h_din     = rvv_addr_out[31:0];
-    assign ar_l_din     = rvv_addr_out[31:0] + MBUS_DW_B;
+    assign ar_h_din     = rvv_addr_out[31:0] + MBUS_DW_B;
+    assign ar_l_din     = rvv_addr_out[31:0];
 
     assign r_l_din      = mbus_r_data;
     assign r_h_din      = mbus_r_data;
 
-    assign aw_h_din     = rvv_addr_out[31:0];
-    assign aw_l_din     = rvv_addr_out[31:0] + MBUS_DW_B;
+    assign aw_h_din     = rvv_addr_out[31:0] + MBUS_DW_B;
+    assign aw_l_din     = rvv_addr_out[31:0];
 
     assign w_h_din      = rvv_data_out[63:32];
     assign w_l_din      = rvv_data_out[31:0];
@@ -193,7 +149,7 @@ module mem_queue #(
         burst_len       <= mid_burst_r ? burst_len + ar_w_en : ((read_count == burst_len) ? 0 : burst_len);   // if we're mid-burst, increment. Else, set to the enable signal value
         mid_burst_r     <= ar_w_en;
 
-        start_read      <= (r_l_pop === (burst_len + 1)) & (r_h_pop === (burst_len + 1)) & (burst_len > 0);
+        start_read      <= (r_l_pop == (burst_len + 1)) & (r_h_pop == (burst_len + 1)) & (burst_len > 0) & rvv_ready_out;
         // read_count          <= start_read ? 1 : ((read_count < (burst_len-1) & read_count > 0) ? read_count + 1 : 0);
 
         read_count      <= (read_count > 0) ? ((read_count < burst_len) ? read_count + 1 : 0) : (start_read ? 1 : 0);
@@ -202,14 +158,12 @@ module mem_queue #(
     assign mbus_ar_addr     = r_turn ? ar_h_dout : ar_l_dout;
     assign mbus_ar_valid    = ~ar_l_empty | ~ar_h_empty;
     assign mbus_r_ready     = r_out; // todo change this maybe idk
-    assign r_h_w_en         = r_turn & mbus_r_valid;
-    assign r_l_w_en         = ~r_turn & mbus_r_valid;
     
-    assign r_r_en           = start_read | (read_count > 0);//~(r_l_empty | r_h_empty);
+    assign r_r_en           = start_read | (read_count > 0);
     assign rvv_valid_in     = r_r_en;
-    assign rvv_data_in      = {r_h_dout, r_l_dout};
+    assign rvv_data_in      = {r_l_dout, r_h_dout};
     
-    assign rvv_done_ld      = (read_count === burst_len & burst_len > 0);
+    assign rvv_done_ld      = (read_count == burst_len & burst_len > 0);
     // must have both - FIXME we should wait until we have the right number of reqs back
     // FIXME integrate ready signal from processor lol
 
@@ -217,7 +171,7 @@ module mem_queue #(
     always @(posedge clk) begin
         w_turn          <= mbus_aw_ready^w_turn;
 
-        write_count     <= rvv_valid_out ? (rvv_start_out ? 2 : write_count + 2) : (ack_count === write_count ? 0 : write_count);
+        write_count     <= rvv_valid_out ? (rvv_start_out ? 2 : write_count + 2) : (ack_count == write_count ? 0 : write_count);
         ack_count       <= (ack_count < write_count) ? (mbus_b_valid ? ack_count + 1 : ack_count) : 0;
     end
 
@@ -226,17 +180,17 @@ module mem_queue #(
     assign mbus_b_ready     = 1;
 
     assign w_l_r_en         = ~w_turn & mbus_aw_ready;
-    assign w_h_r_en         = w_turn & mbus_aw_ready;
+    assign w_h_r_en         =  w_turn & mbus_aw_ready;
 
     assign aw_l_r_en        = ~w_turn & mbus_aw_ready;
-    assign aw_h_r_en        = w_turn & mbus_aw_ready;
+    assign aw_h_r_en        =  w_turn & mbus_aw_ready;
 
-    assign mbus_aw_addr     = w_turn ? aw_h_dout : aw_l_dout;
+    assign mbus_aw_addr     =  w_turn ? aw_h_dout : aw_l_dout;
     assign mbus_aw_valid    = ~aw_l_empty | ~aw_h_empty;
 
-    assign mbus_w_data      = w_turn ? w_h_dout : w_l_dout;
+    assign mbus_w_data      =  w_turn ? w_h_dout : w_l_dout;
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty | ~w_h_empty;
 
-    assign rvv_done_st      = (ack_count === write_count) & (write_count > 0);
+    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0);
 endmodule
