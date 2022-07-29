@@ -16,6 +16,8 @@ module vMCmp #(
 	input      [                  7:0] 	in_start_idx,
 	input                            	in_valid,
 	input      [      OPSEL_WIDTH-1:0] 	in_opSel,
+	input 								in_req_start,
+	input 								in_req_end,
 	output reg [   REQ_ADDR_WIDTH-1:0] 	out_addr,
 	output reg [  RESP_DATA_WIDTH-1:0] 	out_vec,
 	output reg [REQ_BYTE_EN_WIDTH-1:0]	out_be,
@@ -25,34 +27,32 @@ module vMCmp #(
 	genvar i, j;
 
 	reg 						s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
+	reg 						s0_req_end, s1_req_end;
+	reg 						s0_req_start, s1_req_start;
 	reg [	 OPSEL_WIDTH-1:0] 	s0_opSel;
 	reg [ 	   SEW_WIDTH-1:0]	s0_sew;
 	reg [    		     7:0]	s0_start_idx, s1_start_idx;
 	reg [ REQ_DATA_WIDTH-1:0] 	s0_vec0, s0_vec1;
 	reg [RESP_DATA_WIDTH-1:0] 	s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
-	reg [RESP_DATA_WIDTH-1:0] 	s1_out_be, s2_out_be, s3_out_be, s4_out_be;
+	reg [REQ_BYTE_EN_WIDTH-1:0] s1_out_be, s2_out_be, s3_out_be, s4_out_be;
 	reg [ REQ_ADDR_WIDTH-1:0] 	s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
-	wire [RESP_DATA_WIDTH-1:0] 	lt_u	[0:3];
-	wire [RESP_DATA_WIDTH-1:0]	lt_s	[0:3];
-	wire [RESP_DATA_WIDTH-1:0]	eq 		[0:3];
-	wire [RESP_DATA_WIDTH-1:0]	be 		[0:3];
-
-	// reg [REQ_BYTE_EN_WIDTH-1:0] val1[0:3], val2 [0:3];
+	wire [RESP_DATA_WIDTH-1:0] 		lt_u	[0:3];
+	wire [RESP_DATA_WIDTH-1:0]		lt_s	[0:3];
+	wire [RESP_DATA_WIDTH-1:0]		eq 		[0:3];
+	wire [REQ_BYTE_EN_WIDTH-1:0]	be 		[0:3];
 
 	generate
 		for (j = 0; j < 4; j = j + 1) begin
             for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i = i + 1) begin
-            	// assign val1 = s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)]
 
 				assign lt_u[j][i] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] < s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
 
-				// FIXME is representation sign and magnitude or 2's comp? This changes rep
 				assign lt_s[j][i] = (s0_vec0[((i+1)<<(j+3))-1] > s0_vec1[((i+1)<<(j+3))-1]) | 
-										((s0_vec0[((i+1)<<(j+3))-1] === s0_vec1[((i+1)<<(j+3))-1]) &
+										((s0_vec0[((i+1)<<(j+3))-1] == s0_vec1[((i+1)<<(j+3))-1]) &
 										(s0_vec0[((i+1)<<(j+3))-2:i<<(j+3)] < s0_vec1[((i+1)<<(j+3))-2:i<<(j+3)]));
 
-				assign eq[j][i] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] === s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
+				assign eq[j][i] = (s0_vec0[((i+1)<<(j+3))-1:i<<(j+3)] == s0_vec1[((i+1)<<(j+3))-1:i<<(j+3)]);
 
 				assign be[j][i] = s0_valid;	// set bits to 0 if input is invalid!!!
 			end
@@ -90,6 +90,8 @@ module vMCmp #(
 			s3_out_addr	<= 'b0;
 			s4_out_addr	<= 'b0;
 			out_addr  	<= 'b0;
+
+			s2_out_be 	<= 'b0;
 		end
 
 		else begin
@@ -97,9 +99,14 @@ module vMCmp #(
 			s0_vec1 	<= in_vec1 	& {REQ_DATA_WIDTH{in_valid}};
 			s0_opSel 	<= in_opSel & {OPSEL_WIDTH{in_valid}};
 			s0_sew 		<= in_sew 	& {SEW_WIDTH{in_valid}};
+			s0_req_end	<= in_req_end & in_valid;
+			s0_req_start <= in_req_start & in_valid;
 
 			s0_start_idx <= in_start_idx & {3{in_valid}};
 			s1_start_idx <= s0_start_idx;
+
+			s1_req_end	<= s0_req_end;
+			s1_req_start <= s0_req_start;
 
 			if (s0_valid) begin
 				case(s0_opSel)
@@ -113,14 +120,14 @@ module vMCmp #(
 					3'b111: s1_out_vec 	<= ~(lt_s[s0_sew] | eq[s0_sew]);
 				endcase
 			end
-			s2_out_vec 	<= s1_out_vec << s1_start_idx;
+			s2_out_vec 	<= (s1_start_idx == 0 | s1_req_end) ? s1_out_vec << s1_start_idx : s1_out_vec << s1_start_idx | s2_out_vec;
 			s3_out_vec 	<= s2_out_vec;
 			s4_out_vec 	<= s3_out_vec;
 			out_vec 	<= s4_out_vec;
 			
 			s0_valid 	<= in_valid;
 			s1_valid 	<= s0_valid;
-			s2_valid 	<= s1_valid;
+			s2_valid 	<= s1_valid & ((s0_start_idx == 0) | s0_req_end);
 			s3_valid 	<= s2_valid;
 			s4_valid 	<= s3_valid;
 			out_valid  	<= s4_valid;
@@ -132,8 +139,7 @@ module vMCmp #(
 			s4_out_addr	<= s3_out_addr;
 			out_addr  	<= s4_out_addr;
 
-			s1_out_be 	<= be[s0_sew] << s0_start_idx;
-			s2_out_be 	<= s1_out_be;
+			s2_out_be 	<= s1_req_start ? 'b1 : ((s1_start_idx == 0 | s1_req_end) ? s2_out_be << 1 : s2_out_be);
 			s3_out_be 	<= s2_out_be;
 			s4_out_be 	<= s3_out_be;
 			out_be  	<= s4_out_be;

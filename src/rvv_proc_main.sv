@@ -58,6 +58,7 @@ module rvv_proc_main #(
     // TODO: add register config outputs?
 );
     wire  [          DW_B-1:0]  vr_rd_en_1;
+    wire  [          DW_B-1:0]  vr_r1_en;
     wire  [          DW_B-1:0]  vr_rd_en_2;
     wire  [          DW_B-1:0]  vr_wr_en;
     wire  [          DW_B-1:0]  vr_ld_en;
@@ -67,12 +68,9 @@ module rvv_proc_main #(
     wire  [          DW_B-1:0]  vmask_ext;
     reg   [        VLEN/8-1:0]  vm_0; // The currently set mask based on the mask ops before
 
-    wire  [          DW_B-1:0]  vm_rd_en_1;
-    wire  [          DW_B-1:0]  vm_rd_en_2;
-    wire  [          DW_B-1:0]  vm_wr_en;
-    wire  [          DW_B-1:0]  vm_ld_en;
-    wire  [          DW_B-1:0]  vm_in_en;
-    wire  [          DW_B-1:0]  vm_st_en;
+    wire                        vm_rd_en_1;
+    wire                        vm_rd_en_2;
+    wire                        vm_wr_en;
 
     reg                         vr_rd_active_1;
     reg                         vr_rd_active_2;
@@ -81,6 +79,7 @@ module rvv_proc_main #(
     reg                         vm_rd_active_2;
 
     wire  [    ADDR_WIDTH-1:0]  vr_rd_addr_1;
+    wire  [    ADDR_WIDTH-1:0]  vr_r1_addr;
     wire  [    ADDR_WIDTH-1:0]  vr_rd_addr_2;
     wire  [    ADDR_WIDTH-1:0]  vr_wr_addr;
     wire  [    ADDR_WIDTH-1:0]  vr_ld_addr;
@@ -88,6 +87,7 @@ module rvv_proc_main #(
     wire  [    ADDR_WIDTH-1:0]  vr_st_addr;
 
     wire  [      OFF_BITS-1:0]  vr_rd_off_1;
+    wire  [      OFF_BITS-1:0]  vr_r1_off;
     wire  [      OFF_BITS-1:0]  vr_rd_off_2;
     wire  [      OFF_BITS-1:0]  vr_wr_off;
     wire  [      OFF_BITS-1:0]  vr_ld_off;
@@ -97,30 +97,20 @@ module rvv_proc_main #(
     wire  [    ADDR_WIDTH-1:0]  vm_rd_addr_1;
     wire  [    ADDR_WIDTH-1:0]  vm_rd_addr_2;
     wire  [    ADDR_WIDTH-1:0]  vm_wr_addr;
-    wire  [    ADDR_WIDTH-1:0]  vm_ld_addr;
-    wire  [    ADDR_WIDTH-1:0]  vm_in_addr;
-    wire  [    ADDR_WIDTH-1:0]  vm_st_addr;
 
     wire  [      OFF_BITS-1:0]  vm_rd_off_1;
     wire  [      OFF_BITS-1:0]  vm_rd_off_2;
     wire  [      OFF_BITS-1:0]  vm_wr_off;
-    wire  [      OFF_BITS-1:0]  vm_ld_off;
-    wire  [      OFF_BITS-1:0]  vm_in_off;
-    wire  [      OFF_BITS-1:0]  vm_st_off;
 
     wire  [    DATA_WIDTH-1:0]  vr_wr_data_in;
-    wire  [    DATA_WIDTH-1:0]  vr_rd_data_out_1;
+    wire  [    DATA_WIDTH-1:0]  vr_r1_data_out;
     wire  [    DATA_WIDTH-1:0]  vr_rd_data_out_2;
     wire  [    DATA_WIDTH-1:0]  vr_ld_data_in;
     wire  [    DATA_WIDTH-1:0]  vr_in_data;
-    wire  [    DATA_WIDTH-1:0]  vr_st_data_out;
 
-    wire  [    DATA_WIDTH-1:0]  vm_wr_data_in;
-    wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_1;
-    wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_2; 
-    wire  [    DATA_WIDTH-1:0]  vm_ld_data_in;
-    wire  [    DATA_WIDTH-1:0]  vm_in_data;
-    wire  [    DATA_WIDTH-1:0]  vm_st_data_out;
+    wire  [          DW_B-1:0]  vm_wr_data_in;
+    wire  [          DW_B-1:0]  vm_rd_data_out_1;
+    wire  [          DW_B-1:0]  vm_rd_data_out_2; 
 
     reg   [    INSN_WIDTH-1:0]  insn_in_f;
     reg                         insn_valid_f;
@@ -314,19 +304,19 @@ module rvv_proc_main #(
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_st (.clk(clk), .rst_n(rst_n), .en(en_vs3&~stall),              .vlmul(vlmul), .addr_in(dest),  .addr_out(vr_st_addr), .max_reg_in(avl_max_reg), .max_off_in(avl_max_off), .off_out(vr_st_off),.idle(agu_idle_st), .addr_start(agu_addr_start_st), .addr_end(agu_addr_end_st));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid&mem_port_valid_in), .vlmul(vlmul), .addr_in(dest_m),.addr_out(vr_ld_addr), .max_reg_in(avl_max_reg), .max_off_in(avl_max_off), .off_out(vr_ld_off),.idle(agu_idle_ld), .addr_start(agu_addr_start_ld), .addr_end(agu_addr_end_ld));
 
-    // TODO: make this a proper 2 read 1 write regfile ("true dual-port ram")
+    // TODO: make this a proper ("true dual-port ram")
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vr (.clk(clk),.rst_n(rst_n),
-                .rd_en_1(vr_rd_en_1),       .rd_en_2(vr_rd_en_2),       .wr_en(vr_in_en),       .st_en(vr_st_en),
-                .rd_addr_1(vr_rd_addr_1),   .rd_addr_2(vr_rd_addr_2),   .wr_addr(vr_in_addr),   .st_addr(vr_st_addr),
-                .rd_off_1(vr_rd_off_1),     .rd_off_2(vr_rd_off_2),     .wr_off(vr_in_off),     .st_off(vr_st_off),
-                .wr_data_in(vr_in_data),    .st_data_out(vr_st_data_out),.rd_data_out_1(vr_rd_data_out_1),.rd_data_out_2(vr_rd_data_out_2));
+                .rd_en_1(vr_r1_en),             .rd_en_2(vr_rd_en_2),               .wr_en(vr_in_en),     
+                .rd_addr_1(vr_r1_addr),         .rd_addr_2(vr_rd_addr_2),           .wr_addr(vr_in_addr), 
+                .rd_off_1(vr_r1_off),           .rd_off_2(vr_rd_off_2),             .wr_off(vr_in_off),   
+                .rd_data_out_1(vr_r1_data_out), .rd_data_out_2(vr_rd_data_out_2),   .wr_data_in(vr_in_data));
 
-    // TODO: make this a proper 2 read 1 write regfile ("true dual-port ram")
+    // TODO: make this a proper "true dual-port ram"
     mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vmr (.clk(clk),.rst_n(rst_n),
-                .rd_en_1(vm_rd_en_1),       .rd_en_2(vm_rd_en_2),       .wr_en(vm_in_en),       .st_en(vm_st_en),
-                .rd_addr_1(vr_rd_addr_1),   .rd_addr_2(vr_rd_addr_2),   .wr_addr(vm_in_addr),   .st_addr(vr_st_addr),
-                .rd_off_1(vr_rd_off_1),     .rd_off_2(vr_rd_off_2),     .wr_off(vm_in_off),     .st_off(vr_st_off),
-                .wr_data_in(vm_in_data),    .st_data_out(vm_st_data_out),.rd_data_out_1(vm_rd_data_out_1),.rd_data_out_2(vm_rd_data_out_2));
+                .rd_en_1(vm_rd_en_1),           .rd_en_2(vm_rd_en_2),               .wr_en(vm_wr_en),    
+                .rd_addr_1(vr_rd_addr_1),       .rd_addr_2(vr_rd_addr_2),           .wr_addr(vm_wr_addr),
+                .rd_off_1(vr_rd_off_1),         .rd_off_2(vr_rd_off_2),             .wr_off(vm_wr_off),  
+                .rd_data_out_1(vm_rd_data_out_1), .rd_data_out_2(vm_rd_data_out_2),   .wr_data_in(vm_wr_data_in));
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .rst_n(rst_n), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1), .avl_set(avl_set),
         .avl_new(data_in_1_f), .avl(avl), .sew(sew), .vlmul(vlmul), .vma(vma), .vta(vta), .vill(vill), .new_vl(new_vl));
@@ -392,7 +382,7 @@ module rvv_proc_main #(
     // ---------------------------------------- ALU CONTROL --------------------------------------------------------------------------
 
     // hold values steady while waiting for multiple register groupings
-    assign hold_reg_group   = rst_n & ((reg_count > 0) | (reg_count == 0 & (en_vs3 | en_req_mem | (opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE & ~(logic_mop))) & vlmul > 0));
+    assign hold_reg_group   = rst_n & ((reg_count > 0) | (reg_count == 0 & (en_vs3 | en_req_mem | (opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | (~logic_mop & avl > DW_B) | (logic_mop & avl > DATA_WIDTH))));
 
     // SIGN-EXTENDED IMMEDIATE FOR ALU
     always @(*) begin
@@ -410,7 +400,7 @@ module rvv_proc_main #(
             reg_count   <= 'h0;
             s_ext_imm_d <= 'h0;
         end else begin
-            reg_count   <= (reg_count > 0)    ? reg_count - 1 : (hold_reg_group ? (('b1 << vlmul)*(avl/DW_B) - 1) : 0);
+            reg_count   <= (reg_count > 0)    ? reg_count - 1 : (hold_reg_group ? (~logic_mop ? (('b1 << vlmul)*(avl/DW_B) - 1) : ((avl/DATA_WIDTH) - 1)) : 0);
 
             s_ext_imm_d <= (reg_count == 0 && opcode_mjr == `OP_INSN) ? s_ext_imm : s_ext_imm_d; // latch value for register groupings
         end
@@ -444,7 +434,7 @@ module rvv_proc_main #(
                 case (funct6_d)
                     // vid.v
                     6'b010100:  alu_data_in1    = {{(DATA_WIDTH-5){1'b0}},s_ext_imm_d[4:0]}; // use s_ext_imm because it already exists
-                    default:    alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+                    default:    alu_data_in1    = vr_r1_data_out;  // valu.vv
                 endcase
             3'h2:
                 case (funct6_d[5:3])
@@ -452,11 +442,11 @@ module rvv_proc_main #(
                         case (funct6_d[2:0])
                             // vid.v
                             3'b100:     alu_data_in1    = {{(DATA_WIDTH-5){1'b0}},s_ext_imm_d[4:0]}; // use s_ext_imm because it already exists
-                            default:    alu_data_in1    = vr_rd_data_out_1;  // valu.vv
+                            default:    alu_data_in1    = vr_r1_data_out;  // valu.vv
                         endcase
                     end
                     3'b011:     alu_data_in1 = vm_rd_data_out_1;
-                    default:    alu_data_in1 = vr_rd_data_out_1;  // valu.vv
+                    default:    alu_data_in1 = vr_r1_data_out;  // valu.vv
                 endcase
             3'h3: begin // valu.vi
                 case (alu_req_sew)
@@ -490,7 +480,7 @@ module rvv_proc_main #(
 
     // --------------------------------------------- AGU INPUT CONTROL ------------------------------------------------------------------
     assign logic_mop = (opcode_mnr == `MVV_TYPE) & (funct6[5:3] == 3'b011);
-    
+
     // used only for OPIVV, OPFVV, MVV_TYPE (excl VID)
     assign en_vs1   = (opcode_mjr == `OP_INSN & opcode_mnr <= 3'h2 & funct6 != 'h14);// && ~hold_reg_group;
 
@@ -517,10 +507,10 @@ module rvv_proc_main #(
     assign vr_in_off    = ~agu_idle_wr ? vr_wr_off      : vr_ld_off;
     assign vr_in_data   = ~agu_idle_wr ? vr_wr_data_in  : vr_ld_data_in;
 
-    assign vm_in_en     = ~agu_idle_wr ? vm_wr_en       : vm_ld_en;
-    assign vm_in_addr   = ~agu_idle_wr ? vm_wr_addr     : vm_ld_addr;
-    assign vm_in_off    = ~agu_idle_wr ? vm_wr_off      : vm_ld_off;
-    assign vm_in_data   = ~agu_idle_wr ? vm_wr_data_in  : vm_ld_data_in;
+    // merge store and read1 port
+    assign vr_r1_en     = ~agu_idle_rd_1 ? vr_rd_en_1       : vr_st_en;
+    assign vr_r1_addr   = ~agu_idle_rd_1 ? vr_rd_addr_1     : vr_st_addr;
+    assign vr_r1_off    = ~agu_idle_rd_1 ? vr_rd_off_1      : vr_st_off;
 
     // ----------------------------------------------- REGFILE CONTROL --------------------------------------------------------------------
     assign vr_rd_en_1 = {DW_B{~agu_idle_rd_1}}; // & ~(funct6[5:3] == 3'b011 & opcode_mnr == `MVV_TYPE)}}; // don't actually read data if it's a mask op!
@@ -551,7 +541,7 @@ module rvv_proc_main #(
 
     // TODO update with mask ld/st
     assign mem_port_valid_out   = rst_n & en_mem_out;
-    assign mem_port_data_out    = {MEM_DATA_WIDTH{en_mem_out}} & vr_st_data_out;
+    assign mem_port_data_out    = {MEM_DATA_WIDTH{en_mem_out}} & vr_r1_data_out;
     assign mem_port_addr_out    = ({MEM_DATA_WIDTH{en_mem_out}} & mem_addr_in_d) | ({MEM_DATA_WIDTH{mem_port_req_out}} & mem_addr_in_d);
     assign mem_port_be_out      = {(MEM_DW_B){1'b1}};// & vr_st_en;
 
@@ -562,12 +552,12 @@ module rvv_proc_main #(
     // --------------------------------------------------- WRITEBACK STAGE LOGIC --------------------------------------------------------------
     assign vr_wr_data_in    = {DATA_WIDTH{rst_n & alu_valid_out & ~alu_mask_out}} & alu_data_out;
 
-    assign vm_wr_data_in    = {DATA_WIDTH{rst_n & alu_valid_out & alu_mask_out}} & alu_data_out;
+    assign vm_wr_data_in    = {DW_B{rst_n & alu_valid_out & alu_mask_out}} & alu_data_out[DW_B-1:0];
 
     // We may be able to reduce to 1 bit because we use AGNOSTIC ops only right?
     // Nah, combining mask and enable saves some logic overall
     assign vr_wr_en = {DW_B{~agu_idle_wr & ~alu_mask_out}} & alu_be_out;
-    assign vm_wr_en = {DW_B{alu_valid_out & alu_mask_out}} & alu_be_out;     // write mask
+    assign vm_wr_en = alu_valid_out & alu_mask_out;     // write mask
 
     // -------------------------------------------------- SIGNAL PROPAGATION LOGIC ------------------------------------------------------------
     assign no_bubble = hold_reg_group & (reg_count > 0);
@@ -664,7 +654,13 @@ module rvv_proc_main #(
 
             // update
             if (alu_valid_out & alu_mask_out & alu_addr_out == 'h0) begin
-                vm_0    <= (vm_0 & ~(alu_be_out << (DW_B*alu_off_out))) | ((alu_data_out[DW_B-1:0] & alu_be_out) << (DW_B*alu_off_out)); // FIXME this will need to be shifted for VLEN > DW_B
+                integer k;
+                for (k = 0; k < VLEN_B; k++) begin
+                    if (alu_off_out == k) begin
+                        vm_0[k*DW_B +: DW_B] = alu_data_out[DW_B-1:0];
+                    end
+                end
+                // vm_0    <= (vm_0 & ~(alu_data_out << (DW_B*alu_off_out))) | ((alu_data_out[DW_B-1:0] & alu_be_out) << (DW_B*alu_off_out)); // FIXME this will need to be shifted for VLEN > DW_B
             end
         end
     end

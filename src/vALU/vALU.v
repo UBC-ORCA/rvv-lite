@@ -380,6 +380,8 @@ generate
             .in_opSel   (vMask_opSel    ),
             .in_sew     (req_sew        ),
             .in_start_idx(vStartIdx     ),
+            .in_req_start(req_start     ),
+            .in_req_end  (req_end       ),
             .out_vec    (vMCmp_outVec   ),
             .out_valid  (vMCmp_outValid ),
             .out_addr   (vMCmp_outAddr  ),
