@@ -8,8 +8,8 @@ module vID #(
     input       [   REQ_ADDR_WIDTH-1:0] in_addr,
     input       [                  2:0] in_sew,
     input                               in_valid,
-    input       [                  7:0] in_start_idx,
-    input       [REQ_BYTE_EN_WIDTH-1:0] in_mask,
+    input       [                 10:0] in_start_idx,
+    // input       [REQ_BYTE_EN_WIDTH-1:0] in_mask,
     output reg  [   REQ_ADDR_WIDTH-1:0] out_addr,
     output reg  [  RESP_DATA_WIDTH-1:0] out_vec,
     output reg                          out_valid
@@ -28,7 +28,7 @@ module vID #(
         // FIXME lmul < 1?
         for (j = 0; j < 4; j = j + 1) begin
             for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i = i + 1) begin
-                assign s0_data[j][((i+1)<<(j+3))-1:i<<(j+3)] = {(8<<j){(in_mask[i])}} & (i + in_start_idx);
+                assign s0_data[j][i*(1<<(j+3)) +: (1<<(j+3))] = (i + in_start_idx); //{(8<<j){(in_mask[i])}} & (i + in_start_idx);
             end
         end
     endgenerate

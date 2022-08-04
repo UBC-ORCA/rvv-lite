@@ -35,8 +35,6 @@ module vRedSum_min_max_unit_block #(
 	generate
 		if(MIN_MAX_ENABLE == 1) begin
 			vMinMaxSelector vMinMaxSelector0 (
-				.clk			(clk									),
-				.rst			(rst									),
 				.vec0			(vec0[REQ_DATA_WIDTH-1:0]				),
 				.vec1			(vec0[REQ_DATA_WIDTH*2-1:REQ_DATA_WIDTH]),
 				.sub_result 	(result 								),

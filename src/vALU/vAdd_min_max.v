@@ -44,8 +44,6 @@ module vAdd_min_max #(
 	generate
 		if(MIN_MAX_ENABLE == 1) begin
 			vMinMaxSelector vMinMaxSelector0 (
-				.clk(clk),
-				.rst(rst),
 				.vec0(s1_vec0),
 				.vec1(s1_vec1),
 				.sub_result(s1_result),

@@ -15,6 +15,8 @@
 `include "vID.sv"
 `include "vMCmp.v"
 
+// TODO optional 64-bit
+
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
     parameter REQ_DATA_WIDTH    = 64,
@@ -47,7 +49,7 @@ module vALU #(
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
     input      [     REQ_VL_WIDTH-1:0] req_vl      ,
-    input      [                  7:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
+    input      [                 10:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
     input                              req_mask    ,
@@ -71,7 +73,6 @@ reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
 reg  [     REQ_VL_WIDTH-1:0]    s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
 
 reg  [                  7:0]    s0_off, s1_off, s2_off, s3_off, s4_off, s5_off; // TODO pipe through modules
-// reg [REQ_FUNC_ID_WIDTH-1:0]     s0_func_id, s1_func_id, s2_func_id, s3_func_id, s4_func_id;
 reg                             turn;
 
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
@@ -91,7 +92,7 @@ wire                            vNarrow_en, vWiden_en;
 wire                            vSigned_op     ;
 wire                            vSlide_insert  ; //TODO: assign something
 
-wire [                  7:0]    vStartIdx;
+wire [                 11:0]    vStartIdx;
 
 wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec, vMCmp_outVec;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
@@ -103,7 +104,7 @@ wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, 
                                 vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr, vMCmp_outAddr;
 
 // TODO: Update enable signals for FP instr later
-assign vAdd_en              = req_valid & ((req_func_id[5:3] == 3'b000) || (req_func_id[5:2] == 4'b1100));
+assign vAdd_en              = req_valid & ((req_func_id[5:3] == 3'b000) | (req_func_id[5:2] == 4'b1100));
 assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010);
 assign vMinMax_en           = req_valid & (req_func_id[5:2] == 4'b0001);
 assign vMul_en              = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
@@ -146,9 +147,7 @@ assign vMask_opSel          = req_func_id[2:0];
 assign vRedAndOrXor_opSel   = req_func_id[1:0];
 assign vRedSum_min_max_opSel= req_func_id[0];
 
-assign vStartIdx            = req_vr_idx*(REQ_DATA_WIDTH>>(req_sew + 3));
-
-// This needs no enable, it's considered a base insn...
+assign vStartIdx            = req_vr_idx >> req_sew;
 
 vID #(
     .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
@@ -161,7 +160,6 @@ vID_0 (
     .in_valid       (vID_en         ),
     .in_addr        (req_addr       ),
     .in_start_idx   (vStartIdx      ),
-    .in_mask        (req_be         ),
     .out_vec        (vID_outVec     ),
     .out_valid      (vID_outValid   ),
     .out_addr       (vID_outAddr    )
@@ -169,7 +167,7 @@ vID_0 (
 
 generate
     if(WIDEN_ENABLE) begin
-        assign vWiden_en    = (&req_func_id[5:4] & ~req_func_id[2]); // (req_func_id[5:2] == 4'b1100 || req_func_id[5:2] == 4'b1110) 
+        assign vWiden_en    = (&req_func_id[5:4] & ~req_func_id[2]);
 
         vWiden vWiden_0 (
             .in_vec0    (req_data0  ),
@@ -234,7 +232,7 @@ generate
 endgenerate
 
 generate
-    if(ADD_SUB_ENABLE == 1) begin
+    if(ADD_SUB_ENABLE) begin
         vAdd_min_max # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -260,7 +258,7 @@ generate
         assign vAdd_outValid = 'b0;
     end
 
-    if(AND_OR_XOR_ENABLE == 1) begin
+    if(AND_OR_XOR_ENABLE) begin
         vAndOrXor # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -284,7 +282,7 @@ generate
         assign vAndOrXor_outAddr  = 'b0;
     end
 
-    if(MULT_ENABLE == 1) begin
+    if(MULT_ENABLE) begin
         vMul # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -312,7 +310,7 @@ generate
         assign vMul_outAddr  = 'b0;
     end
 
-    if(SLIDE_ENABLE == 1) begin
+    if(SLIDE_ENABLE) begin
         vSlide vSlide_0 (
             .clk        (clk            ),
             .rst        (rst            ),
@@ -494,12 +492,6 @@ always @(posedge clk) begin
         resp_data       <= 'b0;
         resp_valid      <= 'b0;
 
-        // s0_func_id      <= 'b0;
-        // s1_func_id      <= 'b0;
-        // s2_func_id      <= 'b0;
-        // s3_func_id      <= 'b0;
-        // s4_func_id      <= 'b0;
-
         s0_be           <= 'b0;
         s1_be           <= 'b0;
         s2_be           <= 'b0;
@@ -516,12 +508,6 @@ always @(posedge clk) begin
         turn            <= 'b0;
     end
     else begin
-        // s0_func_id      <= req_func_id;
-        // s1_func_id      <= s0_func_id;
-        // s2_func_id      <= s1_func_id;
-        // s3_func_id      <= s2_func_id;
-        // s4_func_id      <= s3_func_id;
-
         s0_vl           <= req_vl;
         s1_vl           <= s0_vl;
         s2_vl           <= s1_vl;

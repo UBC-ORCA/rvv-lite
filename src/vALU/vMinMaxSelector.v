@@ -3,11 +3,8 @@ module vMinMaxSelector #(
 	parameter RESP_DATA_WIDTH 	= 64,
 	parameter SEW_WIDTH       	= 2,
 	parameter OPSEL_WIDTH     	= 9,
-	parameter MIN_MAX_ENABLE  	= 1,
 	parameter MASK_WIDTH      	= 8
 ) (
-	input                        	clk,
-	input                        	rst,
 	input  [ REQ_DATA_WIDTH-1:0] 	vec0,
 	input  [ REQ_DATA_WIDTH-1:0] 	vec1,
 	input  [REQ_DATA_WIDTH+16:0] 	sub_result,

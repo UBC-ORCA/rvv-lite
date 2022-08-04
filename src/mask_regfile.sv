@@ -4,8 +4,8 @@ module mask_regfile #(
     parameter ADDR_WIDTH    = 5,        // this gives us 32 vectors
     parameter DATA_WIDTH    = 64,       // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
     parameter DW_B          = DATA_WIDTH/8, // DATA_WIDTH in bytes
-    parameter EN_B          = DW_B/8,
-    parameter OFF_BITS      = 8             // 2048/64 needs 8 bits
+    parameter OFF_BITS      = 8,             // 2048/64 needs 8 bits
+    parameter PACK_PER_REG  = VLEN_B/DW_B
     )(
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                           clk,
@@ -24,23 +24,22 @@ module mask_regfile #(
     output reg  [      DW_B-1:0]    rd_data_out_2 
 );
     // FIXME I'm pretty sure we can read more data at once but don't quote me on that 
-    reg          [DW_B-1:0] mask_data [((VLEN_B/DW_B) << ADDR_WIDTH)-1:0]; // packet addressable
+    (*ram_decomp = "power"*)  reg          [DW_B-1:0] mask_data [(PACK_PER_REG << ADDR_WIDTH)-1:0]; // packet addressable
 
     // --------------------------- READING AND WRITING ------------------------------------
 
-    integer j;
     always @(posedge clk) begin
         if (wr_en) begin
-            mask_data[wr_addr*(VLEN_B/DW_B)+wr_off]  <= wr_data_in;
+            mask_data[wr_addr*PACK_PER_REG+wr_off]  <= wr_data_in;
         end
         if (rd_en_1) begin
-            rd_data_out_1  <= mask_data[rd_addr_1*(VLEN_B/DW_B) + rd_off_1];
+            rd_data_out_1  <= mask_data[rd_addr_1*PACK_PER_REG + rd_off_1];
         end
     end
 
     always @(posedge clk) begin
         if (rd_en_2) begin
-            rd_data_out_2  <= mask_data[rd_addr_2*(VLEN_B/DW_B) + rd_off_2];
+            rd_data_out_2  <= mask_data[rd_addr_2*PACK_PER_REG + rd_off_2];
         end
     end
 
