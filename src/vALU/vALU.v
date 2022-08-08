@@ -16,6 +16,8 @@
 `include "vMCmp.v"
 
 // TODO optional 64-bit
+// TODO separate masking instructions - test area
+// TODO separate reduction instructions - test area
 
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
@@ -147,7 +149,7 @@ assign vMask_opSel          = req_func_id[2:0];
 assign vRedAndOrXor_opSel   = req_func_id[1:0];
 assign vRedSum_min_max_opSel= req_func_id[0];
 
-assign vStartIdx            = req_vr_idx >> req_sew;
+assign vStartIdx            = req_vr_idx << ('h3 - req_sew);
 
 vID #(
     .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
@@ -159,7 +161,7 @@ vID_0 (
     .in_sew         (req_sew        ),
     .in_valid       (vID_en         ),
     .in_addr        (req_addr       ),
-    .in_start_idx   (vStartIdx      ),
+    .in_start_idx   (vStartIdx     ),
     .out_vec        (vID_outVec     ),
     .out_valid      (vID_outValid   ),
     .out_addr       (vID_outAddr    )

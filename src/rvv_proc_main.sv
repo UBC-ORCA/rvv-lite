@@ -36,7 +36,7 @@
 module rvv_proc_main #(
     parameter VLEN              = 16384,            // vector length in bits
     parameter VLEN_B            = VLEN >> 3,        // same as VLMAX
-    parameter VLEN_B_BITS       = 11,
+    parameter VLEN_B_BITS       = 12,
     parameter XLEN              = 32,               // not sure, data width maybe?
     parameter NUM_VEC           = 32,               // number of available vector registers
     parameter INSN_WIDTH        = 32,               // width of a single instruction
@@ -200,7 +200,7 @@ module rvv_proc_main #(
 
     wire  [          XLEN-1:0]  vtype_nxt;
     wire  [               1:0]  avl_set;
-    reg   [              10:0]  reg_count;
+    reg   [   VLEN_B_BITS-2:0]  reg_count;
 
     wire                        agu_idle_rd_1;
     wire                        agu_idle_rd_2;
@@ -255,7 +255,9 @@ module rvv_proc_main #(
     wire                        alu_resp_start, alu_resp_end;
 
     wire  [      OFF_BITS-1:0]  avl_max_off;
-    wire  [    ADDR_WIDTH-1:0]  avl_max_reg;
+    wire  [               2:0]  avl_max_reg;
+
+    wire  [          DW_B-1:0]  gen_avl_be;
 
 
     genvar i,j;
@@ -356,8 +358,8 @@ module rvv_proc_main #(
     assign cfg_en    = (opcode_mjr == `OP_INSN && opcode_mnr == `CFG_TYPE);
     assign avl_set   = {(dest == 'h0),(src_1 == 'h0)}; // determines if rd and rs1 are non-zero, as AVL setting depends on this
 
-    assign avl_max_off = (avl > (VLEN_B >> sew)) ? (VLEN_B/DW_B) - 1 : (avl >> (DW_B_BITS - sew)) - 1;
-    assign avl_max_reg = (avl >= (VLEN_B >> sew)) ? (avl >> (VLEN_B_BITS - sew)) - 1 : 0;
+    assign avl_max_off = (avl > (VLEN_B >> sew)) ? (VLEN_B/DW_B) - 1 : ((avl-1)>>(DW_B_BITS - sew));
+    assign avl_max_reg = (avl > (VLEN_B >> sew)) ? ((avl-1)>>(VLEN_B_BITS - 1 - sew)) : 0;
 
     // ---------------------------------------- ALU CONTROL --------------------------------------------------------------------------
 
@@ -372,7 +374,7 @@ module rvv_proc_main #(
             reg_count   <= 'h0;
             s_ext_imm_d <= 'h0;
         end else begin
-            reg_count   <= (|reg_count)    ? reg_count - 1 : (hold_reg_group ? (~logic_mop ? (((avl>>DW_B_BITS) - 1) << sew) : ((avl>>DATA_WIDTH_BITS) - 1)) : 0);
+            reg_count   <= (|reg_count)    ? reg_count - 1 : (hold_reg_group ? (~logic_mop ? ((avl-1)>>(DW_B_BITS - sew)) : (avl-1)>>DATA_WIDTH_BITS) : 0);
 
             s_ext_imm_d <= (~(|reg_count) & opcode_mjr == `OP_INSN) ? s_ext_imm : s_ext_imm_d; // latch value for register groupings
         end
@@ -389,7 +391,7 @@ module rvv_proc_main #(
 
     // assign alu_req_sew      = sew;
     // assign alu_req_avl      = avl;
-    assign alu_vr_idx       = (((avl>>DW_B_BITS) - 1) << sew) - reg_count;
+    assign alu_vr_idx       = ((avl-1)>>(DW_B_BITS - sew)) - reg_count;
 
     // FIXME simplify
     assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
@@ -587,13 +589,11 @@ module rvv_proc_main #(
             endcase
         end else begin // FIXME -- how do we use AVL when it's a variable??
             // Next mask will always come from v0, we really only need to read and write masks for mask manipulation instructions
-            alu_req_be = vm_d ? {DW_B{1'b1}} : vmask_ext; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
+            alu_req_be = vm_d ? gen_avl_be : vmask_ext; // vm=1 is unmasked -- just set be to 1 for unmasked insns to simplify ALU
         end
     end
 
-    // wire    [DW_B-1:0] gen_avl_be;
-
-    // generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VEX_DATA_WIDTH)) gen_be_alu (.clk(clk), .rst_n (rst_n), .avl   (avl), .avl_be(gen_avl_be));
+    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(alu_vr_idx), .avl_be(gen_avl_be));
 
 
     always @(posedge clk) begin
@@ -664,33 +664,39 @@ module rvv_proc_main #(
         end else begin
             always @(posedge clk) begin
                 vm_0            <= {(VLEN_B){1'b1}};
-            end // always @(posedge clk)
+            end
         end
     endgenerate
 
 endmodule
 
 module generate_be #(
-    parameter DATA_WIDTH        = 64,
-    parameter DW_B              = DATA_WIDTH/8,
-    parameter AVL_WIDTH         = DATA_WIDTH)
-    (
-    input                           clk,
-    input                           rst_n,
-    input       [  AVL_WIDTH-1:0]   avl,
-    output  reg [       DW_B-1:0]   avl_be
+    parameter AVL_WIDTH     = 12,
+    parameter DATA_WIDTH    = 64,
+    parameter DW_B          = DATA_WIDTH/8
+    ) (
+    input   [AVL_WIDTH-1:0] avl,
+    input   [          2:0] sew,
+    input   [         10:0] reg_count,
+    output  [     DW_B-1:0] avl_be
     );
 
-    genvar i;
+    wire [DW_B-1:0] avl_be_sew   [0:3];
 
+    parameter REP_BITS = 1;
+
+    genvar i, j;
+
+    // Generate mask byte enable based on SEW and current index in vector
     generate
-        for (i = 0; i < DW_B; i=i+1) begin
-            always @(posedge clk) begin
-                // set high if 
-                avl_be[i] <= rst_n & (i < avl);
+        for (j = 0; j < 3; j = j + 1) begin
+            for (i = 0; i < DW_B >> j; i = i + 1) begin
+                assign avl_be_sew[j][i*(REP_BITS<<j) +: (REP_BITS<<j)] = {(REP_BITS<<j){(reg_count*(DW_B>>j) + i) < avl}};
             end
         end
     endgenerate
+
+    assign avl_be = avl_be_sew[sew];
 endmodule
 
 module extract_mask #(

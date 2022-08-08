@@ -3,7 +3,7 @@ module cfg_unit #(
     parameter VLEN          = 16384,
     parameter DATA_WIDTH    = 64,
     parameter VLMAX         = VLEN >> 3,
-    parameter VLEN_B_BITS   = 11  
+    parameter VLEN_B_BITS   = 12  
 ) (
     input                           clk,
     input                           en,
@@ -11,7 +11,7 @@ module cfg_unit #(
     input       [           1:0]    cfg_type,
     input       [           4:0]    src_1,
     input       [           1:0]    avl_set,
-    input       [VLEN_B_BITS-1:0]    avl_new,
+    input       [VLEN_B_BITS-1:0]   avl_new,
 
     output reg  [VLEN_B_BITS-1:0]    avl,   // Application Vector Length (vlen effective)
     output reg  [           2:0]    sew,

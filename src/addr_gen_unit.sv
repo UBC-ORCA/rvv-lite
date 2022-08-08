@@ -2,13 +2,14 @@ module addr_gen_unit #(
     parameter ADDR_WIDTH = 5,    // this gives us 32 vectors
     parameter OFF_WIDTH = 8
 ) (
+    // FIXME for avl of uneven length across regs
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                       clk,
     input                       rst_n,
     input                       en,
     input   [           2:0]    sew,
     input   [ OFF_WIDTH-1:0]    max_off_in,
-    input   [ADDR_WIDTH-1:0]    max_reg_in,
+    input   [           2:0]    max_reg_in,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
     output  [ OFF_WIDTH-1:0]    off_out,

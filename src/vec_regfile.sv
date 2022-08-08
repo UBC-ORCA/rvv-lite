@@ -29,8 +29,6 @@ module vec_regfile #(
 
     // --------------------------- READING AND WRITING ------------------------------------
 
-    // wire p1_e   = rd_en_1 | |wr_en;
-
     integer j;
     always @(posedge clk) begin
         for (j = 0; j < DW_B; j=j+1) begin
