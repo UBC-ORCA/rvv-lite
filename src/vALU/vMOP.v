@@ -53,9 +53,9 @@ module vMOP #(
 		end
 
 		else begin
-			s0_m0 		<= in_m0 	& {REQ_DATA_WIDTH{in_valid}};
-			s0_m1 		<= in_m1 	& {REQ_DATA_WIDTH{in_valid}};
-			s0_opSel 	<= in_opSel & {OPSEL_WIDTH{in_valid}};
+			s0_m0 		<= in_valid ? in_m0 	: 'h0;//	& {REQ_DATA_WIDTH{in_valid}};
+			s0_m1 		<= in_valid ? in_m1 	: 'h0;//	& {REQ_DATA_WIDTH{in_valid}};
+			s0_opSel 	<= in_valid ? in_opSel 	: 'h0;//& {OPSEL_WIDTH{in_valid}};
 
 			case(s0_opSel)
 				3'b000: s1_out_vec 	<= s0_m0 & s0_m1;
@@ -79,7 +79,7 @@ module vMOP #(
 			s4_valid 	<= s3_valid;
 			out_valid  	<= s4_valid;
 
-			s0_out_addr	<= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
+			s0_out_addr	<= in_valid ? in_addr : 'h0;
 			s1_out_addr	<= s0_out_addr;
 			s2_out_addr	<= s1_out_addr;
 			s3_out_addr	<= s2_out_addr;

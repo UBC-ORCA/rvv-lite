@@ -95,6 +95,7 @@ module mem_queue #(
     wire [MBUS_DATA_WIDTH-1:0]  ar_l_din,   ar_h_din,   aw_l_din,   aw_h_din,   r_din,      w_l_din,    w_h_din;
     wire [MBUS_DATA_WIDTH-1:0]  ar_l_dout,  ar_h_dout,  aw_l_dout,  aw_h_dout,  r_l_dout,   r_h_dout,   w_l_dout,   w_h_dout;
     wire                        ar_l_empty, ar_h_empty, w_l_empty,  w_h_empty;
+    wire                        r_l_full, r_h_full;
 
     reg  [FIFO_DEPTH_BITS-1:0]  burst_len;   // it's entirely possible we get 2048 element burst eventually, right?
     wire [FIFO_DEPTH_BITS-1:0]  r_l_pop,    r_h_pop;
@@ -118,8 +119,8 @@ module mem_queue #(
     FIFObuffer #(.DATA_WIDTH(MBUS_ADDR_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) aw_buf_l   (.clk(clk), .rst_n(rst_n), .r_en(w_l_r_en),    .w_en(w_w_en),  .data_in(aw_l_din), .data_out(aw_l_dout));
     FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) w_buf_h    (.clk(clk), .rst_n(rst_n), .r_en(w_h_r_en),    .w_en(w_w_en),  .data_in(w_h_din),  .data_out(w_h_dout),  .EMPTY(w_h_empty));
     FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) w_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(w_l_r_en),    .w_en(w_w_en),  .data_in(w_l_din),  .data_out(w_l_dout),  .EMPTY(w_l_empty));
-    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_h    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_h_w_en),.data_in(r_din),    .data_out(r_h_dout),  .POP(r_h_pop));
-    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_l_w_en),.data_in(r_din),    .data_out(r_l_dout),  .POP(r_l_pop));
+    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_h    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_h_w_en),.data_in(r_din),    .data_out(r_h_dout),  .POP(r_h_pop),  .FULL(r_h_full));
+    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(r_l_w_en),.data_in(r_din),    .data_out(r_l_dout),  .POP(r_l_pop),  .FULL(r_l_full));
 
     assign ar_h_din     = rvv_addr_out[31:0] + MBUS_DW_B;
     assign ar_l_din     = rvv_addr_out[31:0];
@@ -141,8 +142,7 @@ module mem_queue #(
 
     always @(posedge clk) begin
         r_turn          <= mbus_ar_ready^r_turn;
-        r_out           <= r_out ? ~mbus_r_valid : mbus_ar_ready;
-        // r_out           <= (r_out & ~mbus_r_valid) | (~r_out & mbus_ar_ready); // signal that we have an un-acked request
+        r_out           <= r_out ? ~mbus_r_valid : mbus_ar_ready; // signal that we have an un-acked request
 
         burst_len       <= mid_burst_r ? burst_len + ar_w_en : ((read_count == burst_len) ? 0 : burst_len);   // if we're mid-burst, increment. Else, set to the enable signal value
         mid_burst_r     <= ar_w_en;

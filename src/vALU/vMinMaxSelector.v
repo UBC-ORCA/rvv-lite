@@ -12,7 +12,6 @@ module vMinMaxSelector #(
 	input  [    OPSEL_WIDTH-1:0] 	minMax_sel,
 	output [RESP_DATA_WIDTH-1:0] 	minMax_result,
 	output [     MASK_WIDTH-1:0] 	equal,
-	output [     MASK_WIDTH-1:0] 	gt,
 	output [     MASK_WIDTH-1:0] 	lt
 );
 
@@ -23,6 +22,10 @@ module vMinMaxSelector #(
 	wire [MASK_WIDTH-1:0] 	sgn_bits32;
 	wire [MASK_WIDTH-1:0] 	sgn_bits64;
 	wire [MASK_WIDTH-1:0] 	sgn_bits;
+	wire [MASK_WIDTH-1:0] 	lt8;
+	wire [MASK_WIDTH-1:0] 	lt16;
+	wire [MASK_WIDTH-1:0] 	lt32;
+	wire [MASK_WIDTH-1:0] 	lt64;
 	wire [MASK_WIDTH-1:0] 	equal8;
 	wire [MASK_WIDTH-1:0] 	equal16;
 	wire [MASK_WIDTH-1:0] 	equal32;
@@ -33,6 +36,11 @@ module vMinMaxSelector #(
 	assign sgn_bits32	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[39],sub_result[39],sub_result[39],sub_result[39]};
 	assign sgn_bits64	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79]};
 
+	assign lt8 			= {sub_result[79],sub_result[69],sub_result[59],sub_result[49],sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
+	assign lt16			= {sub_result[79],sub_result[59],sub_result[39],sub_result[19]};
+	assign lt32			= {sub_result[79],sub_result[39]};
+	assign lt64			= {sub_result[79]};
+
 	assign sgn_bits 	= sew[1] ? (sew[0] ? sgn_bits64 : sgn_bits32) : (sew[0] ? sgn_bits16 : sgn_bits8);
 
 	for(i=0;i<8;i=i+1) begin
@@ -40,13 +48,11 @@ module vMinMaxSelector #(
 		assign equal8[i] 				= (sub_result[10*i+9:10*i+1] == 'b0);
 	end
 
-	assign equal16 	= {{2{equal8[7] & equal8[6]}},{2{equal8[5] & equal8[4]}},{2{equal8[3] & equal8[2]}},{2{equal8[1] & equal8[0]}}};
-	assign equal32 	= {{4{equal8[7] & equal8[6] & equal8[5] & equal8[4]}},{4{equal8[3] & equal8[2] & equal8[1] & equal8[0]}}};
-	assign equal64 	= {{8{equal8[7] & equal8[6] & equal8[5] & equal8[4] & equal8[3] & equal8[2] & equal8[1] & equal8[0]}}};
+	assign equal16 	= {{equal8[7] & equal8[6]},{equal8[5] & equal8[4]},{equal8[3] & equal8[2]},{equal8[1] & equal8[0]}};
+	assign equal32 	= {{equal8[7] & equal8[6] & equal8[5] & equal8[4]},{equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
+	assign equal64 	= {{equal8[7] & equal8[6] & equal8[5] & equal8[4] & equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
 
 	assign equal 	= sew[1] ? (sew[0] ? equal64 : equal32): (sew[0] ? equal16 : equal8);
 
-	assign lt 		= sgn_bits;
-	assign gt 		= ~sgn_bits;
-
+	assign lt 		= sew[1] ? (sew[0] ? lt64 : lt32) : (sew[0] ? lt16 : lt8);
 endmodule

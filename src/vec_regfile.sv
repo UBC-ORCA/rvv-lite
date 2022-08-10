@@ -24,7 +24,6 @@ module vec_regfile #(
     output reg  [DATA_WIDTH-1:0]    rd_data_out_2 
 );
 
-    // redundant copies so we read from BRAMS
     (*ram_decomp = "power"*) reg [DATA_WIDTH-1:0]    vec_data    [(PACK_PER_REG << ADDR_WIDTH)-1:0]; // packet addressable
 
     // --------------------------- READING AND WRITING ------------------------------------

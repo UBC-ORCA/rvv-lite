@@ -42,7 +42,6 @@ module vRedSum_min_max_unit_block #(
 				.minMax_sel 	(opSel[3] 								),
 				.minMax_result 	(minMax_result 							),
 				.equal			(										),
-				.gt 			(										),
 				.lt 			(										)
 			);
 		end
