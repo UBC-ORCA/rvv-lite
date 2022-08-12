@@ -1,16 +1,19 @@
 module addr_gen_unit #(
-    parameter ADDR_WIDTH = 5,    // this gives us 32 vectors
-    parameter OFF_WIDTH = 8
+    parameter VLEN          = 16384,
+    parameter DATA_WIDTH    = 64,
+    parameter ADDR_WIDTH    = 5,    // this gives us 32 vectors
+    parameter OFF_WIDTH     = 8
 ) (
     // FIXME for avl of uneven length across regs
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                       clk,
     input                       rst_n,
     input                       en,
-    input   [           2:0]    sew,
+    input   [           1:0]    sew,
     input   [ OFF_WIDTH-1:0]    max_off_in,
     input   [           2:0]    max_reg_in,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
+    input                       whole_reg,
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
     output  [ OFF_WIDTH-1:0]    off_out,
     output                      addr_start,
@@ -41,11 +44,11 @@ module addr_gen_unit #(
     assign base_reg_out    = (addr_start ? addr_in : base_reg);
     assign curr_reg_out    = ~addr_start ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off))) : 'h0;
     // assign max_reg_out     = (addr_start ? (~sew[2] ? max_reg_in : (max_reg_in >> (3'b100 - sew[1:0]))) : max_reg);
-    assign max_reg_out     = (addr_start ? max_reg_in : max_reg);
+    assign max_reg_out     = (addr_start ? (whole_reg ? (1 << sew) - 1 : max_reg_in) : max_reg);
 
     assign curr_off_out    = ~addr_start & (curr_off != max_off) ? (curr_off + (curr_off != max_off)) : 'h0;
     // assign max_off_out     = (addr_start ? (~sew[2] ? max_off_in : (max_off_in >> (3'b100 - sew[1:0]))) : max_off);
-    assign max_off_out     = (addr_start ? max_off_in : max_off);
+    assign max_off_out     = (addr_start ? (whole_reg ? (VLEN/DATA_WIDTH) - 1 : max_off_in) : max_off);
 
     // latching input values
     always @(posedge clk) begin

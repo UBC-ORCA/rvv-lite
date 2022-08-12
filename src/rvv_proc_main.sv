@@ -24,14 +24,16 @@
 `define ADD_SUB_ENABLE    1 // a1c
 `define MIN_MAX_ENABLE    1 // a1d
 `define VEC_MOVE_ENABLE   1 // a1e
-`define WIDEN_ENABLE      1 // a2
-`define NARROW_ENABLE     1 // a2
-`define REDUCTION_ENABLE  1 // a3
-`define MULT_ENABLE       1 // a4
-`define SHIFT_ENABLE      1
-`define MULT64_ENABLE     1
 `define SLIDE_ENABLE      1
-`define MASK_ENABLE       1
+`define LDST_WHOLE_ENABLE 0 // a1f
+`define WIDEN_ENABLE      0 // a2
+`define NARROW_ENABLE     0 // a2
+`define REDUCTION_ENABLE  0 // a3
+`define MULT_ENABLE       0 // a4
+`define SHIFT_ENABLE      0
+`define SLIDE_N_ENABLE    0
+`define MULT64_ENABLE     0
+`define MASK_ENABLE       0
 
 module rvv_proc_main #(
     parameter VLEN              = 16384,            // vector length in bits
@@ -177,6 +179,7 @@ module rvv_proc_main #(
     reg   [               2:0]  opcode_mnr_d;
     reg   [               4:0]  dest_d;    // rd, vd, or vs3 -- TODO make better name lol
     reg   [               4:0]  lumop_d;
+    reg   [               1:0]  mop_d;
     reg   [               5:0]  funct6_d;
     reg                         vm_d;
     reg   [   VLEN_B_BITS-1:0]  avl_d;
@@ -186,6 +189,7 @@ module rvv_proc_main #(
     reg   [               6:0]  opcode_mjr_m;
     reg   [               4:0]  dest_m;    // rd, vd, or vs3 -- TODO make better name lol
     reg   [               4:0]  lumop_m;
+    reg   [               1:0]  mop_m;
 
     reg                         out_ack_e;
     reg                         out_ack_m;
@@ -193,10 +197,11 @@ module rvv_proc_main #(
     // CONFIG VALUES -- config unit flops them, these are just connector wires
     wire  [   VLEN_B_BITS-1:0]  avl; // Application Vector Length (vlen effective)
     wire  [   VLEN_B_BITS-1:0]  avl_eff; // avl - 1
+    wire  [   VLEN_B_BITS-1:0]  reg_count_avl; // avl - 1
     wire                        new_vl;
 
     // VTYPE values
-    wire  [               2:0]  sew;
+    wire  [               1:0]  sew; // we dont do fractional
     wire  [          XLEN-1:0]  vtype;
     wire                        vill;
 
@@ -232,6 +237,7 @@ module rvv_proc_main #(
     wire  [          DW_B-1:0]  alu_be_out;
     reg   [              10:0]  alu_vr_idx; // MAX VALUE IS 2047
     wire  [              10:0]  alu_vr_idx_next; // MAX VALUE IS 2047
+    wire                        alu_out_w_reg; // whole register insn
 
     wire                        hold_reg_group;
     reg                         vec_haz         [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
@@ -259,8 +265,14 @@ module rvv_proc_main #(
 
     wire  [      OFF_BITS-1:0]  avl_max_off;
     wire  [      OFF_BITS-1:0]  avl_max_off_m;
-    wire  [      OFF_BITS-1:0]  avl_max_off_in;
+    wire  [      OFF_BITS-1:0]  avl_max_off_in_rd;
     wire  [               2:0]  avl_max_reg;
+
+    wire  [      OFF_BITS-1:0]  avl_max_off_in_ld;
+    wire  [      OFF_BITS-1:0]  avl_max_off_in_wr;
+
+    wire                        whole_reg_rd;
+    wire                        whole_reg_ld;
 
     wire  [          DW_B-1:0]  gen_avl_be;
     reg                  [2:0]  mask_off [0:3];
@@ -277,11 +289,10 @@ module rvv_proc_main #(
         .width(width), .mop(mop), .mew(mew), .nf(nf), .vtype_11(vtype_11), .vtype_10(vtype_10), .vm(vm), .funct6(funct6), .cfg_type(cfg_type));
 
     // TODO: figure out how to make this single cycle, so we can fully pipeline lol
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src1 (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall),  .sew(logic_mop ? 'h0 : sew),    .addr_in(en_vs1 ? src_1 : dest),        .addr_out(vr_rd_addr_1), .max_reg_in(avl_max_reg), .max_off_in(avl_max_off_in),.off_out(vr_rd_off_1), .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_src2 (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),  .sew(logic_mop ? 'h0 : sew),    .addr_in(src_2),        .addr_out(vr_rd_addr_2), .max_reg_in(avl_max_reg), .max_off_in(avl_max_off_in),.off_out(vr_rd_off_2), .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_dest (.clk(clk), .rst_n(rst_n), .en(en_vd),            .sew(sew), .addr_in(alu_addr_out), .addr_out(vr_wr_addr),   .max_reg_in(avl_max_reg), .max_off_in(avl_max_off),.off_out(vr_wr_off),   .idle(agu_idle_wr));
-
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH)) agu_ld (.clk(clk), .rst_n(rst_n), .en(ld_valid&mem_port_valid_in), .sew(sew), .addr_in(dest_m),.addr_out(vr_ld_addr), .max_reg_in(avl_max_reg), .max_off_in(wait_mem_msk ? avl_max_off_m : avl_max_off), .off_out(vr_ld_off),.idle(agu_idle_ld));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),                      .sew(sew),                  .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out),        .addr_out(vr_wr_addr),  .max_reg_in(avl_max_reg),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(ld_valid&mem_port_valid_in), .sew(sew),                  .whole_reg(whole_reg_ld),.addr_in(dest_m),               .addr_out(vr_ld_addr),  .max_reg_in(avl_max_reg),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),    .idle(agu_idle_ld));
 
     // TODO: make this a proper ("true dual-port ram")
     vec_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vr (.clk(clk),.rst_n(rst_n),
@@ -322,10 +333,10 @@ module rvv_proc_main #(
             .AND_OR_XOR_ENABLE(`AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(`ADD_SUB_ENABLE),.MIN_MAX_ENABLE(`MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(`VEC_MOVE_ENABLE),
             .WIDEN_ENABLE(`WIDEN_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),
             .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.MASK_ENABLE(`MASK_ENABLE))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end),
-        .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew[1:0]), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg),
+        .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .req_mask_out(alu_mask_out), .req_be_out(alu_be_out),
-        .resp_start(alu_resp_start), .resp_end(alu_resp_end), .resp_off(alu_off_out));
+        .resp_start(alu_resp_start), .resp_end(alu_resp_end), .resp_off(alu_off_out), .resp_whole_reg(alu_out_w_reg));
     //  MISSING PORT CONNECTIONS:
     //     output                             req_ready   ,
     // );
@@ -371,13 +382,35 @@ module rvv_proc_main #(
     assign cfg_en    = (opcode_mjr == `OP_INSN && opcode_mnr == `CFG_TYPE);
     assign avl_set   = {(dest == 'h0),(src_1 == 'h0)}; // determines if rd and rs1 are non-zero, as AVL setting depends on this
 
-    assign avl_eff  = (src2_ == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) ? VLEN_B - 1 : avl - 1;
+    assign avl_eff   = avl - 1;
 
-    assign avl_max_off = (avl > (VLEN_B >> sew)) ? (VLEN_B/DW_B) - 1 : (avl_eff>>(DW_B_BITS - sew));
-    assign avl_max_off_m = (avl > (VLEN_B >> sew)) ? (VLEN_B/DATA_WIDTH) - 1 : (avl_eff>>(DATA_WIDTH_BITS - sew));
-    assign avl_max_off_in = logic_mop ? avl_max_off_m : avl_max_off;
-    assign avl_max_reg = avl_eff>>(VLEN_B_BITS - 1 - sew);
+    generate
+        if (`VEC_MOVE_ENABLE) begin
+            assign alu_req_w_reg = (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN); // whole reg move
 
+            if (`LDST_WHOLE_ENABLE) begin
+                assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN);
+                assign whole_reg_ld   = (mop_m == 'h0 & lumop_m == 'h8 & opcode_mjr_m == `LD_INSN); // required for when the data actually comes back
+            end else begin
+                assign whole_reg_rd   = (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN);
+                assign whole_reg_ld   = 0;
+            end
+        end else begin
+            assign whole_reg_rd = 0;
+            assign alu_req_w_reg= 0;
+            assign whole_reg_ld = 0;
+        end
+    endgenerate
+
+    // FIXME only helps if avl < single reg lol
+    assign avl_max_off   = (avl > (VLEN_B >> sew)) ? (VLEN_B/DW_B) - 1          : (avl_eff>>(DW_B_BITS - sew));
+    assign avl_max_off_m = (avl > (VLEN_B >> sew)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - sew));
+
+    assign avl_max_off_in_rd= logic_mop     ? avl_max_off_m : avl_max_off;
+    assign avl_max_off_in_wr= alu_mask_out  ? avl_max_off_m : avl_max_off;
+    assign avl_max_off_in_ld= wait_mem_msk  ? avl_max_off_m : avl_max_off;
+
+    assign avl_max_reg    = avl_eff>>(VLEN_B_BITS - 1 - sew);
     // ---------------------------------------- ALU CONTROL --------------------------------------------------------------------------
 
     // hold values steady while waiting for multiple register groupings
@@ -387,13 +420,15 @@ module rvv_proc_main #(
     assign s_ext_imm = {{(DATA_WIDTH-5){src_1[4]}}, src_1};
     assign alu_vr_idx_next = (|reg_count)    ? alu_vr_idx + 1 : 0;
 
+    assign reg_count_avl = (whole_reg_rd ? VLEN_B - 1 : avl_eff);
+
     always @(posedge clk) begin
         if (~rst_n) begin
             reg_count   <= 'h0;
             alu_vr_idx  <= 'h0;
             s_ext_imm_d <= 'h0;
         end else begin
-            reg_count   <= (|reg_count)    ? reg_count - 1 : (hold_reg_group ? (~logic_mop ? (avl_eff>>(DW_B_BITS - sew)) : avl_eff[VLEN_B_BITS-1:DATA_WIDTH_BITS]) : 0);
+            reg_count   <= (|reg_count)    ? reg_count - 1 : (hold_reg_group ? (~logic_mop ? (reg_count_avl>>(DW_B_BITS - sew)) : reg_count_avl[VLEN_B_BITS-1:DATA_WIDTH_BITS]) : 0);
             alu_vr_idx  <= alu_vr_idx_next;
             s_ext_imm_d <= (~(|reg_count) & opcode_mjr == `OP_INSN) ? s_ext_imm : s_ext_imm_d; // latch value for register groupings
         end
@@ -466,7 +501,11 @@ module rvv_proc_main #(
         if (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE) begin
             alu_data_in2 = vm_rd_data_out_2;    // mask logic function
         end else begin
-            alu_data_in2 = vr_rd_data_out_2;
+            if (funct6_d[5:1] == 5'b00111) begin // FIXME what if gather?
+                alu_data_in2 = mem_addr_in_d; // rename varaible later
+            end else begin
+                alu_data_in2 = vr_rd_data_out_2;
+            end
         end
     end
 
@@ -645,6 +684,7 @@ module rvv_proc_main #(
             dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
             // width_d         <= ~stall ? width       : (no_bubble ? width_d      : 'h0);
             lumop_d         <= ~stall ? src_2       : (no_bubble ? lumop_d      : 'h0);
+            mop_d           <= ~stall ? mop         : (no_bubble ? mop_d        : 'h0);
             funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
             // avl_d           <= ~stall ? avl         : avl_d;
@@ -658,13 +698,14 @@ module rvv_proc_main #(
             out_ack_m       <= (mem_port_valid_in & mem_port_done_ld) | (mem_port_done_st);
 
             // hold these values until we get a response
-            opcode_mjr_m    <= opcode_mjr_d;
-            dest_m          <= wait_mem ? dest_m : dest_d;
+            opcode_mjr_m    <= wait_mem & ~mem_port_done_ld ? opcode_mjr_m : opcode_mjr_d;
+            dest_m          <= wait_mem ? dest_m    : dest_d;
             // width_m         <= wait_mem ? width_m : width_d;
-            lumop_m         <= wait_mem ? lumop_m : lumop_d;
+            lumop_m         <= wait_mem ? lumop_m   : lumop_d;
+            mop_m           <= wait_mem ? mop_m     : mop_d;
             ld_valid        <= wait_mem;
             wait_mem        <= wait_mem ? ~mem_port_done_ld : (opcode_mjr_m == `LD_INSN);
-            wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_m == `LD_INSN) & lumop_m == 5'hB);
+            wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_m == `LD_INSN) & lumop_m == 5'hB & mop_m == 'h0);
 
             vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE) ? avl : 'h0;
             vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN && opcode_mnr_d == `CFG_TYPE);
@@ -680,7 +721,7 @@ module generate_be #(
     parameter DW_B_BITS     = 3
     ) (
     input   [AVL_WIDTH-1:0] avl,
-    input   [          2:0] sew,
+    input   [          1:0] sew,
     input   [         10:0] reg_count,
     output  [     DW_B-1:0] avl_be
     );
@@ -710,7 +751,7 @@ module extract_mask #(
     parameter DW_B_BITS     = 3
     ) (
     input   [    DW_B-1:0]  vmask_in,
-    input   [         2:0]  sew,
+    input   [         1:0]  sew,
     input   [         2:0]  reg_off,
     input                   en,
     output  [    DW_B-1:0]  vmask_out

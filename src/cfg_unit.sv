@@ -14,19 +14,19 @@ module cfg_unit #(
     input       [VLEN_B_BITS-1:0]   avl_new,
 
     output reg  [VLEN_B_BITS-1:0]    avl,   // Application Vector Length (vlen effective)
-    output reg  [           2:0]    sew,
+    output reg  [           1:0]    sew,
     // output reg  [           2:0]    vlmul, // sew = vlmul for this when sew/vlmul = 8 (our setting)
     output reg                      vill,
     output reg                      new_vl
 );
     wire [VLEN_B_BITS-1:0]   vlmax;
     
-    wire [           2:0]   sew_nxt;
+    wire [           1:0]   sew_nxt;
     // wire [           2:0]   vlmul_nxt;
     wire                    vill_nxt;
 
     // assign vlmul_nxt   = vtype_nxt[5:3];//vtype_nxt[2:0];
-    assign sew_nxt     = vtype_nxt[5:3];
+    assign sew_nxt     = vtype_nxt[4:3]; // only need bottom 2 bits (00,01,10,11)
     assign vill_nxt    = vtype_nxt[XLEN-1];
     // we only support 
     assign vlmax        = VLMAX;//~vlmul_nxt[2] ? (VLEN_B << vlmul_nxt) >> (sew_nxt) : (VLEN_B >> (3'b100 - vlmul_nxt[1:0] + sew_nxt));

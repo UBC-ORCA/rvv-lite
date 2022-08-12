@@ -110,9 +110,9 @@ module vSlide #(
 			out_addr			<= 'b0;
 		end
 		else begin
-			s0_vec0          	<= {REQ_DATA_WIDTH{in_valid}} & in_vec0;
-			s0_vec1          	<= {REQ_DATA_WIDTH{in_valid}} & in_vec1;
-			s1_vec1          	<= {REQ_DATA_WIDTH{in_valid}} & s0_vec1;
+			s0_vec0          	<= in_valid ? in_vec0 : 'h0;
+			s0_vec1          	<= in_valid ? in_vec1 : 'h0;
+			s1_vec1          	<= in_valid ? s0_vec1 : 'h0;
 			s0_insert        	<= in_insert;
 			s1_down_vec1_end 	<= w_s0_vec1 & (~{{8{w_s0_be_shifted_right[7]}},{8{w_s0_be_shifted_right[6]}},{8{w_s0_be_shifted_right[5]}},{8{w_s0_be_shifted_right[4]}},
 									{8{w_s0_be_shifted_right[3]}},{8{w_s0_be_shifted_right[2]}},{8{w_s0_be_shifted_right[1]}},{8{w_s0_be_shifted_right[0]}}});
@@ -121,7 +121,7 @@ module vSlide #(
 			s2_up_remainder 	<= s1_up_result[127:64];
 			s2_up_result    	<= s1_up_result[63:0] | w_s1_up_remainder;
 			s3_up_result    	<= s2_up_result;
-			s0_sew 				<= {SEW_WIDTH{in_valid}} & in_sew;
+			s0_sew 				<= in_valid ? in_sew : 'h0;
 			s1_down_remainder 	<= w_s0_down_result[63:0];
 			s1_down_result    	<= w_s0_down_result[127:64];
 			s2_down_result    	<= s1_down_result;
@@ -130,7 +130,7 @@ module vSlide #(
 			s4_result 			<= s3_opSel ? s3_down_result : s3_up_result;
 			out_vec 			<= s4_result;
 
-			s0_be  				<= {REQ_BYTE_EN_WIDTH{in_valid}} & in_be;
+			s0_be  				<= in_valid ? in_be : 'h0;
 			s1_be  				<= ((~s0_insert) & s0_opSel & s0_end) ? (w_s0_be_shifted_right) : (((~s0_insert) & (~s0_opSel) & s0_start) ? (w_s0_be_shifted_left) : (s0_be)); 
 			s2_be  				<= s1_be;
 			s3_be  				<= s2_be;
@@ -149,7 +149,7 @@ module vSlide #(
 			s4_valid 			<= s3_valid;
 			out_valid 			<= s4_valid;
 
-			s0_out_addr			<= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
+			s0_out_addr			<= in_valid ? in_addr : 'h0;
 			s1_out_addr			<= s0_out_addr;
 			s2_out_addr			<= s1_out_addr;
 			s3_out_addr			<= s2_out_addr;

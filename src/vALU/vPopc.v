@@ -23,8 +23,8 @@ module vPopc #(
 
 	reg 	[  RESP_DATA_WIDTH-1:0] count;
 	wire 	[  RESP_DATA_WIDTH-1:0] w_count;
-	wire 	[RESP_DATA_WIDTH/8-1:0] w_s1_mask;
- 	reg 	[RESP_DATA_WIDTH/8-1:0] s0_mask, s1_mask;
+	wire 	[  RESP_DATA_WIDTH-1:0] w_s1_mask;
+ 	reg 	[  RESP_DATA_WIDTH-1:0] s0_mask, s1_mask;
 	reg 							s0_end, s1_end, s2_end, s3_end, s4_end;
 	reg 	[ 		 SEW_WIDTH-1:0] s0_sew;
 	reg 	[   REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;

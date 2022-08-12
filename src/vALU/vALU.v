@@ -56,6 +56,7 @@ module vALU #(
     input                              req_end     ,
     input                              req_mask    ,
     input      [                  7:0] req_off     ,
+    input                              req_whole_reg,
     output reg                         resp_valid  ,
     output reg                         resp_start  ,
     output reg                         resp_end    ,
@@ -65,7 +66,8 @@ module vALU #(
     output reg [                  7:0] resp_off    ,
     output reg [     REQ_VL_WIDTH-1:0] req_vl_out  ,
     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out  ,
-    output reg                         req_mask_out
+    output reg                         req_mask_out,
+    output reg                         resp_whole_reg
 );
 
 reg  [   REQ_ADDR_WIDTH-1:0]    s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
@@ -100,6 +102,7 @@ wire [                 11:0]    vStartIdx;
 wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
                                 vID_outValid, vMCmp_outValid;
+wire                            vMove_outWReg;
 wire [                  9:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
 wire                            vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en, vMove_en, vMCmp_en;
@@ -113,13 +116,14 @@ assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010);
 assign vMinMax_en           = req_valid & (req_func_id[5:2] == 4'b0001);
 assign vMul_en              = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
 assign vSlide_en            = req_valid & (req_func_id[5:1] == 5'b00111);
-assign vMove_en             = req_valid & (req_func_id == 6'b010111) & req_mask;
+assign vMove_en             = req_valid & ((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3);
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
 assign vMOP_en              = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h2);
 assign vMCmp_en             = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h0 | req_op_mnr === 3'h3 | req_op_mnr === 3'h4);
 assign vPopc_en             = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
+assign vFirst_en            = req_valid & (req_func_id == 'h10) & (req_data0 == 'h11); // First uses VWXUNARY0
 assign vID_en               = req_valid & (req_func_id == 'h14) & (req_data0 == 'h11); // vid uses VMUNARY0
 assign vRedAndOrXor_en      = req_valid & (|req_func_id[1:0] & req_func_id[5:2] == 4'b0000) & (req_op_mnr == 3'h2);
 assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr == 3'h2);
@@ -501,15 +505,18 @@ generate
             .in_vec0  (req_data0        ),
             .in_valid (vMove_en         ),
             .in_addr  (req_addr         ),
+            .in_w_reg (req_whole_reg    ),
             .out_vec  (vMove_outVec     ),
             .out_valid(vMove_outValid   ),
-            .out_addr (vMove_outAddr    )
+            .out_addr (vMove_outAddr    ),
+            .out_w_reg(vMove_outWReg    )
         );
     end
     else begin
         assign vMove_outVec     = 'b0;
         assign vMove_outValid   = 'b0;
         assign vMove_outAddr    = 'b0;
+        assign vMove_outWReg    = 'b0;
     end
 endgenerate
 
@@ -589,6 +596,8 @@ always @(posedge clk) begin
                             | vID_outAddr;
 
         req_mask_out    <= vMOP_outValid | (vAdd_outValid & vAdd_outMask);
+
+        resp_whole_reg  <= vMove_outWReg;
 
         if(req_end)
             turn        <= 'b0;
