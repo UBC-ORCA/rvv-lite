@@ -31,7 +31,7 @@ module vPopc #(
 		.rst   		(rst      	),
 		.in_valid 	(in_valid	),
 		.in_m0  	(s0_mask  	),
-		.in_count	(count 		),
+		.in_count	(w_count 	),
 		.out_vec	(w_count	)
 	);
 
