@@ -6,6 +6,7 @@
 `include "vMul.v"
 `include "vNarrow.v"
 `include "vPopc.v"
+`include "vFirst.sv"
 `include "vRedAndOrXor.v"
 `include "vRedSum_min_max.v"
 `include "vSlide.v"
@@ -66,11 +67,11 @@ module vALU #(
     output reg [                  7:0] resp_off    ,
     output reg [     REQ_VL_WIDTH-1:0] req_vl_out  ,
     output reg [REQ_BYTE_EN_WIDTH-1:0] req_be_out  ,
-    output reg                         req_mask_out,
+    output reg                         resp_mask_out,
+    output reg                         resp_sca_out,
     output reg                         resp_whole_reg
 );
 
-reg  [   REQ_ADDR_WIDTH-1:0]    s0_addr, s1_addr, s2_addr, s3_addr, s4_addr, s5_addr;
 reg  [REQ_BYTE_EN_WIDTH-1:0]    s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
 reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start;
 reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
@@ -81,7 +82,6 @@ reg                             turn;
 
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1;
-wire [   REQ_DATA_WIDTH-1:0]    vAdd_outVec, vAndOrXor_outVec, vMul_outVec, vSlide_outVec, vNarrow_outVec;
 wire [   REQ_DATA_WIDTH-1:0]    vAvAdd_outVec, vScShift_outVec;
 wire [                  1:0]    vAndOrXor_opSel, vMul_opSel, vAdd_opSel;
 wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1      ;
@@ -89,26 +89,25 @@ wire [   REQ_DATA_WIDTH-1:0]    vShift_mult    ;
 wire [                  6:0]    vShift_cmpl    ;
 wire [                  1:0]    vSlide_sew, vWiden_sew, vAdd_sew, vMul_sew;
 wire [REQ_BYTE_EN_WIDTH-1:0]    vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe;
-wire                            vAdd_outValid, vAndOrXor_outValid, vMul_outValid, vSlide_outValid, vNarrow_outValid;
-wire                            vMinMax_opSel,vRightShift_opSel, vSlide_opSel;
-wire                            vAdd_en, vMinMax_en, vAndOrXor_en, vMul_en, vSlide_en, vID_en;
+wire                            vMinMax_opSel, vRightShift_opSel, vSlide_opSel;
 wire                            vAdd_outMask;
-wire                            vNarrow_en, vWiden_en;
 wire                            vSigned_op     ;
 wire                            vSlide_insert  ; //TODO: assign something
 
 wire [                 11:0]    vStartIdx;
 
-wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec;
+wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec, vFirst_outVec,
+                                vAdd_outVec, vAndOrXor_outVec, vMul_outVec, vSlide_outVec, vNarrow_outVec;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
-                                vID_outValid, vMCmp_outValid;
+                                vID_outValid, vFirst_outValid, vAdd_outValid, vAndOrXor_outValid, vMul_outValid, vSlide_outValid, vNarrow_outValid;
 wire                            vMove_outWReg;
 wire [                  9:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
-wire                            vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en, vMove_en, vMCmp_en;
+wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vFirst_en, vAdd_en, vMinMax_en,
+                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vNarrow_outAddr, vMerge_outAddr,
-                                vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr;
+                                vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr, vFirst_outAddr;
 
 // TODO: Update enable signals for FP instr later
 assign vAdd_en              = req_valid & ((req_func_id[5:3] == 3'b000) | (req_func_id[5:2] == 4'b1100));
@@ -128,6 +127,7 @@ assign vID_en               = req_valid & (req_func_id == 'h14) & (req_data0 == 
 assign vRedAndOrXor_en      = req_valid & (|req_func_id[1:0] & req_func_id[5:2] == 4'b0000) & (req_op_mnr == 3'h2);
 assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr == 3'h2);
 
+// FIXME
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 
@@ -247,7 +247,7 @@ generate
 endgenerate
 
 generate
-    if(ADD_SUB_ENABLE | MASK_ENABLE) begin
+    if(ADD_SUB_ENABLE | MASK_ENABLE) begin : add_sub
         vAdd_min_max # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -281,7 +281,7 @@ generate
         assign vAdd_outValid = 'b0;
     end
 
-    if(AND_OR_XOR_ENABLE) begin
+    if(AND_OR_XOR_ENABLE) begin : and_or_xor
         vAndOrXor # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -306,7 +306,7 @@ generate
         assign vAndOrXor_outAddr  = 'b0;
     end
 
-    if(MULT_ENABLE) begin
+    if(MULT_ENABLE) begin : mult
         vMul # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -335,7 +335,7 @@ generate
         assign vMul_outAddr  = 'b0;
     end
 
-    if(SLIDE_ENABLE) begin
+    if(SLIDE_ENABLE) begin : slide
         vSlide #(
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -370,7 +370,7 @@ endgenerate
 
 
 generate
-    if(MASK_ENABLE) begin
+    if(MASK_ENABLE) begin : mask
         vMerge # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -412,15 +412,30 @@ generate
             ) vPopc0 (
             .clk        (clk            ),
             .rst        (rst            ),
-            .in_m0      (req_be         ),
+            .in_m0      (req_data1      ),
             .in_valid   (vPopc_en       ),
-            .in_sew     (req_sew        ),
-            .in_start   (req_start      ),
             .in_end     (req_end        ),
             .in_addr    (req_addr       ),
             .out_vec    (vPopc_outVec   ),
             .out_addr   (vPopc_outAddr  ),
             .out_valid  (vPopc_outValid )
+        );
+
+        vFirst #(
+            .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
+            .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
+            .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH)
+            ) vFirst0 (
+            .clk        (clk            ),
+            .rst        (rst            ),
+            .in_m0      (req_data1      ),
+            .in_valid   (vFirst_en      ),
+            .in_end     (req_end        ),
+            .in_addr    (req_addr       ),
+            .in_start_idx(vStartIdx     ),
+            .out_vec    (vFirst_outVec  ),
+            .out_addr   (vFirst_outAddr ),
+            .out_valid  (vFirst_outValid)
         );
 
     end
@@ -436,12 +451,16 @@ generate
         assign vPopc_outVec     = 'b0;
         assign vPopc_outValid   = 'b0;
         assign vPopc_outAddr    = 'b0;
+
+        assign vFirst_outVec    = 'b0;
+        assign vFirst_outValid  = 'b0;
+        assign vFirst_outAddr   = 'b0;
     end
 endgenerate
 
 
 generate
-    if(REDUCTION_ENABLE) begin
+    if(REDUCTION_ENABLE) begin : red
         vRedAndOrXor #(
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -494,7 +513,7 @@ generate
 endgenerate
 
 generate
-    if(VEC_MOVE_ENABLE) begin
+    if(VEC_MOVE_ENABLE) begin : move 
         vMove #(
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
@@ -581,21 +600,23 @@ always @(posedge clk) begin
         s5_off        <= s4_off;
         resp_off      <= s5_off;
 
-        req_be_out      <=  vSlide_outBe     | s5_be         | vNarrow_be    | vMCmp_outBe;
+        req_be_out      <=  vSlide_outBe        | s5_be         | vNarrow_be        | vMCmp_outBe;
 
-        resp_valid      <= vMove_outValid   | vAdd_outValid | vAndOrXor_outValid| vMul_outValid | vSlide_outValid | vNarrow_outValid
-                            | vMerge_outValid   | vMOP_outValid | vPopc_outValid| vRedAndOrXor_outValid | vRedSum_min_max_outValid
-                            | vID_outValid;
+        resp_valid      <= vMove_outValid       | vAdd_outValid | vAndOrXor_outValid| vMul_outValid         | vSlide_outValid           | vNarrow_outValid
+                            | vMerge_outValid   | vMOP_outValid | vPopc_outValid    | vRedAndOrXor_outValid | vRedSum_min_max_outValid
+                            | vID_outValid      | vFirst_outValid;
 
-        resp_data       <= vMove_outVec     | vAdd_outVec   | vAndOrXor_outVec  | vMul_outVec   | vSlide_outVec | vNarrow_outVec
-                            | vMerge_outVec     | vMOP_outVec   | vPopc_outVec  | vRedAndOrXor_outVec   | vRedSum_min_max_outVec
-                            | vID_outVec;
+        resp_data       <= vMove_outVec     | vAdd_outVec   | vAndOrXor_outVec  | vMul_outVec           | vSlide_outVec         | vNarrow_outVec
+                            | vMerge_outVec | vMOP_outVec   | vPopc_outVec      | vRedAndOrXor_outVec   | vRedSum_min_max_outVec
+                            | vID_outVec    | vFirst_outVec;
 
-        req_addr_out    <= vMove_outAddr    | vAdd_outAddr  | vAndOrXor_outAddr | vMul_outAddr  | vSlide_outAddr | vNarrow_outAddr
-                            | vMerge_outAddr    | vMOP_outAddr  | vPopc_outAddr | vRedAndOrXor_outAddr  | vRedSum_min_max_outAddr
-                            | vID_outAddr;
+        req_addr_out    <= vMove_outAddr        | vAdd_outAddr  | vAndOrXor_outAddr | vMul_outAddr          | vSlide_outAddr            | vNarrow_outAddr
+                            | vMerge_outAddr    | vMOP_outAddr  | vPopc_outAddr     | vRedAndOrXor_outAddr  | vRedSum_min_max_outAddr
+                            | vID_outAddr   | vFirst_outAddr;
 
-        req_mask_out    <= vMOP_outValid | (vAdd_outValid & vAdd_outMask);
+        resp_mask_out   <= vMOP_outValid | (vAdd_outValid & vAdd_outMask);
+
+        resp_sca_out    <= vFirst_outValid | vPopc_outValid;
 
         resp_whole_reg  <= vMove_outWReg;
 

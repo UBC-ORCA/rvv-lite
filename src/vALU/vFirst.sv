@@ -1,20 +1,18 @@
-`include "vAdd_mask.v"
+`include "vFirst_bit.sv"
 
 module vFirst #(
     parameter REQ_DATA_WIDTH    = 64,
     parameter RESP_DATA_WIDTH   = 64,
     parameter REQ_ADDR_WIDTH    = 32,
-    parameter SEW_WIDTH         = 2,
-    parameter OPSEL_WIDTH       = 3,
-    parameter MIN_MAX_ENABLE    = 1
+    parameter MIN_MAX_ENABLE    = 1,
+    parameter IDX_BITS          = 10,
+    parameter DATA_WIDTH_BITS   = 6
 ) (
     input                               clk,
     input                               rst,
     input       [   REQ_DATA_WIDTH-1:0] in_m0,
     input                               in_valid,
-    input       [        SEW_WIDTH-1:0] in_sew,
-    input                               in_start_idx,
-    input                               in_start,
+    input       [         IDX_BITS-1:0] in_start_idx,
     input                               in_end,
     input       [   REQ_ADDR_WIDTH-1:0] in_addr,
     output reg  [  RESP_DATA_WIDTH-1:0] out_vec,
@@ -22,24 +20,37 @@ module vFirst #(
     output reg                          out_valid
     );
 
-    reg     [  RESP_DATA_WIDTH-1:0] count;
-    wire    [  RESP_DATA_WIDTH-1:0] w_count;
-    wire    [  RESP_DATA_WIDTH-1:0] w_s1_mask;
-    reg     [  RESP_DATA_WIDTH-1:0] s0_mask, s1_mask;
+    reg     [  RESP_DATA_WIDTH-1:0] idx_out;
+    wire    [  RESP_DATA_WIDTH-1:0] w_idx;
+    reg     [  RESP_DATA_WIDTH-1:0] found;
+    wire                            w_found;
+    reg     [  RESP_DATA_WIDTH-1:0] s0_mask;
+    reg                             s0_valid;
+    reg     [         IDX_BITS-1:0] s0_start_idx;
     reg                             s0_end, s1_end, s2_end, s3_end, s4_end;
-    reg     [        SEW_WIDTH-1:0] s0_sew;
     reg     [   REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
-    always @(posedge clk) begin
-        case()
-    end
+    vFirst_bit #(
+        .REQ_DATA_WIDTH(REQ_DATA_WIDTH),
+        .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
+        .IDX_BITS(IDX_BITS)
+        ) vFirst_bit0 (
+        .clk        (clk        ),
+        .rst        (rst        ),
+        .in_valid   (s0_valid & ~(found | w_found)), // stop processing if we found it since we read packs in order
+        .in_m0      (s0_mask    ),
+        .in_idx     (s0_start_idx),
+        .out_vec    (w_idx      ),
+        .out_found  (w_found    )
+    );
 
     always @(posedge clk) begin
         if(rst) begin
             s0_mask     <= 'b0;
-            s0_sew      <= 'b0;
-            s1_mask     <= 'b0;
-            count       <= 'b0;
+            s0_valid    <= 'b0;
+
+            idx_out     <= 'b0;
+            found       <= 'b0;
             out_vec     <= 'b0;
             
             s0_end      <= 'b0;
@@ -59,10 +70,12 @@ module vFirst #(
 
         else begin
             s0_mask     <= in_valid ? in_m0 : 'h0;
-            s0_sew      <= in_sew;
-            s1_mask     <= w_s1_mask;
-            count       <= s4_end ? 'b0 : w_count;
-            out_vec     <= s4_end ? count : 'b0;
+            s0_valid    <= in_valid;
+            s0_start_idx<= in_valid ? in_start_idx << DATA_WIDTH_BITS : 'h0;
+
+            idx_out     <= s4_end ? 'b0 : (w_found ? w_idx : idx_out);
+            found       <= s4_end ? 'b0 : (w_found | found);
+            out_vec     <= s4_end ? idx_out : 'b0;
 
             s0_end      <= in_end & in_valid;
             s1_end      <= s0_end;
@@ -71,7 +84,7 @@ module vFirst #(
             s4_end      <= s3_end;
             out_valid   <= s4_end;
 
-            s0_out_addr <= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
+            s0_out_addr <= in_valid ? in_addr : 'h0;
             s1_out_addr <= s0_out_addr;
             s2_out_addr <= s1_out_addr;
             s3_out_addr <= s2_out_addr;

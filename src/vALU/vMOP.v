@@ -58,12 +58,12 @@ module vMOP #(
 			s0_opSel 	<= in_valid ? in_opSel 	: 'h0;//& {OPSEL_WIDTH{in_valid}};
 
 			case(s0_opSel)
-				3'b000: s1_out_vec 	<= s0_m0 & s0_m1;
-				3'b001: s1_out_vec 	<= ~s0_m0 & ~s0_m1;
-				3'b010: s1_out_vec 	<= ~(s0_m0 & s0_m1);
+				3'b000: s1_out_vec 	<= s0_m0 & ~s0_m1;
+				3'b001: s1_out_vec 	<= s0_m0 & s0_m1;
+				3'b010: s1_out_vec 	<= s0_m0 | s0_m1;
 				3'b011: s1_out_vec 	<= s0_m0 ^ s0_m1;
-				3'b100: s1_out_vec 	<= s0_m0 | s0_m1;
-				3'b101: s1_out_vec 	<= ~s0_m0 | ~s0_m1;
+				3'b100: s1_out_vec 	<= s0_m0 | ~s0_m1;
+				3'b101: s1_out_vec 	<= ~(s0_m0 & s0_m1);
 				3'b110: s1_out_vec 	<= ~(s0_m0 | s0_m1);
 				3'b111: s1_out_vec 	<= ~(s0_m0 ^ s0_m1);
 			endcase
