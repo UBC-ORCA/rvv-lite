@@ -116,7 +116,6 @@ module rvv_proc_main #(
     wire  [    DATA_WIDTH-1:0]  vr_ld_data_in;
     wire  [    DATA_WIDTH-1:0]  vr_in_data;
 
-    wire  [    DATA_WIDTH-1:0]  vm_wr_data_in;
     wire  [    DATA_WIDTH-1:0]  vm_ld_data_in;
     wire  [    DATA_WIDTH-1:0]  vm_in_data;
     wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_1;
@@ -192,6 +191,7 @@ module rvv_proc_main #(
     reg   [               1:0]  mop_m;
 
     reg                         out_ack_e;
+    reg   [VEX_DATA_WIDTH-1:0]  out_data_e;
     reg                         out_ack_m;
 
     // CONFIG VALUES -- config unit flops them, these are just connector wires
@@ -304,7 +304,7 @@ module rvv_proc_main #(
 
     // TODO: make this a proper "true dual-port ram"
     generate
-        if (`MASK_ENABLE) begin
+        if (`MASK_ENABLE) begin : mask_file
             mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vmr (.clk(clk),.rst_n(rst_n),
                         .rd_en_1(vm_rd_en_1),           .rd_en_2(vm_rd_en_2),               .wr_en(vm_in_en),    
                         .rd_addr_1(vm_rd_addr_1),       .rd_addr_2(vr_rd_addr_2),           .wr_addr(vm_in_addr),
@@ -502,19 +502,32 @@ module rvv_proc_main #(
         endcase
 
         // FIXME make pretty
-        if (is_mcmp_op_d | first_or_cpop) begin
-            alu_data_in2 = vm_rd_data_out_2;    // mask logic function
-        end else begin
-            if (funct6_d[5:1] == 5'b00111) begin // FIXME what if gather?
-                alu_data_in2 = mem_addr_in_d; // rename variable later
-            end else begin
-                if (funct6_d == 6'h10 & opcode_mnr_d == `MVX_TYPE) begin
-                    alu_data_in2 = lumop_d; // vmv.s.x
-                end else begin
-                    alu_data_in2 = vr_rd_data_out_2;
-                end
+        // if (is_mcmp_op_d | first_or_cpop_d) begin
+        //     alu_data_in2 = vm_rd_data_out_2;    // mask logic function
+        // end else begin
+        //     if (funct6_d[5:1] == 5'b00111) begin // slide - FIXME what if gather?
+        //         alu_data_in2 = mem_addr_in_d; // rename variable later
+        //     end else begin
+        //         if (funct6_d == 6'h10 & opcode_mnr_d == `MVX_TYPE) begin
+        //             alu_data_in2 = lumop_d; // vmv.s.x
+        //         end else begin
+        //             alu_data_in2 = vr_rd_data_out_2;
+        //         end
+        //     end
+        // end
+
+        case (funct6_d)
+            6'b00111x:  alu_data_in1 = mem_addr_in_d;
+            6'b010000:  begin
+                case(opcode_mnr_d)
+                    `MVV_TYPE:  alu_data_in2 = s_ext_imm_d[4] ? vm_rd_data_out_2 : vr_rd_data_out_2; // vFirst, vPopc : vmv.x.s                            default
+                    `MVX_TYPE:  alu_data_in2 = lumop_d; // vmv.s.x
+                    default:    alu_data_in2 = vr_rd_data_out_2;
+                endcase // opcode_mnr_d
             end
-        end
+            6'b011xxx:  alu_data_in1 = vm_rd_data_out_2;
+            default:  alu_data_in1  = 'h0;
+        endcase
     end
 
     // --------------------------------------------- AGU INPUT CONTROL ------------------------------------------------------------------
@@ -562,7 +575,7 @@ module rvv_proc_main #(
 
     // ----------------------------------------------- REGFILE CONTROL --------------------------------------------------------------------
     // FIXME only read if mask op?
-    wire is_mcmp_op, is_mcmp_op_d, first_or_cpop;
+    wire is_mcmp_op, is_mcmp_op_d, first_or_cpop, first_or_cpop_d;
 
     assign vr_rd_en_1 = ~agu_idle_rd_1 & ~is_mcmp_op_d; // don't actually read data if it's a mask op!
     assign vr_rd_en_2 = ~agu_idle_rd_2 & ~is_mcmp_op_d; // don't actually read data if it's a mask op!
@@ -577,10 +590,11 @@ module rvv_proc_main #(
         if (`MASK_ENABLE) begin
             assign is_mcmp_op = (funct6[5:3] == 3'b011 & opcode_mnr == `MVV_TYPE);
             assign is_mcmp_op_d = (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE);
-            assign first_or_cpop = (funct6_d == 6'h10 & opcode_mnr_d == `MVV_TYPE);
+            assign first_or_cpop = (funct6 == 6'h10 & opcode_mnr == `MVV_TYPE);
+            assign first_or_cpop_d = (funct6_d == 6'h10 & opcode_mnr_d == `MVV_TYPE);
 
             assign vm_rd_en_1 = ~agu_idle_rd_1 & (is_mcmp_op | is_mcmp_op_d | ~vm | ~vm_d); // only enable if it's a mask op or masked op!
-            assign vm_rd_en_2 = ~agu_idle_rd_2 & (is_mcmp_op | is_mcmp_op_d | first_or_cpop); // only enable if it's a mask op!
+            assign vm_rd_en_2 = ~agu_idle_rd_2 & (is_mcmp_op | is_mcmp_op_d | first_or_cpop | first_or_cpop_d); // only enable if it's a mask op!
 
             assign vm_rd_addr_1 = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? 'h0 : vr_rd_addr_1;
             assign vm_rd_off_1  = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? alu_vr_idx_next >> (sew + 3) : vr_rd_off_1;
@@ -651,13 +665,17 @@ module rvv_proc_main #(
     // Adding byte enable for ALU
     always @(*) begin
         if ((opcode_mnr_d[1]^opcode_mnr_d[0]) & (funct6_d == 'h10)) begin // vmv.s.x (mvx) vmv.x.s (mvv)
-            case (sew)
-                'h0: alu_req_be = 'h1;
-                'h1: alu_req_be = 'h3;
-                'h2: alu_req_be = 'hF;
-                'h3: alu_req_be = 'hFF;
-                default: alu_req_be = 'hFF;
-            endcase
+            if (alu_vr_idx == 'h0) begin // FIXME this should be moved to agu logic (fix max_reg and max_off to 0)
+                case (sew)
+                    'h0: alu_req_be = 'h1;
+                    'h1: alu_req_be = 'h3;
+                    'h2: alu_req_be = 'hF;
+                    'h3: alu_req_be = 'hFF;
+                    default: alu_req_be = 'hFF;
+                endcase
+            end else begin
+                alu_req_be = 'h0;
+            end
         end else begin // FIXME -- how do we use AVL when it's a variable??
             // Next mask will always come from v0, we really only need to read and write masks for mask manipulation instructions
             alu_req_be = gen_avl_be & vmask_ext; // vm=1 is unmasked
@@ -706,6 +724,7 @@ module rvv_proc_main #(
             mem_addr_in_d   <= ~stall ? data_in_1_f : (no_bubble ? (mem_addr_in_d + DW_B) : 'h0);
 
             out_ack_e       <= (alu_valid_out & alu_resp_end);
+            out_data_e      <= (alu_sca_out ? alu_data_out[VEX_DATA_WIDTH-1:0] : 'h0);
             out_ack_m       <= (mem_port_valid_in & mem_port_done_ld) | (mem_port_done_st);
 
             // hold these values until we get a response
@@ -718,8 +737,8 @@ module rvv_proc_main #(
             wait_mem        <= wait_mem ? ~mem_port_done_ld : (opcode_mjr_m == `LD_INSN);
             wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_m == `LD_INSN) & lumop_m == 5'hB & mop_m == 'h0);
 
-            vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE) ? avl : (alu_sca_out ? alu_data_out[VEX_DATA_WIDTH-1:0] : 'h0);
-            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN && opcode_mnr_d == `CFG_TYPE);
+            vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) ? avl : out_data_e;
+            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl);
         end // end else
     end
 

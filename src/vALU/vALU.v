@@ -109,6 +109,8 @@ wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndO
 wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vNarrow_outAddr, vMerge_outAddr,
                                 vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr, vFirst_outAddr;
 
+wire                            vMove_outSca;
+
 // TODO: Update enable signals for FP instr later
 assign vAdd_en              = req_valid & ((req_func_id[5:3] == 3'b000) | (req_func_id[5:2] == 4'b1100));
 assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010);
@@ -129,7 +131,7 @@ assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2
 
 // FIXME
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
-assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
+assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6);
 
 assign vSlide_sew           = req_data1[3] ? (req_sew + 2'b11) : (req_data1[2] ? (req_sew + 2'b10) : (req_data1[1] ? (req_sew + 2'b01) : (req_sew)));
 assign vSlide_insert        = 1;
@@ -174,7 +176,7 @@ vID_0 (
 );
 
 generate
-    if(WIDEN_ENABLE) begin
+    if(WIDEN_ENABLE) begin : widen
         assign vWiden_en    = (&req_func_id[5:4] & ~req_func_id[2]);
 
         vWiden #(
@@ -203,7 +205,7 @@ generate
 endgenerate
 
 generate
-    if(NARROW_ENABLE) begin
+    if(NARROW_ENABLE) begin : narrow
         vNarrow #(
             .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
             .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
@@ -234,7 +236,7 @@ endgenerate
 
 
 generate
-    if(SHIFT_ENABLE) begin
+    if(SHIFT_ENABLE) begin : shift
         assign vShift_cmpl = req_sew[1] ? (req_sew[0] ? 7'd64 : 7'd32) : (req_sew[0] ? 7'd16 : 7'd8);
         assign vShift_mult = (req_func_id[5:2] == 4'b1010) ? 2**(vShift_cmpl-req_data1[6:0]) : 2**(req_data1[6:0]);
         assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data1 : (req_sew[1] ? (req_sew[0] ? (vShift_mult) : ({2{vShift_mult[31:0]}})) : (req_sew[0] ? ({4{vShift_mult[15:0]}}) : ({8{vShift_mult[7:0]}})));
@@ -521,14 +523,17 @@ generate
             ) vMove0 (
             .clk      (clk              ),
             .rst      (rst              ),
-            .in_vec0  (req_data0        ),
-            .in_valid (vMove_en         ),
+            .in_vec0  (vMoveXS_en ? req_data1 : req_data0),
+            .in_valid (vMove_en | vMoveSX_en | vMoveXS_en),
             .in_addr  (req_addr         ),
             .in_w_reg (req_whole_reg    ),
+            .in_sca   (vMoveXS_en       ),
+            .in_be    (req_be           ),
             .out_vec  (vMove_outVec     ),
             .out_valid(vMove_outValid   ),
             .out_addr (vMove_outAddr    ),
-            .out_w_reg(vMove_outWReg    )
+            .out_w_reg(vMove_outWReg    ),
+            .out_sca  (vMove_outSca     )
         );
     end
     else begin
@@ -616,7 +621,7 @@ always @(posedge clk) begin
 
         resp_mask_out   <= vMOP_outValid | (vAdd_outValid & vAdd_outMask);
 
-        resp_sca_out    <= vFirst_outValid | vPopc_outValid;
+        resp_sca_out    <= vFirst_outValid | vPopc_outValid | vMove_outSca;
 
         resp_whole_reg  <= vMove_outWReg;
 

@@ -186,5 +186,5 @@ module mem_queue #(
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty | ~w_h_empty;
 
-    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0);
+    assign rvv_done_st      = (ack_count[FIFO_DEPTH_BITS-1:1] == write_count) & (write_count > 0);
 endmodule
