@@ -133,8 +133,8 @@ assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6);
 
-assign vSlide_sew           = req_data1[3] ? (req_sew + 2'b11) : (req_data1[2] ? (req_sew + 2'b10) : (req_data1[1] ? (req_sew + 2'b01) : (req_sew)));
-assign vSlide_insert        = 1;
+assign vSlide_sew           = req_data0[3] ? (req_sew + 2'b11) : (req_data0[2] ? (req_sew + 2'b10) : (req_data0[1] ? (req_sew + 2'b01) : (req_sew)));
+assign vSlide_insert        = 0;
 assign req_ready            = 1'b1; //TODO: control
 
 assign vAdd_sew             = vWiden_en ? vWiden_sew : req_sew;
@@ -145,7 +145,7 @@ assign vAdd_in1             = vWiden_en ? vWiden_in1 : req_data1;
 assign vMul_in0             = vWiden_en ? vWiden_in0 : req_data0;
 assign vMul_in1             = vWiden_en ? vWiden_in1 : vMul_vec1;
 
-assign vSlide_in1           = vSlide_insert ? req_data1 : 'b0;
+assign vSlide_in1           = vSlide_insert ? req_data0 : 'b0;
 
 assign vRightShift_opSel    = req_func_id[0];
 assign vMinMax_opSel        = req_func_id[1];
@@ -345,7 +345,7 @@ generate
             ) vSlide_0 (
             .clk        (clk            ),
             .rst        (rst            ),
-            .in_vec0    (req_data0      ),
+            .in_vec0    (req_data1      ),
             .in_vec1    (vSlide_in1     ),
             .in_be      (req_be         ),
             .in_sew     (vSlide_insert ? req_sew : vSlide_sew),
@@ -523,7 +523,7 @@ generate
             ) vMove0 (
             .clk      (clk              ),
             .rst      (rst              ),
-            .in_vec0  (vMoveXS_en ? req_data1 : req_data0),
+            .in_vec0  ((vMoveXS_en | req_whole_reg) ? req_data1 : req_data0),
             .in_valid (vMove_en | vMoveSX_en | vMoveXS_en),
             .in_addr  (req_addr         ),
             .in_w_reg (req_whole_reg    ),

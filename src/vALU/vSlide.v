@@ -52,7 +52,7 @@ module vSlide #(
 	assign w_s0_down_result    		= s0_sew[1] ? (s0_sew[0] ? (w_s0_down_vec0 >> 64) : (w_s0_down_vec0 >> 32)) : (s0_sew[0] ? (w_s0_down_vec0 >> 16) : (w_s0_down_vec0 >> 8));
 
 
-	assign w_s1_up_remainder 		= s1_start ? s1_vec1 : s2_up_remainder;
+	assign w_s1_up_remainder 		= s1_start ? 'h0 : s2_up_remainder;
 	assign w_s0_up_vec0      		= {64'b0, s0_vec0};
 	assign w_s0_up_result    		= s0_sew[1] ? (s0_sew[0] ? (w_s0_up_vec0 << 64) : (w_s0_up_vec0 << 32)) : (s0_sew[0] ? (w_s0_up_vec0 << 16) : (w_s0_up_vec0 << 8));
 
@@ -112,7 +112,7 @@ module vSlide #(
 		else begin
 			s0_vec0          	<= in_valid ? in_vec0 : 'h0;
 			s0_vec1          	<= in_valid ? in_vec1 : 'h0;
-			s1_vec1          	<= in_valid ? s0_vec1 : 'h0;
+			s1_vec1          	<= 'h0;
 			s0_insert        	<= in_insert;
 			s1_down_vec1_end 	<= w_s0_vec1 & (~{{8{w_s0_be_shifted_right[7]}},{8{w_s0_be_shifted_right[6]}},{8{w_s0_be_shifted_right[5]}},{8{w_s0_be_shifted_right[4]}},
 									{8{w_s0_be_shifted_right[3]}},{8{w_s0_be_shifted_right[2]}},{8{w_s0_be_shifted_right[1]}},{8{w_s0_be_shifted_right[0]}}});

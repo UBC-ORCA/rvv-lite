@@ -387,13 +387,13 @@ module rvv_proc_main #(
 
     generate
         if (`VEC_MOVE_ENABLE) begin
-            assign alu_req_w_reg = (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN); // whole reg move
+            assign alu_req_w_reg = (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE); // whole reg move
 
             if (`LDST_WHOLE_ENABLE) begin
-                assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN);
+                assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
                 assign whole_reg_ld   = (mop_m == 'h0 & lumop_m == 'h8 & opcode_mjr_m == `LD_INSN); // required for when the data actually comes back
             end else begin
-                assign whole_reg_rd   = (funct6_d[5:1] == 5'b00111 & opcode_mjr == `OP_INSN);
+                assign whole_reg_rd   = (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
                 assign whole_reg_ld   = 0;
             end
         end else begin
@@ -501,23 +501,8 @@ module rvv_proc_main #(
             default:  alu_data_in1  = 'h0;
         endcase
 
-        // FIXME make pretty
-        // if (is_mcmp_op_d | first_or_cpop_d) begin
-        //     alu_data_in2 = vm_rd_data_out_2;    // mask logic function
-        // end else begin
-        //     if (funct6_d[5:1] == 5'b00111) begin // slide - FIXME what if gather?
-        //         alu_data_in2 = mem_addr_in_d; // rename variable later
-        //     end else begin
-        //         if (funct6_d == 6'h10 & opcode_mnr_d == `MVX_TYPE) begin
-        //             alu_data_in2 = lumop_d; // vmv.s.x
-        //         end else begin
-        //             alu_data_in2 = vr_rd_data_out_2;
-        //         end
-        //     end
-        // end
-
         case (funct6_d)
-            6'b00111x:  alu_data_in1 = mem_addr_in_d;
+            6'b00111x:  alu_data_in2 = mem_addr_in_d;
             6'b010000:  begin
                 case(opcode_mnr_d)
                     `MVV_TYPE:  alu_data_in2 = s_ext_imm_d[4] ? vm_rd_data_out_2 : vr_rd_data_out_2; // vFirst, vPopc : vmv.x.s                            default
@@ -525,8 +510,8 @@ module rvv_proc_main #(
                     default:    alu_data_in2 = vr_rd_data_out_2;
                 endcase // opcode_mnr_d
             end
-            6'b011xxx:  alu_data_in1 = vm_rd_data_out_2;
-            default:  alu_data_in1  = 'h0;
+            6'b011xxx:  alu_data_in2 = vm_rd_data_out_2;
+            default:  alu_data_in2  = vr_rd_data_out_2;
         endcase
     end
 
