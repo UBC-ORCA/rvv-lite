@@ -33,7 +33,7 @@
 `define SHIFT_ENABLE      1
 `define SLIDE_N_ENABLE    1
 `define MULT64_ENABLE     1
-`define MASK_ENABLE       1
+`define MASK_ENABLE       1 // a8
 
 module rvv_proc_main #(
     parameter VLEN              = 16384,            // vector length in bits
@@ -333,7 +333,7 @@ module rvv_proc_main #(
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(8),
             .AND_OR_XOR_ENABLE(`AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(`ADD_SUB_ENABLE),.MIN_MAX_ENABLE(`MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(`VEC_MOVE_ENABLE),
             .WIDEN_ENABLE(`WIDEN_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),
-            .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.MASK_ENABLE(`MASK_ENABLE))
+            .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE))
             alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .resp_mask_out(alu_mask_out), .req_be_out(alu_be_out),
@@ -387,13 +387,13 @@ module rvv_proc_main #(
 
     generate
         if (`VEC_MOVE_ENABLE) begin
-            assign alu_req_w_reg = (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE); // whole reg move
+            assign alu_req_w_reg = (funct6_d == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE); // whole reg move
 
             if (`LDST_WHOLE_ENABLE) begin
                 assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
                 assign whole_reg_ld   = (mop_m == 'h0 & lumop_m == 'h8 & opcode_mjr_m == `LD_INSN); // required for when the data actually comes back
             end else begin
-                assign whole_reg_rd   = (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
+                assign whole_reg_rd   = (funct6_d == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
                 assign whole_reg_ld   = 0;
             end
         end else begin
@@ -501,16 +501,20 @@ module rvv_proc_main #(
             default:  alu_data_in1  = 'h0;
         endcase
 
-        case (funct6_d)
-            6'b00111x:  alu_data_in2 = mem_addr_in_d;
+        casez (funct6_d)
+            // 6'b00111?:  alu_data_in2 = mem_addr_in_d;
             6'b010000:  begin
                 case(opcode_mnr_d)
                     `MVV_TYPE:  alu_data_in2 = s_ext_imm_d[4] ? vm_rd_data_out_2 : vr_rd_data_out_2; // vFirst, vPopc : vmv.x.s                            default
                     `MVX_TYPE:  alu_data_in2 = lumop_d; // vmv.s.x
                     default:    alu_data_in2 = vr_rd_data_out_2;
-                endcase // opcode_mnr_d
+                endcase
             end
-            6'b011xxx:  alu_data_in2 = vm_rd_data_out_2;
+            6'b011???:
+                case (opcode_mnr_d)
+                    `MVV_TYPE:  alu_data_in2 = vm_rd_data_out_2;
+                    default:    alu_data_in2 = vr_rd_data_out_2;
+                endcase
             default:  alu_data_in2  = vr_rd_data_out_2;
         endcase
     end

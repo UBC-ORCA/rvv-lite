@@ -144,7 +144,7 @@ module mem_queue #(
         r_turn          <= mbus_ar_ready^r_turn;
         r_out           <= r_out ? ~mbus_r_valid : mbus_ar_ready; // signal that we have an un-acked request
 
-        burst_len       <= mid_burst_r ? burst_len + ar_w_en : ((read_count == burst_len) ? 0 : burst_len);   // if we're mid-burst, increment. Else, set to the enable signal value
+        burst_len       <= (mid_burst_r | ar_w_en) ? burst_len + ar_w_en : ((read_count == burst_len) ? 0 : burst_len);   // if we're mid-burst, increment. Else, set to the enable signal value
         mid_burst_r     <= ar_w_en;
 
         start_read      <= (r_l_pop == (burst_len)) & (r_h_pop == (burst_len)) & (burst_len > 0) & rvv_ready_out;
@@ -156,11 +156,11 @@ module mem_queue #(
     assign mbus_ar_valid    = ~ar_l_empty | ~ar_h_empty;
     assign mbus_r_ready     = r_out; // todo change this maybe idk
     
-    assign r_r_en           = start_read | (read_count > 0);
+    assign r_r_en           = start_read | (read_count < burst_len & read_count > 0);
     assign rvv_valid_in     = r_r_en;
     assign rvv_data_in      = {r_l_dout, r_h_dout};
     
-    assign rvv_done_ld      = (read_count == burst_len & burst_len > 0);
+    assign rvv_done_ld      = (read_count == (burst_len - 1) & burst_len > 0);
     // must have both - FIXME we should wait until we have the right number of reqs back
     // FIXME integrate ready signal from processor lol
 

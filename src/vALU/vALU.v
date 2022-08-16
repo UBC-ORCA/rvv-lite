@@ -39,6 +39,7 @@ module vALU #(
     parameter MULT64_ENABLE     = 1 ,
     parameter SHIFT_ENABLE      = 1 ,
     parameter SLIDE_ENABLE      = 1 ,
+    parameter SLIDE_N_ENABLE    = 1 ,
     parameter MASK_ENABLE       = 1 
 ) (
     input                              clk         ,
@@ -133,7 +134,14 @@ assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
 assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6);
 
-assign vSlide_sew           = req_data0[3] ? (req_sew + 2'b11) : (req_data0[2] ? (req_sew + 2'b10) : (req_data0[1] ? (req_sew + 2'b01) : (req_sew)));
+generate
+    if (SLIDE_N_ENABLE) begin
+        assign vSlide_sew           = req_data0[3] ? (req_sew + 2'b11) : (req_data0[2] ? (req_sew + 2'b10) : (req_data0[1] ? (req_sew + 2'b01) : (req_sew)));
+    end else begin
+        assign vSlide_sew           = req_sew;
+    end
+endgenerate
+
 assign vSlide_insert        = 0;
 assign req_ready            = 1'b1; //TODO: control
 
