@@ -33,7 +33,7 @@ module vFirst_bit #(
 			s0_idx_next 	= 0;
 			found_one_nxt	= 0;
 			for (i = 0; i < REQ_DATA_WIDTH; i=i+1) begin
-				s0_idx_next		= (in_m0[i] & (~found_one_nxt | i < s0_idx_next)) ? i : s0_idx_next;
+				s0_idx_next		= (in_m0[i] & ~found_one_nxt) ? i : s0_idx_next;
 				found_one_nxt 	= in_m0[i] | found_one_nxt;
 			end
 		end

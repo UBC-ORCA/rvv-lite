@@ -23,13 +23,14 @@ module vPopc #(
 	wire 	[  RESP_DATA_WIDTH-1:0] w_count;
 	wire 	[  RESP_DATA_WIDTH-1:0] w_s1_mask;
  	reg 	[  RESP_DATA_WIDTH-1:0] s0_mask;
+ 	reg 							s0_valid;
 	reg 							s0_end, s1_end, s2_end, s3_end, s4_end;
 	reg 	[   REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
 	vAdd_mask vAdd_mask0 (
 		.clk   		(clk      	),
 		.rst   		(rst      	),
-		.in_valid 	(in_valid	),
+		.in_valid 	(s0_valid	),
 		.in_m0  	(s0_mask  	),
 		.in_count	(w_count 	),
 		.out_vec	(w_count	)
@@ -38,6 +39,7 @@ module vPopc #(
 	always @(posedge clk) begin
 		if(rst) begin
 			s0_mask 	<= 'b0;
+			s0_valid 	<= 'b0;
 
 			count 		<= 'b0;
 			out_vec 	<= 'b0;
@@ -59,6 +61,7 @@ module vPopc #(
 
 		else begin
 			s0_mask 	<= in_valid ? in_m0 : 'h0;
+			s0_valid 	<= in_valid | s0_end | s1_end | s2_end | s3_end; // :/
 
 			count 		<= s4_end ? 'b0 : w_count;
 			out_vec 	<= s4_end ? count : 'b0;

@@ -34,9 +34,9 @@ module vAdd_mask #(
 				s0_add0 	<= 0;
 				s0_count 	<= 0;
 			end else begin
-				s0_add0 	<= s0_add0_next;
+				s0_add0 	<= in_valid ? s0_add0_next : 'h0;
 
-				s0_count 	<= in_count;
+				s0_count 	<= in_valid ? in_count : 'h0;
 			end
 		end
 	endgenerate

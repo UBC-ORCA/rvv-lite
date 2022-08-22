@@ -9,7 +9,8 @@ module vAdd_min_max #(
 	parameter SEW_WIDTH       = 2 ,
 	parameter OPSEL_WIDTH     = 9 ,
 	parameter MIN_MAX_ENABLE  = 1 ,
-	parameter MASK_ENABLE	  = 1
+	parameter MASK_ENABLE	  = 1 ,
+	parameter FXP_ENABLE      = 1
 ) (
 	input                            	clk      ,
 	input                            	rst      ,
@@ -24,11 +25,15 @@ module vAdd_min_max #(
 	input 								in_req_start,
 	input 								in_req_end,
 	input	   [REQ_BYTE_EN_WIDTH-1:0]	in_be,
+	input 								in_avg,
 	output reg [  RESP_DATA_WIDTH-1:0] 	out_vec  ,
 	output reg                       	out_valid,
 	output reg [   REQ_ADDR_WIDTH-1:0] 	out_addr ,
 	output reg [REQ_BYTE_EN_WIDTH-1:0]	out_be,
-	output reg 						 	out_mask
+	output reg 						 	out_mask,
+	output reg [REQ_BYTE_EN_WIDTH-1:0]	out_vd,
+	output reg [REQ_BYTE_EN_WIDTH-1:0] 	out_vd1,
+	output reg 							out_fxp
 );
 
 	genvar i;
@@ -36,7 +41,7 @@ module vAdd_min_max #(
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
 	reg [RESP_DATA_WIDTH-1:0] s2_out_vec, s3_out_vec, s4_out_vec, s5_out_vec;
-	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew;
+	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew, s2_sew, s3_sew;
 	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel, s2_opSel;
 	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid, s5_valid;
 	reg [                7:0] s2_gt, s2_lt, s2_equal;
@@ -48,11 +53,18 @@ module vAdd_min_max #(
 
 	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr, s5_out_addr;
 
+	reg [REQ_BYTE_EN_WIDTH-1:0] s5_vd;
+	reg [REQ_BYTE_EN_WIDTH-1:0] s5_vd1;
+	reg 					  s0_avg, s1_avg, s2_avg, s3_avg, s4_avg, s5_avg;
+
 	wire [REQ_DATA_WIDTH+16:0] s1_result;
 
 	wire [RESP_DATA_WIDTH-1:0] w_minMax_result  ;
 	wire [RESP_DATA_WIDTH-1:0] w_s1_arith_result;
 	wire [                7:0] w_gt, w_lt, w_equal;
+
+	wire [RESP_DATA_WIDTH-1:0] avg_vec_out;
+	wire [REQ_BYTE_EN_WIDTH-1:0] avg_vd, avg_vd1;
 
 	generate
 		if(MIN_MAX_ENABLE | MASK_ENABLE) begin
@@ -84,6 +96,22 @@ module vAdd_min_max #(
 		.result(s1_result)
 	);
 
+	generate 
+		if (FXP_ENABLE) begin : fxp
+			avg_unit #(.DATA_WIDTH(REQ_DATA_WIDTH)) fxp_avg (
+				.clk   	(clk		),
+				.vec_in	(s3_out_vec	),
+				.sew   	(s3_sew		),
+				.v_d 	(avg_vd		),
+				.v_d1  	(avg_vd1	),
+				.vec_out(avg_vec_out)
+			);
+		end else begin
+			assign avg_vd = 'h0;
+			assign avg_vd1 = 'h0;
+			assign avg_vec_out = 'h0;
+		end
+	endgenerate
 
 	always @(posedge clk) begin
 		if(rst) begin
@@ -136,12 +164,14 @@ module vAdd_min_max #(
 			s0_req_end	<= in_valid ? in_req_end 	: 'h0;
 			s0_req_start<= in_valid ? in_req_start 	: 'h0;
 			s0_out_be   <= in_valid ? in_be			: 'h0;
+			s0_avg		<= in_valid ? in_avg		: 'h0;
 
 			s1_vec0  	<= s0_vec0;
 			s1_vec1  	<= s0_vec1;
 			s1_sew   	<= s0_sew;
 			s1_opSel 	<= s0_opSel;
-			s1_valid 	<= s0_valid;
+			// s1_valid 	<= s0_valid;
+			// s1_avg 		<= s0_avg;
 			// s1_out_addr	<= s0_out_addr;
 			// s1_start_idx<= s0_start_idx;
 			// s1_req_end	<= s0_req_end;
@@ -155,6 +185,8 @@ module vAdd_min_max #(
 			s2_req_end	<= s0_req_end;
 			s2_req_start<= s0_req_start;
 			s2_out_be 	<= s0_out_be;
+			s2_avg 		<= s0_avg;
+			s2_sew 		<= s0_sew;
 
 			s2_out_vec 	<= s1_opSel[4] ? w_minMax_result : w_s1_arith_result;
 			s2_equal   	<= w_equal;
@@ -178,6 +210,8 @@ module vAdd_min_max #(
 			s3_req_end	<= s2_req_end;
 			s3_req_start<= s2_req_start;
 			s3_out_be 	<= s2_out_be;
+			s3_avg 		<= s2_avg;
+			s3_sew 		<= s2_sew;
 
 			s4_out_vec 	<= ~s3_mask ? s3_out_vec : (s3_start_idx == 0 | s3_req_end) ? (s3_out_vec << s3_start_idx) : (s3_out_vec << s3_start_idx) | s4_out_vec;
 			s4_valid   	<= s3_valid & (~s3_mask | (s2_start_idx == 0) | s3_req_end);
@@ -186,18 +220,25 @@ module vAdd_min_max #(
          								s3_req_start ? 'h1 : 
          												((s3_start_idx == 0 | s4_req_end) ? {s4_out_be[REQ_BYTE_EN_WIDTH-2:0],s4_out_be[REQ_BYTE_EN_WIDTH-1]} : s4_out_be);
          	s4_mask 	<= s3_mask;
+         	s4_avg 		<= s3_avg;
 
-         	s5_out_vec 	<= s4_out_vec;
+         	s5_out_vec 	<= s4_avg ? avg_vec_out : s4_out_vec;
+         	s5_vd 		<= s4_avg ? avg_vd : 'h0;
+         	s5_vd1 		<= s4_avg ? avg_vd1 : 'h0;
 			s5_valid   	<= s4_valid;
          	s5_out_addr <= s4_out_addr;
          	s5_out_be 	<= s4_valid ? s4_out_be : 'h0;
          	s5_mask 	<= s4_mask;
+         	s5_avg 		<= s4_avg;
 
 			out_vec   	<= s5_out_vec;
 			out_valid 	<= s5_valid;
 			out_addr  	<= s5_out_addr;
 			out_be 		<= s5_out_be;
 			out_mask 	<= s5_mask;
+			out_fxp		<= s5_avg;
+			out_vd 		<= s5_vd;
+			out_vd1 	<= s5_vd1;
 		end
 	end
 
@@ -212,5 +253,45 @@ module vAdd_min_max #(
 			end
 		end
 	endgenerate
+
+endmodule
+
+module avg_unit #(
+	parameter DATA_WIDTH 	= 64,
+	parameter DW_B 			= DATA_WIDTH>>3
+) (
+	input 						clk,
+	input  	   [DATA_WIDTH-1:0] vec_in,
+	input  	   [		   1:0] sew,
+	output reg [	  DW_B-1:0] v_d,
+	output reg [	  DW_B-1:0] v_d1, // v_d and v_d10 are the same for this op
+	output reg [DATA_WIDTH-1:0] vec_out
+);
+
+reg  [DATA_WIDTH-1:0] vec_out_sew 	[0:3];
+reg  [		DW_B-1:0] v_d_sew		[0:3];
+reg  [		DW_B-1:0] v_d1_sew		[0:3];
+
+genvar i;
+integer j;
+generate
+	for (i = 0; i < 4; i = i + 1) begin
+		always @(*) begin
+			for (j = 0; j < DW_B >> i; j = j + 1) begin
+				vec_out_sew	[i][(j<<(i+3)) +: (1<<(i+3))] = vec_in[(j<<(i+3)) + 1 +: ((1 << (i+3)) - 1)];
+
+				v_d_sew 	[i][j<<i] = vec_in[(j<<(i+3)) + 1];
+				v_d1_sew	[i][j<<i] = vec_in[j<<(i+3)];
+			end
+		end
+	end
+
+	always @(posedge clk) begin
+		vec_out <=	vec_out_sew[sew];
+
+		v_d 	<=	v_d_sew [sew];
+		v_d1 	<=	v_d1_sew[sew];
+	end
+endgenerate
 
 endmodule

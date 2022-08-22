@@ -58,6 +58,7 @@ module rvv_proc_main #(
     input                               rst_n,
     input       [    INSN_WIDTH-1:0]    insn_in, // make this a queue possibly
     input                               insn_valid,
+    input       [               2:0]    vxrm_in,
     input       [    DATA_WIDTH-1:0]    mem_port_data_in,
     input                               mem_port_valid_in,
     input                               mem_port_done_ld,
@@ -122,9 +123,11 @@ module rvv_proc_main #(
     wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_2; 
 
     reg   [    INSN_WIDTH-1:0]  insn_in_f;
-    reg                         insn_valid_f;
+    // reg                         insn_valid_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_1_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_2_f;
+    reg   [               1:0]  vxrm_in_f;
+
 
     wire                        stall;
 
@@ -184,6 +187,7 @@ module rvv_proc_main #(
     reg   [   VLEN_B_BITS-1:0]  avl_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_1_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_2_d;
+    reg   [               1:0]  vxrm_in_d;
 
     reg   [               6:0]  opcode_mjr_m;
     reg   [               4:0]  dest_m;    // rd, vd, or vs3 -- TODO make better name lol
@@ -216,6 +220,7 @@ module rvv_proc_main #(
     wire                        agu_idle_st;
 
     wire                        alu_enable;
+    reg   [               1:0]  alu_req_vxrm;
     // wire  [               2:0]  alu_req_sew;
     // wire  [VEX_DATA_WIDTH-1:0]  alu_req_avl;
     
@@ -334,7 +339,7 @@ module rvv_proc_main #(
             .AND_OR_XOR_ENABLE(`AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(`ADD_SUB_ENABLE),.MIN_MAX_ENABLE(`MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(`VEC_MOVE_ENABLE),
             .WIDEN_ENABLE(`WIDEN_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),
             .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg), .req_vxrm (vxrm_in_d),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .resp_mask_out(alu_mask_out), .req_be_out(alu_be_out),
         .resp_start(alu_resp_start), .resp_end(alu_resp_end), .resp_off(alu_off_out), .resp_whole_reg(alu_out_w_reg), .resp_sca_out(alu_sca_out));
@@ -347,6 +352,7 @@ module rvv_proc_main #(
         insn_in_f       <= rst_n ? (stall ? insn_in_f : (insn_valid ? insn_in : 'h0)) : 'h0;
         data_in_1_f     <= (stall ? data_in_1_f : vexrv_data_in_1);
         data_in_2_f     <= (stall ? data_in_2_f : vexrv_data_in_2);
+        vxrm_in_f       <= (stall ? vxrm_in_f   : vxrm_in[1:0]);
     end
 
     // Hazard COUNT? IS THAT TOO MUCH?
@@ -442,6 +448,7 @@ module rvv_proc_main #(
         alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14)) & (reg_count == 1));
 
         alu_off_agu     <= vr_rd_off_1; // FIXME - make generic
+        // alu_req_vxrm    <= vxrm_in_d;
     end
 
     // assign alu_vr_idx       = (avl_eff>>(DW_B_BITS - sew)) - reg_count;
@@ -688,6 +695,7 @@ module rvv_proc_main #(
             sca_data_in_1_d <= 'h0;
             sca_data_in_2_d <= 'h0;
             mem_addr_in_d   <= 'b0;
+            vxrm_in_d       <= 'b0;
 
             out_ack_e       <= 'b0;
             out_ack_m       <= 'b0;
@@ -708,6 +716,8 @@ module rvv_proc_main #(
             // avl_d           <= ~stall ? avl         : avl_d;
             sca_data_in_1_d <= ~stall ? sca_data_in_1 : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? sca_data_in_2 : (no_bubble ? sca_data_in_2_d : 'h0);
+
+            vxrm_in_d       <= ~stall ? vxrm_in_f   : (no_bubble ? vxrm_in_d    : 'h0);
 
             mem_port_req_out<= ~stall ? en_req_mem : (no_bubble & mem_port_req_out);
             mem_addr_in_d   <= ~stall ? data_in_1_f : (no_bubble ? (mem_addr_in_d + DW_B) : 'h0);

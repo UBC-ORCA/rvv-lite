@@ -19,6 +19,10 @@ module vRedAndOrXor_unit_block #(
 												: 'b0);
 
 	always @(posedge clk) begin
-		out_vec	<= ~rst & (in_en ? w_vec : in_vec0);
+		if (rst) begin
+			out_vec <= 0;
+		end else begin
+			out_vec	<= in_en ? w_vec : in_vec0;
+		end
 	end
 endmodule

@@ -206,7 +206,7 @@ module vMul #(
 			s4_valid  	<= s3_valid;
 			out_valid 	<= s4_valid;
 
-			s0_sew    	<= {SEW_WIDTH{in_valid}} & in_sew;
+			s0_sew    	<= in_valid ? in_sew : 'h0;
 			s1_sew    	<= s0_sew;
 			s2_sew    	<= s1_sew;
 			s3_sew    	<= s2_sew;
@@ -218,7 +218,7 @@ module vMul #(
 			s3_lsb    	<= s2_lsb;
 			s4_lsb    	<= s3_lsb;
 
-			s0_out_addr	<= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
+			s0_out_addr	<= in_valid ? in_addr : 'h0;
 			s1_out_addr <= s0_out_addr;
 			s2_out_addr <= s1_out_addr;
 			s3_out_addr <= s2_out_addr;

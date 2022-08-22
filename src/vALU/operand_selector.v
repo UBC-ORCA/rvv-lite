@@ -132,10 +132,10 @@ module operand_select #(
 			m3_b1 	<= 'b0;
 		end 
 		else begin
-			r_vec0 	<= {INPUT_WIDTH{valid}} & vec0;
-			r_vec1 	<= {INPUT_WIDTH{valid}} & vec1;
-			r_sew 	<= {SEW_WIDTH{valid}} & sew;
-			r_opSel <= {OPSEL_WIDTH{valid}} & opSel;
+			r_vec0 	<= valid ? vec0 : 'h0;
+			r_vec1 	<= valid ? vec1 : 'h0;
+			r_sew 	<= valid ? sew 	: 'h0;
+			r_opSel <= valid ? opSel : 'h0;
 			m0_a0 	<= b_op ? b_a7 : a3;
 			m0_b0 	<= b_op ? b_b7 : b3;
 			m0_a1 	<= b_op ? b_a6 : a2;

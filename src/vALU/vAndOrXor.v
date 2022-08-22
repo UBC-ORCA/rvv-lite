@@ -53,11 +53,11 @@ module vAndOrXor #(
 				2'b01 : s1_out_vec <= s0_vec0 & s0_vec1;
 				2'b10 : s1_out_vec <= s0_vec0 | s0_vec1;
 				2'b11 : s1_out_vec <= s0_vec0 ^ s0_vec1;
-				2'b00 : s1_out_vec <= 'b0;
+				default : s1_out_vec <= 'b0;
 			endcase
-			s0_vec0    	<= {REQ_DATA_WIDTH{in_valid}} & in_vec0;
-			s0_vec1    	<= {REQ_DATA_WIDTH{in_valid}} & in_vec1;
-			s0_opSel   	<= {OPSEL_WIDTH{in_valid}} & in_opSel;
+			s0_vec0    	<= in_valid ? in_vec0 : 'h0;
+			s0_vec1    	<= in_valid ? in_vec1 : 'h0;
+			s0_opSel   	<= in_valid ? in_opSel : 'h0;
 			s2_out_vec 	<= s1_out_vec;
 			s3_out_vec 	<= s2_out_vec;
 			s4_out_vec 	<= s3_out_vec;
@@ -70,7 +70,7 @@ module vAndOrXor #(
 			s4_valid 	<= s3_valid;
 			out_valid 	<= s4_valid;
 
-			s0_out_addr <= {REQ_ADDR_WIDTH{in_valid}} & in_addr;
+			s0_out_addr <= in_valid ? in_addr : 'h0;
 			s1_out_addr <= s0_out_addr;
 			s2_out_addr <= s1_out_addr;
 			s3_out_addr <= s2_out_addr;

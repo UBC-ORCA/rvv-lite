@@ -58,7 +58,11 @@ module vRedSum_min_max_unit_block #(
 	assign copy_out	= vec0;
 
 	always @(posedge clk) begin
-		out_vec <= ~rst & (en ? (opSel[3] ? op_out : minMax_result) : copy_out);
+		if (rst) begin
+			out_vec <= 'h0;
+		end else begin
+			out_vec <= en ? (opSel[3] ? op_out : minMax_result) : copy_out;
+		end
 	end
 
 

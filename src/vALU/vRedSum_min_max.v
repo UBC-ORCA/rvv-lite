@@ -121,13 +121,13 @@ module vRedSum_min_max #(
 			out_addr 	<= 'b0;
 		end 
 		else begin
-			s0_vec0 	<= in_vec0 	& {REQ_DATA_WIDTH{in_valid}};
-			s0_opSel 	<= in_opSel	& {OPSEL_WIDTH{in_valid}};
+			s0_vec0 	<= in_valid ? in_vec0 : 'h0; // 	& {REQ_DATA_WIDTH{in_valid}};
+			s0_opSel 	<= in_valid ? in_opSel : 'h0; //	& {OPSEL_WIDTH{in_valid}};
 			s1_opSel 	<= s0_opSel;
 			s2_opSel 	<= s1_opSel;
 			s3_opSel 	<= s2_opSel;
 
-			s0_sew 		<= in_sew 	& {SEW_WIDTH{in_valid}};
+			s0_sew 		<= in_valid ? in_sew : 'h0; // 	& {SEW_WIDTH{in_valid}};
 			s1_sew 		<= s0_sew;
 			s2_sew 		<= s1_sew;
 			s3_sew 		<= s2_sew;
@@ -150,7 +150,7 @@ module vRedSum_min_max #(
 			out_valid 	<= s4_end;
 			out_vec 	<= s4_end ? s4_out : 'b0;
 
-			s0_out_addr	<= in_addr 	& {REQ_ADDR_WIDTH{in_valid}};
+			s0_out_addr	<= in_valid ? in_addr : 'h0; // 	& {REQ_ADDR_WIDTH{in_valid}};
 			s1_out_addr	<= s0_out_addr;
 			s2_out_addr	<= s1_out_addr;
 			s3_out_addr	<= s2_out_addr;
