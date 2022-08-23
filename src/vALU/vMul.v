@@ -8,7 +8,8 @@ module vMul #(
 	parameter REQ_ADDR_WIDTH 	= 32,
 	parameter SEW_WIDTH       	= 2 ,
 	parameter OPSEL_WIDTH     	= 2 , 
-	parameter MUL64_ENABLE    	= 0
+	parameter MUL64_ENABLE    	= 0 ,
+	parameter FXP_ENABLE		= 0
 ) (
 	input                            	clk,
 	input                            	rst,
@@ -19,7 +20,8 @@ module vMul #(
 	input      	[    OPSEL_WIDTH-1:0] 	in_opSel,
 	input                            	in_widen,
 	input 	 	[ REQ_ADDR_WIDTH-1:0] 	in_addr,
-	input 								in_fxp,
+	input 								in_fxp_s,
+	input 								in_fxp_mul,
 	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec,
 	output reg                       	out_valid,
 	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr,
@@ -55,7 +57,8 @@ module vMul #(
 	reg [REQ_ADDR_WIDTH-1:0]	s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 	reg [	  SEW_WIDTH-1:0]	s0_sew, s1_sew, s2_sew, s3_sew, s4_sew;
 	reg                 		s0_lsb, s1_lsb, s2_lsb, s3_lsb, s4_lsb;
-	reg                 		s0_fxp, s1_fxp, s2_fxp, s3_fxp, s4_fxp;
+	reg                 		s0_fxp_s, s1_fxp_s, s2_fxp_s, s3_fxp_s, s4_fxp_s;
+	reg                 		s0_fxp_mul, s1_fxp_mul, s2_fxp_mul, s3_fxp_mul, s4_fxp_mul;
 	// reg [RESP_DATA_WIDTH-1:0]	out_vec;
 
 	//assign w_add0 = {m0_mult32,64'b0} + {{64{m3_mult32[65]}},m3_mult32[65:0]};
@@ -185,6 +188,18 @@ module vMul #(
 			s3_lsb    	<= 'b0;
 			s4_lsb    	<= 'b0;
 
+			s0_fxp_s   	<= 'b0;
+			s1_fxp_s   	<= 'b0;
+			s2_fxp_s   	<= 'b0;
+			s3_fxp_s   	<= 'b0;
+			s4_fxp_s   	<= 'b0;
+
+			s0_fxp_mul 	<= 'b0;
+			s1_fxp_mul 	<= 'b0;
+			s2_fxp_mul 	<= 'b0;
+			s3_fxp_mul 	<= 'b0;
+			s4_fxp_mul 	<= 'b0;
+
 			s0_out_addr	<= 'b0;
 			s1_out_addr <= 'b0;
 			s2_out_addr <= 'b0;
@@ -192,7 +207,7 @@ module vMul #(
 			s4_out_addr <= 'b0;
 			out_addr	<= 'b0;
 
-			out_vec 	<= 'b0;
+			// out_vec 	<= 'b0;
 		end
 
 		else begin
@@ -224,11 +239,17 @@ module vMul #(
 			s3_sew    	<= s2_sew;
 			s4_sew    	<= s3_sew;
 
-			s0_fxp    	<= in_valid ? in_fxp : 'b0;
-			s1_fxp    	<= s0_fxp;
-			s2_fxp    	<= s1_fxp;
-			s3_fxp    	<= s2_fxp;
-			s4_fxp    	<= s3_fxp;
+			s0_fxp_s    <= in_valid ? in_fxp_s : 'b0;
+			s1_fxp_s    <= s0_fxp_s;
+			s2_fxp_s    <= s1_fxp_s;
+			s3_fxp_s    <= s2_fxp_s;
+			s4_fxp_s    <= s3_fxp_s;
+
+			s0_fxp_mul	<= in_valid ? in_fxp_mul : 'b0;
+			s1_fxp_mul	<= s0_fxp_mul;
+			s2_fxp_mul	<= s1_fxp_mul;
+			s3_fxp_mul	<= s2_fxp_mul;
+			s4_fxp_mul	<= s3_fxp_mul;
 
 			s0_lsb    	<= (~in_opSel[1] & in_opSel[0] & ~in_widen) & in_valid;
 			s1_lsb    	<= s0_lsb;
@@ -248,128 +269,229 @@ module vMul #(
 	end
 
 	generate
-		if(MUL64_ENABLE) begin
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vec <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vec	<= s4_lsb ? {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]}
-													:  {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
-						'b01 : out_vec	<= s4_lsb ? {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]} 
-													: {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
-						'b10 : out_vec 	<= s4_lsb ? {s3_w1[31:0], s3_w0[31:0]} 
-													: {s3_w1[63:32], s3_w0[63:32]};
-						//'b11:  out_vec <= s4_lsb ? s3_d0[63:0] : s3_d0[127:64];
-						'b11 : out_vec 	<= s3_d0;
-					endcase
+		if (FXP_ENABLE) begin
+			if(MUL64_ENABLE) begin
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vec <= 'b0;
+					end 
+					else begin
+						casex ({s4_fxp_mul, s4_lsb, s4_sew})
+							'b0000 : out_vec <= {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
+							'b0001 : out_vec <= {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
+							'b0010 : out_vec <= {s3_w1[63:32], s3_w0[63:32]};
+
+							'b0100 : out_vec <= {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]};
+							'b0101 : out_vec <= {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]};
+							'b0110 : out_vec <= {s3_w1[31:0], s3_w0[31:0]};
+							//'b11:  out_vec <= s4_lsb ? s3_d0[63:0] : s3_d0[127:64];
+							'b0?11 : out_vec <= s3_d0;
+
+							// fxp needs middle bits
+							'b1?00 : out_vec <= {s3_h3[11:4],s3_h2[11:4],s3_b5[11:4],s3_b4[11:4],s3_b3[11:4],s3_b2[11:4],s3_h1[11:4],s3_h0[11:4]};
+							'b1?01 : out_vec <= {s3_h3[23:8], s3_h2[23:8], s3_h1[23:8], s3_h0[23:8]};
+							'b1?10 : out_vec <= {s3_w1[47:16], s3_w0[47:16]};
+
+							default: out_vec <= 'h0; // Doesn't exist for ZVE*
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd	<= {s3_h3[8],s3_h2[8],s3_b5[8],s3_b4[8],s3_b3[8],s3_b2[8],s3_h1[8],s3_h0[8]};
+							'b0101 : out_vd	<= {1'b0, s3_h3[16], 1'b0, s3_h2[16], 1'b0, s3_h1[16], 1'b0, s3_h0[16]};
+							'b0110 : out_vd <= {3'b0, s3_w1[32], 3'b0, s3_w0[32]};
+							//'b11:  out_vd <= s4_lsb ? s3_d0[63:0] : s3_d0[63];
+							'b0111 : out_vd <= {7'b0, s3_d0[64]}; // FIXME - how do we find shift out?
+
+							'b1000 : out_vd	<= {s3_h3[3],s3_h2[3],s3_b5[3],s3_b4[3],s3_b3[3],s3_b2[3],s3_h1[3],s3_h0[3]};
+							'b1001 : out_vd	<= {1'b0, s3_h3[7], 1'b0, s3_h2[7], 1'b0, s3_h1[7], 1'b0, s3_h0[7]};
+							'b1010 : out_vd <= {3'b0, s3_w1[15], 3'b0, s3_w0[15]};
+
+							default: out_vd <= 'h0;
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd1 <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd1 <= {s3_h3[7],s3_h2[7],s3_b5[7],s3_b4[7],s3_b3[7],s3_b2[7],s3_h1[7],s3_h0[7]};
+							'b0101 : out_vd1 <= {1'b0, s3_h3[15], 1'b0, s3_h2[15], 1'b0, s3_h1[15], 1'b0, s3_h0[15]};
+							'b0110 : out_vd1 <= {3'b0, s3_w1[31], 3'b0, s3_w0[31]};
+							//'b11:  out_vd1 <= s4_lsb ? s3_d0[63:0] : s3_d0[63];
+							'b0111 : out_vd1 <= {7'b0, s3_d0[63]}; // FIXME - how do we find shift out?
+
+							'b1000 : out_vd1 <= {s3_h3[3],s3_h2[3],s3_b5[3],s3_b4[3],s3_b3[3],s3_b2[3],s3_h1[3],s3_h0[3]};
+							'b1001 : out_vd1 <= {1'b0, s3_h3[7], 1'b0, s3_h2[7], 1'b0, s3_h1[7], 1'b0, s3_h0[7]};
+							'b1010 : out_vd1 <= {3'b0, s3_w1[15], 3'b0, s3_w0[15]};
+
+							default: out_vd1 <= 'h0;
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd10 <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd10 <= {(|s3_h3[7:0]),(|s3_h2[7:0]),(|s3_b5[7:0]),(|s3_b4[7:0]),(|s3_b3[7:0]),(|s3_b2[7:0]),(|s3_h1[7:0]),(|s3_h0[7:0])};
+							'b0101 : out_vd10 <= {1'b0, |(s3_h3[15:0]), 1'b0, (|s3_h2[15:0]), 1'b0, (|s3_h1[15:0]), 1'b0, (|s3_h0[15:0])};
+							'b0110 : out_vd10 <= {3'b0, (|s3_w1[31:0]), 3'b0, (|s3_w0[31:0])};
+							'b0111 : out_vd10 <= {7'b0, (|s3_d0[63:0])}; // FIXME - how do we find shift out?
+
+							'b1000 : out_vd10 <= {s3_h3[3:0],s3_h2[3:0],s3_b5[3:0],s3_b4[3:0],s3_b3[3:0],s3_b2[3:0],s3_h1[3:0],s3_h0[3:0]};
+							'b1001 : out_vd10 <= {1'b0, s3_h3[7:0], 1'b0, s3_h2[7:0], 1'b0, s3_h1[7:0], 1'b0, s3_h0[7:0]};
+							'b1010 : out_vd10 <= {3'b0, s3_w1[15:0], 3'b0, s3_w0[15:0]};
+
+							default: out_vd10 <= 'h0;
+						endcase
+					end
+				end
+			end else begin
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vec <= 'b0;
+					end 
+					else begin
+						casex ({s4_fxp_mul, s4_lsb, s4_sew})
+							'b0000 : out_vec <= {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
+							'b0001 : out_vec <= {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
+							'b0010 : out_vec <= {s3_w1[63:32], s3_w0[63:32]};
+
+							'b0100 : out_vec <= {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]};
+							'b0101 : out_vec <= {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]};
+							'b0110 : out_vec <= {s3_w1[31:0], s3_w0[31:0]};
+
+							// fxp needs middle bits
+							'b1?00 : out_vec <= {s3_h3[11:4],s3_h2[11:4],s3_b5[11:4],s3_b4[11:4],s3_b3[11:4],s3_b2[11:4],s3_h1[11:4],s3_h0[11:4]};
+							'b1?01 : out_vec <= {s3_h3[23:8], s3_h2[23:8], s3_h1[23:8], s3_h0[23:8]};
+							'b1?10 : out_vec <= {s3_w1[47:16], s3_w0[47:16]};
+
+							default: out_vec <= 'h0; // Doesn't exist for ZVE*
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd	<= {s3_h3[8],s3_h2[8],s3_b5[8],s3_b4[8],s3_b3[8],s3_b2[8],s3_h1[8],s3_h0[8]};
+							'b0101 : out_vd	<= {1'b0, s3_h3[16], 1'b0, s3_h2[16], 1'b0, s3_h1[16], 1'b0, s3_h0[16]};
+							'b0110 : out_vd <= {3'b0, s3_w1[32], 3'b0, s3_w0[32]};
+
+							'b1000 : out_vd	<= {s3_h3[3],s3_h2[3],s3_b5[3],s3_b4[3],s3_b3[3],s3_b2[3],s3_h1[3],s3_h0[3]};
+							'b1001 : out_vd	<= {1'b0, s3_h3[7], 1'b0, s3_h2[7], 1'b0, s3_h1[7], 1'b0, s3_h0[7]};
+							'b1010 : out_vd <= {3'b0, s3_w1[15], 3'b0, s3_w0[15]};
+
+							default: out_vd <= 'h0;
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd1 <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd1 <= {s3_h3[7],s3_h2[7],s3_b5[7],s3_b4[7],s3_b3[7],s3_b2[7],s3_h1[7],s3_h0[7]};
+							'b0101 : out_vd1 <= {1'b0, s3_h3[15], 1'b0, s3_h2[15], 1'b0, s3_h1[15], 1'b0, s3_h0[15]};
+							'b0110 : out_vd1 <= {3'b0, s3_w1[31], 3'b0, s3_w0[31]};
+
+							'b1000 : out_vd1 <= {s3_h3[3],s3_h2[3],s3_b5[3],s3_b4[3],s3_b3[3],s3_b2[3],s3_h1[3],s3_h0[3]};
+							'b1001 : out_vd1 <= {1'b0, s3_h3[7], 1'b0, s3_h2[7], 1'b0, s3_h1[7], 1'b0, s3_h0[7]};
+							'b1010 : out_vd1 <= {3'b0, s3_w1[15], 3'b0, s3_w0[15]};
+
+							default: out_vd1 <= 'h0;
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vd10 <= 'b0;
+					end 
+					else begin
+						case ({s4_fxp_mul, s4_fxp_s, s4_sew})
+							'b0100 : out_vd10 <= {(|s3_h3[7:0]),(|s3_h2[7:0]),(|s3_b5[7:0]),(|s3_b4[7:0]),(|s3_b3[7:0]),(|s3_b2[7:0]),(|s3_h1[7:0]),(|s3_h0[7:0])};
+							'b0101 : out_vd10 <= {1'b0, |(s3_h3[15:0]), 1'b0, (|s3_h2[15:0]), 1'b0, (|s3_h1[15:0]), 1'b0, (|s3_h0[15:0])};
+							'b0110 : out_vd10 <= {3'b0, (|s3_w1[31:0]), 3'b0, (|s3_w0[31:0])};
+
+							'b1000 : out_vd10 <= {s3_h3[3:0],s3_h2[3:0],s3_b5[3:0],s3_b4[3:0],s3_b3[3:0],s3_b2[3:0],s3_h1[3:0],s3_h0[3:0]};
+							'b1001 : out_vd10 <= {1'b0, s3_h3[7:0], 1'b0, s3_h2[7:0], 1'b0, s3_h1[7:0], 1'b0, s3_h0[7:0]};
+							'b1010 : out_vd10 <= {3'b0, s3_w1[15:0], 3'b0, s3_w0[15:0]};
+
+							default: out_vd10 <= 'h0;
+						endcase
+					end
 				end
 			end
+		end else begin
+			if(MUL64_ENABLE) begin
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vec <= 'b0;
+					end 
+					else begin
+						case ({s4_lsb, s4_sew})
+							'b000 : out_vec <= {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
+							'b001 : out_vec <= {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
+							'b010 : out_vec <= {s3_w1[63:32], s3_w0[63:32]};
 
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vd <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd	<= s4_fxp ? {s3_h3[8],s3_h2[8],s3_b5[8],s3_b4[8],s3_b3[8],s3_b2[8],s3_h1[8],s3_h0[8]} : 'h0;
-						'b01 : out_vd	<= s4_fxp ? {1'b0, s3_h3[16], 1'b0, s3_h2[16], 1'b0, s3_h1[16], 1'b0, s3_h0[16]} :'h0;
-						'b10 : out_vd 	<= s4_fxp ? {3'b0, s3_w1[32], 3'b0, s3_w0[32]} : 'h0;
-						//'b11:  out_vd1 <= s4_lsb ? s3_d0[63:0] : s3_d0[63];
-						'b11 : out_vd 	<= s4_fxp ? {7'b0, s3_d0[64]} : 'h0; // FIXME - how do we find shift out?
-					endcase
+							'b100 : out_vec <= {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]};
+							'b101 : out_vec <= {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]};
+							'b110 : out_vec <= {s3_w1[31:0], s3_w0[31:0]};
+							//'b11:  out_vec <= s4_lsb ? s3_d0[63:0] : s3_d0[127:64];
+							'b011,
+							'b111 : out_vec <= s3_d0;
+
+							default: out_vec <= 'h0;
+						endcase
+					end
 				end
-			end
 
-			always @(posedge clk) begin
-				if(rst) begin
+				always @(posedge clk) begin
+					out_vd 	<= 'b0;
 					out_vd1 <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd1	<= s4_fxp ? {s3_h3[7],s3_h2[7],s3_b5[7],s3_b4[7],s3_b3[7],s3_b2[7],s3_h1[7],s3_h0[7]} : 'h0;
-						'b01 : out_vd1	<= s4_fxp ? {1'b0, s3_h3[15], 1'b0, s3_h2[15], 1'b0, s3_h1[15], 1'b0, s3_h0[15]} :'h0;
-						'b10 : out_vd1 	<= s4_fxp ? {3'b0, s3_w1[31], 3'b0, s3_w0[31]} : 'h0;
-						//'b11:  out_vd1 <= s4_lsb ? s3_d0[63:0] : s3_d0[63];
-						'b11 : out_vd1 	<= s4_fxp ? {7'b0, s3_d0[63]} : 'h0; // FIXME - how do we find shift out?
-					endcase
+					out_vd10<= 'b0;
 				end
-			end
+			end else begin
+				always @(posedge clk) begin
+					if(rst) begin
+						out_vec <= 'b0;
+					end 
+					else begin
+						case ({s4_lsb, s4_sew})
+							'b000 : out_vec <= {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
+							'b001 : out_vec <= {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
+							'b010 : out_vec <= {s3_w1[63:32], s3_w0[63:32]};
 
-			always @(posedge clk) begin
-				if(rst) begin
+							'b100 : out_vec <= {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]};
+							'b101 : out_vec <= {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]};
+							'b110 : out_vec <= {s3_w1[31:0], s3_w0[31:0]};
+							default : out_vec 	<= 'h0;
+						endcase
+					end
+				end
+
+				always @(posedge clk) begin
+					out_vd 	<= 'b0;
 					out_vd1 <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd10	<= s4_fxp ? {(|s3_h3[7:0]),(|s3_h2[7:0]),(|s3_b5[7:0]),(|s3_b4[7:0]),(|s3_b3[7:0]),(|s3_b2[7:0]),(|s3_h1[7:0]),(|s3_h0[7:0])} : 'h0;
-						'b01 : out_vd10	<= s4_fxp ? {1'b0, |(s3_h3[15:0]), 1'b0, (|s3_h2[15:0]), 1'b0, (|s3_h1[15:0]), 1'b0, (|s3_h0[15:0])} :'h0;
-						'b10 : out_vd10	<= s4_fxp ? {3'b0, (|s3_w1[31:0]), 3'b0, (|s3_w0[31:0])} : 'h0;
-						//'b11:  out_vd1 <= s4_lsb ? s3_d0[63:0] : s3_d0[63];
-						'b11 : out_vd10	<= s4_fxp ? {7'b0, (|s3_d0[63:0])} : 'h0; // FIXME - how do we find shift out?
-					endcase
-				end
-			end
-		end
-
-		else begin
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vec <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vec 	<= s4_lsb ? {s3_h3[7:0],s3_h2[7:0],s3_b5[7:0],s3_b4[7:0],s3_b3[7:0],s3_b2[7:0],s3_h1[7:0],s3_h0[7:0]}
-								:  {s3_h3[15:8],s3_h2[15:8],s3_b5[15:8],s3_b4[15:8],s3_b3[15:8],s3_b2[15:8],s3_h1[15:8],s3_h0[15:8]};
-						'b01 : out_vec 	<= s4_lsb ? {s3_h3[15:0], s3_h2[15:0], s3_h1[15:0], s3_h0[15:0]} 
-								: {s3_h3[31:16], s3_h2[31:16], s3_h1[31:16], s3_h0[31:16]};
-						'b10 : out_vec 	<= s4_lsb ? {s3_w1[31:0], s3_w0[31:0]} 
-								: {s3_w1[63:32], s3_w0[63:32]};
-						'b11 : out_vec 	<= 'h0;
-					endcase
-				end
-			end
-
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vd <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd	<= s4_fxp ? {s3_h3[8],s3_h2[8],s3_b5[8],s3_b4[8],s3_b3[8],s3_b2[8],s3_h1[8],s3_h0[8]} : 'h0;
-						'b01 : out_vd	<= s4_fxp ? {1'b0, s3_h3[16], 1'b0, s3_h2[16], 1'b0, s3_h1[16], 1'b0, s3_h0[16]} :'h0;
-						'b10 : out_vd 	<= s4_fxp ? {3'b0, s3_w1[32], 3'b0, s3_w0[32]} : 'h0;
-						'b11 : out_vd 	<= 'h0;
-					endcase
-				end
-			end
-
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vd1 <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd1	<= s4_fxp ? {s3_h3[7],s3_h2[7],s3_b5[7],s3_b4[7],s3_b3[7],s3_b2[7],s3_h1[7],s3_h0[7]} : 'h0;
-						'b01 : out_vd1	<= s4_fxp ? {1'b0, s3_h3[15], 1'b0, s3_h2[15], 1'b0, s3_h1[15], 1'b0, s3_h0[15]} :'h0;
-						'b10 : out_vd1 	<= s4_fxp ? {3'b0, s3_w1[31], 3'b0, s3_w0[31]} : 'h0;
-						'b11 : out_vd1 	<= 'h0;
-					endcase
-				end
-			end
-
-			always @(posedge clk) begin
-				if(rst) begin
-					out_vd1 <= 'b0;
-				end 
-				else begin
-					case (s4_sew)
-						'b00 : out_vd10	<= s4_fxp ? {(|s3_h3[7:0]),(|s3_h2[7:0]),(|s3_b5[7:0]),(|s3_b4[7:0]),(|s3_b3[7:0]),(|s3_b2[7:0]),(|s3_h1[7:0]),(|s3_h0[7:0])} : 'h0;
-						'b01 : out_vd10	<= s4_fxp ? {1'b0, |(s3_h3[15:0]), 1'b0, (|s3_h2[15:0]), 1'b0, (|s3_h1[15:0]), 1'b0, (|s3_h0[15:0])} :'h0;
-						'b10 : out_vd10	<= s4_fxp ? {3'b0, (|s3_w1[31:0]), 3'b0, (|s3_w0[31:0])} : 'h0;
-						'b11 : out_vd10	<= 'h0;
-					endcase
+					out_vd10<= 'b0;
 				end
 			end
 		end
