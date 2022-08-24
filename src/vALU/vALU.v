@@ -15,7 +15,6 @@
 `include "vAdd_unit_block.v"
 `include "vID.sv"
 `include "fxp_round.sv"
-// `include "vMCmp.v"
 
 // TODO optional 64-bit
 // TODO separate masking instructions - test area
@@ -28,7 +27,7 @@ module vALU #(
     parameter SEW_WIDTH         = 2 ,
     parameter REQ_ADDR_WIDTH    = 32,
     parameter REQ_VL_WIDTH      = 8 ,
-    parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH/8,
+    parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH>>3,
     parameter AND_OR_XOR_ENABLE = 1 ,
     parameter ADD_SUB_ENABLE    = 1 ,
     parameter MIN_MAX_ENABLE    = 1 ,
@@ -42,7 +41,8 @@ module vALU #(
     parameter SLIDE_ENABLE      = 1 ,
     parameter SLIDE_N_ENABLE    = 1 ,
     parameter MASK_ENABLE       = 1 ,
-    parameter FXP_ENABLE        = 1
+    parameter FXP_ENABLE        = 1 ,
+    parameter SHIFT64_ENABLE    = 0
 ) (
     input                              clk         ,
     input                              rst         ,
@@ -89,9 +89,15 @@ wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAvAdd_outVec, vScShift_outVec;
 wire [                  1:0]    vAndOrXor_opSel, vMul_opSel, vAdd_opSel;
-wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1      ;
-wire [   REQ_DATA_WIDTH-1:0]    vShift_mult    ;
-wire [                  6:0]    vShift_cmpl    ;
+wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1       ;
+wire [   REQ_DATA_WIDTH-1:0]    vMul_vec0       ;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_mult_sew [0:3];
+// wire [   REQ_DATA_WIDTH-1:0]    vShift_mult;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_upper      ;
+wire                            vShiftR64       ;
+// wire [                  6:0]    vShift_cmpl     ;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl_sew [0:3];
+wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl;
 wire [                  1:0]    vSlide_sew, vWiden_sew, vAdd_sew, vMul_sew;
 wire [REQ_BYTE_EN_WIDTH-1:0]    vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe;
 wire                            vMinMax_opSel, vRightShift_opSel, vSlide_opSel;
@@ -160,7 +166,7 @@ assign vMul_sew             = vWiden_en ? vWiden_sew : req_sew;
 
 assign vAdd_in0             = vWiden_en ? vWiden_in0 : req_data0;
 assign vAdd_in1             = vWiden_en ? vWiden_in1 : req_data1;
-assign vMul_in0             = vWiden_en ? vWiden_in0 : req_data1;
+assign vMul_in0             = vWiden_en ? vWiden_in0 : vMul_vec0;
 assign vMul_in1             = vWiden_en ? vWiden_in1 : vMul_vec1;
 
 assign vSlide_in1           = vSlide_insert ? req_data0 : 'b0;
@@ -252,17 +258,48 @@ generate
     end
 endgenerate
 
+genvar i,j;
 
 generate
     if(SHIFT_ENABLE) begin : shift
-        assign vShift_cmpl = req_sew[1] ? (req_sew[0] ? 7'd64 : 7'd32) : (req_sew[0] ? 7'd16 : 7'd8);
-        assign vShift_mult = (req_func_id[5:2] == 4'b1010) ? 2**(vShift_cmpl-req_data0[6:0]) : 2**(req_data0[6:0]);
-        assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data0 : (req_sew[1] ? (req_sew[0] ? (vShift_mult) : ({2{vShift_mult[31:0]}})) : (req_sew[0] ? ({4{vShift_mult[15:0]}}) : ({8{vShift_mult[7:0]}})));
+        if (SHIFT64_ENABLE) begin : shift64
+            assign vShiftR64 = ((req_func_id[5:2] == 4'b1010) & (req_op_mnr[1]^req_op_mnr[0] == 'b0)) & (req_sew[1] & req_sew[0]);
+            assign vSRA      = (req_func_id == 6'b101001);
+
+            for (i = 0; i < (REQ_DATA_WIDTH >> 6); i = i + 1) begin
+                assign vShift_upper[i*64 +: 64] = req_data1[(i*64 + 32) +: 32]; // upper 32b
+                // FIXME lower?
+            end
+
+            assign vMul_vec0   = vShiftR64 ? vShift_upper : req_data1;
+        end else begin
+            assign vShiftR64   = 'b0;
+
+            assign vMul_vec0   = req_data1;
+        end
+        // assign vShift_cmpl = req_sew[1] ? (req_sew[0] ? 7'd64 : 7'd32) : (req_sew[0] ? 7'd16 : 7'd8); // fixme - doesn't work for vv
+        // assign vShift_mult = (req_func_id[5:2] == 4'b1010) & ~(req_sew[1] & req_sew[1]) ? 2**(vShift_cmpl-req_data0[6:0]) : 2**(req_data0[6:0]);
+
+        for (j = 0; j < 4; j = j + 1) begin
+            for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                if (j < 3) begin
+                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                    // FIXME add "or top"
+                end else begin
+                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << 5) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                end
+                assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+            end
+        end
+
+        assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data0 : vShift_mult_sew[req_sew];
+
         assign vMul_opSel  = (req_func_id[5:2] == 4'b1001) ? req_func_id[1:0] : ((req_func_id == 6'b110101) ? (2'b01) : (req_func_id[0] ? 2'b10 : 2'b00));
     end
     else begin
         assign vMul_vec1    = req_data0;
-        assign vMul_opSel = req_func_id[1:0];
+        assign vMul_vec0    = req_data1;
+        assign vMul_opSel   = req_func_id[1:0];
     end
 endgenerate
 
@@ -353,6 +390,7 @@ generate
             .in_addr    (req_addr       ),
             .in_fxp_s   (vSShift_en     ),
             .in_fxp_mul (vSMul_en       ),
+            .in_sra     (vSRA           ), // FIXME
             .out_vec    (vMul_outVec    ),
             .out_valid  (vMul_outValid  ),
             .out_addr   (vMul_outAddr   ),
@@ -581,7 +619,7 @@ generate
             .v_d(vAAdd_vd | vMul_vd), .v_d1(vAAdd_vd1 | vMul_vd1), .v_d10(vAAdd_vd1 | vMul_vd10),
             .vec_out(fxp_out));
     end else begin
-        assign fxp_out = vAdd_outVec;
+        assign fxp_out = vAdd_outVec | vMul_outVec;
     end
 endgenerate
 
@@ -622,7 +660,7 @@ always @(posedge clk) begin
         s5_vxrm         <= s4_vxrm;
 
         // TODO pipe these through modules instead, so timing of outputs is guaranteed
-        s0_be           <= vWiden_en ? vWiden_be : ((vSlide_en | vNarrow_en | vMCmp_en) ? 'h0 : req_be);//{REQ_BYTE_EN_WIDTH{~(vSlide_en | vNarrow_en | vMCmp_en)}});// & {REQ_BYTE_EN_WIDTH{req_valid}};
+        s0_be           <= vWiden_en ? vWiden_be : ((vSlide_en | vNarrow_en | vMCmp_en) ? 'h0 : req_be);
         s1_be           <= s0_be;
         s2_be           <= s1_be;
         s3_be           <= s2_be;
@@ -645,7 +683,7 @@ always @(posedge clk) begin
         s5_end          <= s4_end;
         resp_end        <= s5_end;
 
-        s0_off          <= req_valid ? req_off : 'h0;// & {8{req_valid}};
+        s0_off          <= req_valid ? req_off : 'h0;
         s1_off          <= s0_off;
         s2_off          <= s1_off;
         s3_off          <= s2_off;

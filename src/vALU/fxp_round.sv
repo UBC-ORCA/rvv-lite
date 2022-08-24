@@ -37,48 +37,6 @@ assign vec_out = in_valid ? vec_in + r_vec : 'h0;
 
 endmodule
 
-// module avg_unit (
-// 	parameter DATA_WIDTH 	= 64,
-// 	parameter DW_B 			= DATA_WIDTH>>3
-// ) (
-// 	input 						clk,
-// 	input  	   [DATA_WIDTH-1:0] vec_in,
-// 	input  	   [		   1:0] sew,
-// 	output reg [	  DW_B-1:0] v_d,
-// 	output reg [	  DW_B-1:0] v_d1, // v_d and v_d10 are the same for this op
-// 	output reg [DATA_WIDTH-1:0] vec_out
-// );
-
-// wire [DATA_WIDTH-1:0] vec_out_sew 	[0:3];
-// wire [		DW_B-1:0] v_d_sew		[0:3];
-// wire [		DW_B-1:0] v_d1_sew		[0:3];
-
-// genvar i;
-// integer j;
-// generate
-// 	for (i = 0; i < 4; i = i + 1) begin
-// 		always @(*) begin
-// 			for (j = 0; j < DW_B >> i; j = j + 1) begin
-// 				vec_out_sew	[i][j<<(i+3) +: (1<<(i+3))] = vec_in[j<<(i+3) + 1 +: ((1 << (i+3)) - 1)];
-
-// 				v_d_sew 	[i][j<<i] = vec_in[j<<(i+3) + 1];
-// 				v_d1_sew	[i][j<<i] = vec_in[j<<(i+3)];
-// 			end
-// 		end
-// 	end
-
-// 	always @(*) begin
-// 		vec_out <=	vec_out_sew[sew];
-
-// 		v_d 	<=	v_d_sew [sew];
-// 		v_d1 	<=	v_d1_sew[sew];
-// 	end
-// endgenerate
-
-// endmodule
-
-
-
 // module rshift (
 // 	parameter DATA_WIDTH 	= 64,
 // 	parameter DW_B 			= DATA_WIDTH>>3

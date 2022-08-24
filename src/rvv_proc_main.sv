@@ -33,8 +33,10 @@
 `define SHIFT_ENABLE      1
 `define SLIDE_N_ENABLE    1
 `define MULT64_ENABLE     1
-`define MASK_ENABLE       1 // a8
-`define FXP_ENABLE        1 // a9
+`define FXP_ENABLE        1 // a8
+
+`define MASK_ENABLE       1 // b1
+
 
 module rvv_proc_main #(
     parameter VLEN              = 16384,            // vector length in bits
@@ -445,14 +447,17 @@ module rvv_proc_main #(
 
     // ALU INPUTS
     always @(posedge clk) begin
-        alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2 | ((opcode_mjr== `OP_INSN) & (opcode_mnr == `IVI_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14)) & (reg_count == 0));
-        alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14)) & (reg_count == 1));
+        if (~rst_n) begin
+            alu_req_start   <= 'h0;
+            alu_req_end     <= 'h0;
+            alu_off_agu     <= 'h0;
+        end else begin
+            alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2 | ((opcode_mjr== `OP_INSN) & (opcode_mnr == `IVI_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14)) & (reg_count == 0));
+            alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14)) & (reg_count == 1));
 
-        alu_off_agu     <= vr_rd_off_1; // FIXME - make generic
-        // alu_req_vxrm    <= vxrm_in_d;
+            alu_off_agu     <= vr_rd_off_1; // FIXME - make generic
+        end
     end
-
-    // assign alu_vr_idx       = (avl_eff>>(DW_B_BITS - sew)) - reg_count;
 
     // FIXME simplify
     assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
@@ -797,34 +802,3 @@ module extract_mask #(
     // todo case stmt
     assign vmask_out = en ? vmask_sew[sew] : {DW_B{1'b1}};
 endmodule
-
-// module extract_mask #(
-//     parameter VLEN          = 128,
-//     parameter DATA_WIDTH    = 64,
-//     parameter DW_B          = DATA_WIDTH/8,
-//     parameter VLEN_B        = VLEN/8,
-//     parameter DW_B_BITS     = 3
-//     ) (
-//     input   [  VLEN_B-1:0]  vmask_in,
-//     input   [         2:0]  sew,
-//     input   [        10:0]  reg_count,
-//     input                   en,
-//     output  [    DW_B-1:0]  vmask_out
-//     );
-
-//     wire [DW_B-1:0] vmask_sew   [0:3];
-
-//     genvar i, j;
-
-//     // Generate mask byte enable based on SEW and current index in vector
-//     generate
-//         for (j = 0; j < 4; j = j + 1) begin
-//             for (i = 0; i < DW_B >> j; i = i + 1) begin
-//                 assign vmask_sew[j][(i<<j) +: (1<<j)] = {(1<<j){vmask_in[((reg_count*DW_B) >> j) + i]}};
-//             end
-//         end
-//     endgenerate
-
-//     assign vmask_out = {DW_B{~en}} | vmask_sew[sew];
-
-// endmodule
