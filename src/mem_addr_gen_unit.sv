@@ -23,7 +23,6 @@ module mem_addr_gen_unit #(
     output                      addr_end,
     output                      idle      // signal to processor that we can get another address
 );
-    // TODO fractional lmul support would change this up
 
     reg  [ADDR_WIDTH-1:0]   base_addr;
     reg  [ SEW_WIDTH-1:0]   curr_addr, max_addr;

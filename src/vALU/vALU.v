@@ -95,7 +95,7 @@ wire [   REQ_DATA_WIDTH-1:0]    vShift_mult_sew [0:3];
 // wire [   REQ_DATA_WIDTH-1:0]    vShift_mult;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_upper    ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_vd10     ;
-wire [   REQ_DATA_WIDTH-1:0]    vShift_inShift  ;
+wire [                  6:0]    vShift_inShift  ;
 wire                            vShiftR64       ;
 wire                            vShift_orTop    ;
 // wire [                  6:0]    vShift_cmpl     ;
@@ -282,7 +282,7 @@ generate
 
             assign vMul_vec0    = vShiftR64 ? vShift_upper : req_data1;
 
-            assign vShift_inShift = vShiftR64 ? req_data0 : 'h0;
+            assign vShift_inShift = vShiftR64 ? req_data0[6:0] : 'h0;
         end else begin
             assign vShiftR64    = 'b0;
             assign vShift_orTop = 'b0;
@@ -308,7 +308,7 @@ generate
 
         assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data0 : vShift_mult_sew[req_sew];
 
-        assign vMul_opSel  = (req_func_id[5:2] == 4'b1001) ? req_func_id[1:0] : ((req_func_id == 6'b110101) ? (2'b01) : (req_func_id[0] ? 2'b10 : 2'b00));
+        assign vMul_opSel  = (req_func_id[5:2] == 4'b1001) ? req_func_id[1:0] : ((req_func_id == 6'b110101) ? (2'b01) : {req_func_id[0],0});
     end
     else begin
         assign vMul_vec1    = req_data0;

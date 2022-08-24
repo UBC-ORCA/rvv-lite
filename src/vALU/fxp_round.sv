@@ -1,3 +1,5 @@
+`define BYTE 8
+
 module fxp_round #(
 	parameter DATA_WIDTH 	= 64,
 	parameter DW_B 			= DATA_WIDTH >> 3
@@ -13,23 +15,31 @@ module fxp_round #(
 	output 	[DATA_WIDTH-1:0] vec_out
 );
 
-wire [DATA_WIDTH-1:0] r_vec;
-reg  [		DW_B-1:0] r;
+reg [DATA_WIDTH-1:0] r_vec;
+// reg  [		DW_B-1:0] r;
 
-always @(*) begin
-	r = 'h0;
-	case (vxrm)
-		2'b00: 	r = v_d1;
-		2'b01: 	r = v_d & v_d10;
-		2'b10: 	r = 1'b0;
-		2'b11:	r = ~v_d & v_d10;
-	endcase
-end
+// always @(*) begin
+// 	// r = 'h0;
+// 	case (vxrm)
+// 		2'b00: 	r = v_d1;
+// 		2'b01: 	r = v_d & v_d10;
+// 		2'b10: 	r = 1'b0;
+// 		2'b11:	r = ~v_d & v_d10;
+// 	endcase
+// end
 
 genvar i;
 generate
 	for (i = 0; i < DW_B; i=i+1) begin
-		assign r_vec[(i<<3) +: 8] = r[i]; // zero-pad
+		// assign r_vec[(i<<3) +: 8] = r[i]; // zero-pad
+		always @(*) begin
+			case (vxrm)
+				2'b00: 	r_vec[i*`BYTE +: `BYTE] = v_d1[i];
+				2'b01: 	r_vec[i*`BYTE +: `BYTE] = v_d[i] & v_d10[i];
+				2'b10: 	r_vec[i*`BYTE +: `BYTE] = 1'b0;
+				2'b11:	r_vec[i*`BYTE +: `BYTE] = ~v_d[i] & v_d10[i];
+			endcase
+		end
 	end
 endgenerate
 

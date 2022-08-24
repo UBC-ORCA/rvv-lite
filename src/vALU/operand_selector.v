@@ -52,7 +52,6 @@ module operand_select #(
 	assign w_op 	= (r_sew == 'b10);
 	assign d_op 	= (r_sew == 'b11);
 
-
 	assign a0 		= b_op ? 'b0 : {{2{a0_ext}}, r_vec0[15:0]};
 	assign a1 		= b_op ? 'b0 : {{2{a1_ext}}, r_vec0[31:16]};
 	assign a2 		= b_op ? 'b0 : {{2{a2_ext}}, r_vec0[47:32]};
