@@ -30,10 +30,12 @@
 `define NARROW_ENABLE     1 // a2
 `define REDUCTION_ENABLE  1 // a3
 `define MULT_ENABLE       1 // a4
-`define SHIFT_ENABLE      1
-`define SLIDE_N_ENABLE    1
-`define MULT64_ENABLE     1
+`define SHIFT_ENABLE      1 
+`define MULH_SR_32_ENABLE 1 // a5
+`define SLIDE_N_ENABLE    1 // a6
+`define MULT64_ENABLE     1 // a7
 `define FXP_ENABLE        1 // a8
+`define SHIFT64_ENABLE    1 // a9
 
 `define MASK_ENABLE       1 // b1
 

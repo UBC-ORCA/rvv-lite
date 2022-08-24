@@ -42,7 +42,7 @@ module vALU #(
     parameter SLIDE_N_ENABLE    = 1 ,
     parameter MASK_ENABLE       = 1 ,
     parameter FXP_ENABLE        = 1 ,
-    parameter SHIFT64_ENABLE    = 0
+    parameter SHIFT64_ENABLE    = 1
 ) (
     input                              clk         ,
     input                              rst         ,
@@ -93,8 +93,11 @@ wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1       ;
 wire [   REQ_DATA_WIDTH-1:0]    vMul_vec0       ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_mult_sew [0:3];
 // wire [   REQ_DATA_WIDTH-1:0]    vShift_mult;
-wire [   REQ_DATA_WIDTH-1:0]    vShift_upper      ;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_upper    ;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_vd10     ;
+wire [   REQ_DATA_WIDTH-1:0]    vShift_inShift  ;
 wire                            vShiftR64       ;
+wire                            vShift_orTop    ;
 // wire [                  6:0]    vShift_cmpl     ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl_sew [0:3];
 wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl;
@@ -264,18 +267,29 @@ generate
     if(SHIFT_ENABLE) begin : shift
         if (SHIFT64_ENABLE) begin : shift64
             assign vShiftR64 = ((req_func_id[5:2] == 4'b1010) & (req_op_mnr[1]^req_op_mnr[0] == 'b0)) & (req_sew[1] & req_sew[0]);
-            assign vSRA      = (req_func_id == 6'b101001);
 
             for (i = 0; i < (REQ_DATA_WIDTH >> 6); i = i + 1) begin
-                assign vShift_upper[i*64 +: 64] = req_data1[(i*64 + 32) +: 32]; // upper 32b
-                // FIXME lower?
+                assign vShift_upper[i*64 +: 64] = vShift_orTop ? req_data1 : {32'b0,req_data1[(i*64 + 32) +: 32]}; // upper 32b
+
+                if (FXP_ENABLE) begin
+                    assign vShift_vd10[i*64 +: 64] = vShift_orTop ? 0 : (|req_data1[(i*64) +: 32]); // lower 32b
+                end else begin
+                    assign vShift_vd10 = 'h0;
+                end
             end
 
-            assign vMul_vec0   = vShiftR64 ? vShift_upper : req_data1;
-        end else begin
-            assign vShiftR64   = 'b0;
+            assign vShift_orTop = (req_data0 < 32);
 
-            assign vMul_vec0   = req_data1;
+            assign vMul_vec0    = vShiftR64 ? vShift_upper : req_data1;
+
+            assign vShift_inShift = vShiftR64 ? req_data0 : 'h0;
+        end else begin
+            assign vShiftR64    = 'b0;
+            assign vShift_orTop = 'b0;
+            assign vShift_vd10  = 'b0;
+
+            assign vMul_vec0    = req_data1;
+            assign vShift_inShift = 'h0;
         end
         // assign vShift_cmpl = req_sew[1] ? (req_sew[0] ? 7'd64 : 7'd32) : (req_sew[0] ? 7'd16 : 7'd8); // fixme - doesn't work for vv
         // assign vShift_mult = (req_func_id[5:2] == 4'b1010) & ~(req_sew[1] & req_sew[1]) ? 2**(vShift_cmpl-req_data0[6:0]) : 2**(req_data0[6:0]);
@@ -286,7 +300,7 @@ generate
                     assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
                     // FIXME add "or top"
                 end else begin
-                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << 5) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                    assign vShift_cmpl_sew[j][i*64 +: 64] = (req_func_id[5:2] == 4'b1010)? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
                 end
                 assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
             end
@@ -300,6 +314,8 @@ generate
         assign vMul_vec1    = req_data0;
         assign vMul_vec0    = req_data1;
         assign vMul_opSel   = req_func_id[1:0];
+        assign vShift_orTop = 'b0;
+        assign vShift_vd10  = 'b0;
     end
 endgenerate
 
@@ -390,7 +406,10 @@ generate
             .in_addr    (req_addr       ),
             .in_fxp_s   (vSShift_en     ),
             .in_fxp_mul (vSMul_en       ),
-            .in_sra     (vSRA           ), // FIXME
+            .in_sr_64   (vShiftR64      ), // FIXME
+            .in_or_top  (vShift_orTop   ),
+            .in_vd10    (vShift_vd10    ),
+            .in_shift   (vShift_inShift ),
             .out_vec    (vMul_outVec    ),
             .out_valid  (vMul_outValid  ),
             .out_addr   (vMul_outAddr   ),
