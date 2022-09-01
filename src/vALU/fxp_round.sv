@@ -4,46 +4,50 @@ module fxp_round #(
 	parameter DATA_WIDTH 	= 64,
 	parameter DW_B 			= DATA_WIDTH >> 3
 ) (
-	input 					 clk,
-	input 					 rst,
-	input 	[			1:0] vxrm, // comes from vfu "round" port
-	input 	[	   DW_B-1:0] v_d, // do it like this so we can add directly
-	input	[	   DW_B-1:0] v_d1,
-	input	[	   DW_B-1:0] v_d10,
-	input 	[DATA_WIDTH-1:0] vec_in,
-	input					 in_valid,
-	output 	[DATA_WIDTH-1:0] vec_out
+	input 						 clk,
+	input 						 rst,
+	input 		[			1:0] vxrm, // comes from vfu "round" port
+	input 		[	   DW_B-1:0] v_d, // do it like this so we can add directly
+	input		[	   DW_B-1:0] v_d1,
+	input		[	   DW_B-1:0] v_d10,
+	input 		[DATA_WIDTH-1:0] vec_in,
+	input						 in_valid,
+	output    	[DATA_WIDTH-1:0] vec_out
 );
 
 reg [DATA_WIDTH-1:0] r_vec;
-// reg  [		DW_B-1:0] r;
-
-// always @(*) begin
-// 	// r = 'h0;
-// 	case (vxrm)
-// 		2'b00: 	r = v_d1;
-// 		2'b01: 	r = v_d & v_d10;
-// 		2'b10: 	r = 1'b0;
-// 		2'b11:	r = ~v_d & v_d10;
-// 	endcase
-// end
+reg [DATA_WIDTH-1:0] base_vec;
 
 genvar i;
 generate
 	for (i = 0; i < DW_B; i=i+1) begin
-		// assign r_vec[(i<<3) +: 8] = r[i]; // zero-pad
-		always @(*) begin
-			case (vxrm)
-				2'b00: 	r_vec[i*`BYTE +: `BYTE] = v_d1[i];
-				2'b01: 	r_vec[i*`BYTE +: `BYTE] = v_d[i] & v_d10[i];
-				2'b10: 	r_vec[i*`BYTE +: `BYTE] = 1'b0;
-				2'b11:	r_vec[i*`BYTE +: `BYTE] = ~v_d[i] & v_d10[i];
+		always @(posedge clk) begin
+			case ({in_valid, vxrm})
+				3'b100: 	r_vec[(i<<3)] <= v_d1[i];
+				3'b101: 	r_vec[(i<<3)] <= v_d[i] & v_d10[i];
+				3'b110: 	r_vec[(i<<3)] <= 1'b0;
+				3'b111:		r_vec[(i<<3)] <= ~v_d[i] & v_d10[i];
+				default: 	r_vec[(i<<3)] <= 'h0;
 			endcase
 		end
 	end
 endgenerate
 
-assign vec_out = in_valid ? vec_in + r_vec : 'h0;
+always @(posedge clk) begin
+	if (rst) begin
+		base_vec <= 'h0;
+	end else begin
+		base_vec <= in_valid ? vec_in : 'h0;
+	end
+end
+
+// doesn't account for overflow, but this shouldn't be a problem because
+// asub -> can't average to greater than the max value
+// aadd -> can't average to greater than the max value
+// ssrl/a -> can't right shift to greater than max value
+// smul -> think lol
+
+assign vec_out = base_vec + r_vec;
 
 endmodule
 

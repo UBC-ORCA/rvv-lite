@@ -133,7 +133,6 @@ module rvv_proc_main #(
     reg   [VEX_DATA_WIDTH-1:0]  data_in_2_f;
     reg   [               1:0]  vxrm_in_f;
 
-
     wire                        stall;
 
     wire                        en_req_mem;
@@ -336,7 +335,7 @@ module rvv_proc_main #(
         end
     endgenerate
   
-    cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .src_1(src_1), .avl_set(avl_set),
+    cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
         .avl_new(data_in_1_f), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
@@ -516,16 +515,16 @@ module rvv_proc_main #(
             default:  alu_data_in1  = 'h0;
         endcase
 
-        casez (funct6_d)
+        case (funct6_d[5:3])
             // 6'b00111?:  alu_data_in2 = mem_addr_in_d;
-            6'b010000:  begin
-                case(opcode_mnr_d)
-                    `MVV_TYPE:  alu_data_in2 = s_ext_imm_d[4] ? vm_rd_data_out_2 : vr_rd_data_out_2; // vFirst, vPopc : vmv.x.s                            default
-                    `MVX_TYPE:  alu_data_in2 = lumop_d; // vmv.s.x
+            3'b010:  begin
+                case({funct6_d[2:0],opcode_mnr_d})
+                    {3'b0,`MVV_TYPE}:  alu_data_in2 = s_ext_imm_d[4] ? vm_rd_data_out_2 : vr_rd_data_out_2; // vFirst, vPopc : vmv.x.s                            default
+                    {3'b0,`MVX_TYPE}:  alu_data_in2 = lumop_d; // vmv.s.x
                     default:    alu_data_in2 = vr_rd_data_out_2;
                 endcase
             end
-            6'b011???:
+            3'b011:
                 case (opcode_mnr_d)
                     `MVV_TYPE:  alu_data_in2 = vm_rd_data_out_2;
                     default:    alu_data_in2 = vr_rd_data_out_2;

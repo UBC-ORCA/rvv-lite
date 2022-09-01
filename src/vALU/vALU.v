@@ -76,14 +76,22 @@ module vALU #(
     output reg                         resp_whole_reg
 );
 
-reg  [REQ_BYTE_EN_WIDTH-1:0]    s0_be, s1_be, s2_be, s3_be, s4_be, s5_be;
+reg  [REQ_BYTE_EN_WIDTH-1:0]    s0_be, s1_be, s2_be, s3_be, s4_be, s5_be, s6_be;
 reg  [                  1:0]    s0_vxrm, s1_vxrm, s2_vxrm, s3_vxrm, s4_vxrm, s5_vxrm;
-reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start;
-reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
-reg  [     REQ_VL_WIDTH-1:0]    s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
+reg                             s0_start, s1_start, s2_start, s3_start, s4_start, s5_start, s6_start;
+reg                             s0_end, s1_end, s2_end, s3_end, s4_end, s5_end, s6_end;
+reg  [     REQ_VL_WIDTH-1:0]    s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl, s6_vl;
 
-reg  [                  7:0]    s0_off, s1_off, s2_off, s3_off, s4_off, s5_off; // TODO pipe through modules
+reg  [                  7:0]    s0_off, s1_off, s2_off, s3_off, s4_off, s5_off, s6_off; // TODO pipe through modules
 reg                             turn;
+
+reg  [   REQ_ADDR_WIDTH-1:0]    s6_addr;
+reg  [  RESP_DATA_WIDTH-1:0]    s6_data;
+
+reg                             s6_sca_out;
+reg                             s6_whole_reg;
+reg                             s6_mask_out;
+reg                             s6_valid;
 
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1;
@@ -95,7 +103,7 @@ wire [   REQ_DATA_WIDTH-1:0]    vShift_mult_sew [0:3];
 // wire [   REQ_DATA_WIDTH-1:0]    vShift_mult;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_upper    ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_vd10     ;
-wire [                  6:0]    vShift_inShift  ;
+wire [                  5:0]    vShift_inShift  ;
 wire                            vShiftR64       ;
 wire                            vShift_orTop    ;
 // wire [                  6:0]    vShift_cmpl     ;
@@ -112,13 +120,14 @@ wire [                 11:0]    vStartIdx;
 
 wire [  RESP_DATA_WIDTH-1:0]    vMerge_outVec, vMOP_outVec, vPopc_outVec, vRedAndOrXor_outVec, vRedSum_min_max_outVec, vMove_outVec, vID_outVec, vFirst_outVec,
                                 vAdd_outVec, vAndOrXor_outVec, vMul_outVec, vSlide_outVec, vNarrow_outVec, fxp_out;
+reg  [  RESP_DATA_WIDTH-1:0]    s6_fxp_out;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
                                 vID_outValid, vFirst_outValid, vAdd_outValid, vAndOrXor_outValid, vMul_outValid, vSlide_outValid, vNarrow_outValid;
 wire                            vMove_outWReg;
 wire [                  9:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
 wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vFirst_en, vAdd_en, vMinMax_en,
-                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en;
+                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vSMul_en;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vMove_outAddr, vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vNarrow_outAddr, vMerge_outAddr,
                                 vMOP_outAddr, vPopc_outAddr, vRedAndOrXor_outAddr, vRedSum_min_max_outAddr, vID_outAddr, vFirst_outAddr;
@@ -134,7 +143,7 @@ assign vAndOrXor_en         = req_valid & (req_func_id[5:2] == 4'b0010) & (req_o
 assign vMinMax_en           = req_valid & (req_func_id[5:2] == 4'b0001);
 assign vMul_en              = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id == 6'b110101) | (req_func_id[5:2] == 4'b1110));
 assign vSlide_en            = req_valid & (req_func_id[5:1] == 5'b00111);
-assign vMove_en             = req_valid & ((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3);
+assign vMove_en             = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
 
 assign vNarrow_en           = req_valid & (req_func_id == 6'b101100);
 assign vMerge_en            = req_valid & (req_func_id == 6'b010111) & ~req_mask;
@@ -148,7 +157,7 @@ assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2
 
 // FIXME
 assign vMoveXS_en           = req_valid & (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
-assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6);
+// assign vMoveSX_en           = req_valid & (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6);
 
 assign vSShift_en           = req_valid & (req_func_id[5:1] == 5'b10101) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
 assign vSMul_en             = req_valid & (req_func_id[5:1] == 5'b10011) & (req_op_mnr[1:0] == 2'h0);
@@ -282,7 +291,7 @@ generate
 
             assign vMul_vec0    = vShiftR64 ? vShift_upper : req_data1;
 
-            assign vShift_inShift = vShiftR64 ? req_data0[6:0] : 'h0;
+            assign vShift_inShift = vShiftR64 ? req_data0[5:0] - 7 : 'h0; // upper bits shift by 0-25 bits
         end else begin
             assign vShiftR64    = 'b0;
             assign vShift_orTop = 'b0;
@@ -308,7 +317,7 @@ generate
 
         assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data0 : vShift_mult_sew[req_sew];
 
-        assign vMul_opSel  = (req_func_id[5:2] == 4'b1001) ? req_func_id[1:0] : ((req_func_id == 6'b110101) ? (2'b01) : {req_func_id[0],0});
+        assign vMul_opSel  = (req_func_id[5:2] == 4'b1001 | req_func_id == 6'b110101) ? req_func_id[1:0] : {req_func_id[0],0};
     end
     else begin
         assign vMul_vec1    = req_data0;
@@ -611,7 +620,7 @@ generate
             .clk      (clk              ),
             .rst      (rst              ),
             .in_vec0  ((vMoveXS_en | req_whole_reg) ? req_data1 : req_data0),
-            .in_valid (vMove_en | vMoveSX_en | vMoveXS_en),
+            .in_valid (vMove_en         ),
             .in_addr  (req_addr         ),
             .in_w_reg (req_whole_reg    ),
             .in_sca   (vMoveXS_en       ),
@@ -638,7 +647,11 @@ generate
             .v_d(vAAdd_vd | vMul_vd), .v_d1(vAAdd_vd1 | vMul_vd1), .v_d10(vAAdd_vd1 | vMul_vd10),
             .vec_out(fxp_out));
     end else begin
-        assign fxp_out = vAdd_outVec | vMul_outVec;
+        // need 1 cycle delay!
+        always @(posedge clk) begin
+            s6_fxp_out <= vAdd_outVec | vMul_outVec;
+        end
+        assign fxp_out = s6_fxp_out;
     end
 endgenerate
 
@@ -653,6 +666,7 @@ always @(posedge clk) begin
         s3_be           <= 'b0;
         s4_be           <= 'b0;
         s5_be           <= 'b0;
+        s6_be           <= 'b0;
 
         s0_vl           <= 'b0;
         s1_vl           <= 'b0;
@@ -660,7 +674,45 @@ always @(posedge clk) begin
         s3_vl           <= 'b0;
         s4_vl           <= 'b0;
         s5_vl           <= 'b0;
+        s6_vl           <= 'b0;
         turn            <= 'b0;
+        req_vl_out      <= 'b0;
+
+        s0_start        <= 'b0;
+        s1_start        <= 'b0;
+        s2_start        <= 'b0;
+        s3_start        <= 'b0;
+        s4_start        <= 'b0;
+        s5_start        <= 'b0;
+        s6_start        <= 'b0;
+        resp_start      <= 'b0;
+
+        s0_end          <= 'b0;
+        s1_end          <= 'b0;
+        s2_end          <= 'b0;
+        s3_end          <= 'b0;
+        s4_end          <= 'b0;
+        s5_end          <= 'b0;
+        s6_end          <= 'b0;
+        resp_end        <= 'b0;
+
+        s0_off          <= 'b0;
+        s1_off          <= 'b0;
+        s2_off          <= 'b0;
+        s3_off          <= 'b0;
+        s4_off          <= 'b0;
+        s5_off          <= 'b0;
+        s6_off          <= 'b0;
+        resp_off        <= 'b0;
+
+        s6_mask_out     <= 'b0;
+        resp_mask_out   <= 'b0;
+
+        s6_sca_out      <= 'b0;
+        resp_sca_out    <= 'b0;
+
+        s6_whole_reg    <= 'b0;
+        resp_whole_reg  <= 'b0;
     end
     else begin
         s0_vl           <= req_vl;
@@ -669,7 +721,8 @@ always @(posedge clk) begin
         s3_vl           <= s2_vl;
         s4_vl           <= s3_vl;
         s5_vl           <= s4_vl;
-        req_vl_out      <= s5_vl;
+        s6_vl           <= s5_vl;
+        req_vl_out      <= s6_vl;
 
         s0_vxrm         <= req_vxrm;
         s1_vxrm         <= s0_vxrm;
@@ -692,7 +745,8 @@ always @(posedge clk) begin
         s3_start        <= s2_start;
         s4_start        <= s3_start;
         s5_start        <= s4_start;
-        resp_start      <= s5_start;
+        s6_start        <= s5_start;
+        resp_start      <= s6_start;
 
         s0_end          <= req_end & req_valid;
         s1_end          <= s0_end;
@@ -700,7 +754,8 @@ always @(posedge clk) begin
         s3_end          <= s2_end;
         s4_end          <= s3_end;
         s5_end          <= s4_end;
-        resp_end        <= s5_end;
+        s6_end          <= s5_end;
+        resp_end        <=  s6_end;
 
         s0_off          <= req_valid ? req_off : 'h0;
         s1_off          <= s0_off;
@@ -708,27 +763,35 @@ always @(posedge clk) begin
         s3_off          <= s2_off;
         s4_off          <= s3_off;
         s5_off          <= s4_off;
-        resp_off        <= s5_off;
+        s6_off          <= s5_off;
+        resp_off        <= s6_off;
 
-        req_be_out      <=  vSlide_outBe        | s5_be         | vNarrow_be        | vMCmp_outBe;
+        s6_be           <=  vSlide_outBe        | s5_be         | vNarrow_be        | vMCmp_outBe;
+        req_be_out      <=  s6_be;
 
-        resp_valid      <= vMove_outValid       | vAdd_outValid | vAndOrXor_outValid| vMul_outValid         | vSlide_outValid           | vNarrow_outValid
+        s6_valid        <= vMove_outValid       | vAdd_outValid | vAndOrXor_outValid| vMul_outValid         | vSlide_outValid           | vNarrow_outValid
                             | vMerge_outValid   | vMOP_outValid | vPopc_outValid    | vRedAndOrXor_outValid | vRedSum_min_max_outValid
                             | vID_outValid      | vFirst_outValid;
+        resp_valid      <= s6_valid;
 
-        resp_data       <= vMove_outVec         | fxp_out       | vAndOrXor_outVec  | vSlide_outVec         | vNarrow_outVec
+        s6_data         <= vMove_outVec         | vAndOrXor_outVec  | vSlide_outVec         | vNarrow_outVec
                             | vMerge_outVec     | vMOP_outVec   | vPopc_outVec      | vRedAndOrXor_outVec   | vRedSum_min_max_outVec
                             | vID_outVec        | vFirst_outVec;
+        resp_data       <= s6_data | fxp_out;
 
-        req_addr_out    <= vMove_outAddr        | vAdd_outAddr  | vAndOrXor_outAddr | vMul_outAddr          | vSlide_outAddr            | vNarrow_outAddr
+        s6_addr         <= vMove_outAddr        | vAdd_outAddr  | vAndOrXor_outAddr | vMul_outAddr          | vSlide_outAddr            | vNarrow_outAddr
                             | vMerge_outAddr    | vMOP_outAddr  | vPopc_outAddr     | vRedAndOrXor_outAddr  | vRedSum_min_max_outAddr
                             | vID_outAddr       | vFirst_outAddr;
+        req_addr_out    <= s6_addr;
 
-        resp_mask_out   <= vMOP_outValid        | (vAdd_outValid & vAdd_outMask);
+        s6_mask_out     <= vMOP_outValid        | (vAdd_outValid & vAdd_outMask);
+        resp_mask_out   <= s6_mask_out;
 
-        resp_sca_out    <= vFirst_outValid      | vPopc_outValid | vMove_outSca;
+        s6_sca_out      <= vFirst_outValid      | vPopc_outValid | vMove_outSca;
+        resp_sca_out    <= s6_sca_out;
 
-        resp_whole_reg  <= vMove_outWReg;
+        s6_whole_reg    <= vMove_outWReg;
+        resp_whole_reg  <= s6_whole_reg;
 
         if(req_end)
             turn        <= 'b0;
