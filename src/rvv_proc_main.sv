@@ -30,14 +30,15 @@
 `define NARROW_ENABLE     1 // a2
 `define REDUCTION_ENABLE  1 // a3
 `define MULT_ENABLE       1 // a4
-`define SHIFT_ENABLE      1 
-`define MULH_SR_32_ENABLE 1 // a5
-`define SLIDE_N_ENABLE    1 // a6
-`define MULT64_ENABLE     1 // a7
-`define FXP_ENABLE        1 // a8
-`define SHIFT64_ENABLE    1 // a9
+`define SHIFT_ENABLE      1
+`define MULH_SR_ENABLE    0 // a4b
+`define MULH_SR_32_ENABLE 0 // a5
+`define SLIDE_N_ENABLE    0 // a6
+`define MULT64_ENABLE     0 // a7
+`define SHIFT64_ENABLE    0 
 
-`define MASK_ENABLE       1 // b1
+`define FXP_ENABLE        0 // a8
+`define MASK_ENABLE       0 // b1
 
 
 module rvv_proc_main #(
@@ -88,7 +89,6 @@ module rvv_proc_main #(
     wire  [          DW_B-1:0]  vr_in_en;
     
     wire  [          DW_B-1:0]  vmask_ext;
-    // reg   [        VLEN_B-1:0]  vm_0; // The currently set mask based on the mask ops before
 
     wire                        vm_rd_en_1;
     wire                        vm_rd_en_2;
@@ -128,7 +128,6 @@ module rvv_proc_main #(
     wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_2; 
 
     reg   [    INSN_WIDTH-1:0]  insn_in_f;
-    // reg                         insn_valid_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_1_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_2_f;
     reg   [               1:0]  vxrm_in_f;
@@ -341,8 +340,8 @@ module rvv_proc_main #(
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(8),
             .AND_OR_XOR_ENABLE(`AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(`ADD_SUB_ENABLE),.MIN_MAX_ENABLE(`MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(`VEC_MOVE_ENABLE),
-            .WIDEN_ENABLE(`WIDEN_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE), .MULT64_ENABLE(`MULT64_ENABLE),
-            .SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE),.FXP_ENABLE(`FXP_ENABLE))
+            .WIDEN_ENABLE(`WIDEN_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),.MULH_SR_ENABLE(`MULH_SR_ENABLE),.MULH_SR_32_ENABLE(`MULH_SR_32_ENABLE), 
+            .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),.SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE),.FXP_ENABLE(`FXP_ENABLE))
             alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg), .req_vxrm (vxrm_in_d),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .resp_mask_out(alu_mask_out), .req_be_out(alu_be_out),
@@ -356,12 +355,17 @@ module rvv_proc_main #(
         insn_in_f       <= rst_n ? (stall ? insn_in_f : (insn_valid ? insn_in : 'h0)) : 'h0;
         data_in_1_f     <= (stall ? data_in_1_f : vexrv_data_in_1);
         data_in_2_f     <= (stall ? data_in_2_f : vexrv_data_in_2);
-        vxrm_in_f       <= (stall ? vxrm_in_f   : vxrm_in[1:0]);
+    end
+
+    if (`FXP_ENABLE) begin : vxrm
+        always @(posedge clk) begin
+            vxrm_in_f       <= (stall ? vxrm_in_f   : vxrm_in[1:0]);
+        end
     end
 
     // Hazard COUNT? IS THAT TOO MUCH?
     generate
-        for (i = 0; i < NUM_VEC; i=i+1) begin
+        for (i = 0; i < NUM_VEC; i=i+1) begin : haz_logic
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest == i) & ((opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | en_req_mem);
             assign vec_haz_clr[i] = (dest_m == i & en_ld & mem_port_done_ld) |
@@ -694,11 +698,11 @@ module rvv_proc_main #(
             opcode_mnr_d    <= 'h0;
             dest_d          <= 'h0;
             lumop_d         <= 'h0;
-            // width_d         <= 'h0;
+
             funct6_d        <= 'h0;
             vm_d            <= 'b1; // unmasked by default
             ld_valid        <= 'h0;
-            // avl_d           <= 'h0; // FIXME
+
             sca_data_in_1_d <= 'h0;
             sca_data_in_2_d <= 'h0;
             mem_addr_in_d   <= 'b0;
@@ -708,19 +712,19 @@ module rvv_proc_main #(
             out_ack_m       <= 'b0;
 
             dest_m          <= 'h0;
-            // width_m         <= 'h0;
+
             lumop_m         <= 'h0;
         end else begin
             // all stalling should happen here
             opcode_mjr_d    <= ~stall ? opcode_mjr  : (no_bubble ? opcode_mjr_d : 'h0);
             opcode_mnr_d    <= ~stall ? opcode_mnr  : (no_bubble ? opcode_mnr_d : 'h0);
             dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
-            // width_d         <= ~stall ? width       : (no_bubble ? width_d      : 'h0);
+
             lumop_d         <= ~stall ? src_2       : (no_bubble ? lumop_d      : 'h0);
             mop_d           <= ~stall ? mop         : (no_bubble ? mop_d        : 'h0);
             funct6_d        <= ~stall ? funct6      : (no_bubble ? funct6_d     : 'h0);
             vm_d            <= ~stall ? vm          : (no_bubble ? vm_d         : 'b1);
-            // avl_d           <= ~stall ? avl         : avl_d;
+
             sca_data_in_1_d <= ~stall ? sca_data_in_1 : (no_bubble ? sca_data_in_1_d : 'h0);
             sca_data_in_2_d <= ~stall ? sca_data_in_2 : (no_bubble ? sca_data_in_2_d : 'h0);
 
@@ -736,7 +740,7 @@ module rvv_proc_main #(
             // hold these values until we get a response
             opcode_mjr_m    <= wait_mem & ~mem_port_done_ld ? opcode_mjr_m : opcode_mjr_d;
             dest_m          <= wait_mem ? dest_m    : dest_d;
-            // width_m         <= wait_mem ? width_m : width_d;
+
             lumop_m         <= wait_mem ? lumop_m   : lumop_d;
             mop_m           <= wait_mem ? mop_m     : mop_d;
             ld_valid        <= wait_mem;

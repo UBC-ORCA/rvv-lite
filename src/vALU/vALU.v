@@ -36,13 +36,15 @@ module vALU #(
     parameter NARROW_ENABLE     = 1 ,
     parameter REDUCTION_ENABLE  = 1 ,
     parameter MULT_ENABLE       = 1 ,
-    parameter MULT64_ENABLE     = 1 ,
     parameter SHIFT_ENABLE      = 1 ,
+    parameter MULH_SR_ENABLE    = 1 ,
+    parameter MULH_SR_32_ENABLE = 1 ,
     parameter SLIDE_ENABLE      = 1 ,
     parameter SLIDE_N_ENABLE    = 1 ,
+    parameter MULT64_ENABLE     = 1 ,
+    parameter SHIFT64_ENABLE    = 1 ,
     parameter MASK_ENABLE       = 1 ,
-    parameter FXP_ENABLE        = 1 ,
-    parameter SHIFT64_ENABLE    = 1
+    parameter FXP_ENABLE        = 1 
 ) (
     input                              clk         ,
     input                              rst         ,
@@ -292,6 +294,22 @@ generate
             assign vMul_vec0    = vShiftR64 ? vShift_upper : req_data1;
 
             assign vShift_inShift = vShiftR64 ? req_data0[5:0] - 7 : 'h0; // upper bits shift by 0-25 bits
+
+            for (j = 0; j < 4; j = j + 1) begin
+                for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                    if (j < 3) begin
+                        assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                        // FIXME add "or top"
+                    end else begin
+                        assign vShift_cmpl_sew[j][i*64 +: 64] = (req_func_id[5:2] == 4'b1010)? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
+                    end
+                    assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+                end
+            end
+
+            assign vMul_vec1   = (req_func_id[5:2] == 4'b1001 & (req_op_mnr[1]^req_op_mnr[0] == 1'b1)) ? req_data0 : vShift_mult_sew[req_sew];
+
+            assign vMul_opSel  = (req_func_id[5:2] == 4'b1001 | req_func_id == 6'b110101) ? req_func_id[1:0] : {req_func_id[0],0};
         end else begin
             assign vShiftR64    = 'b0;
             assign vShift_orTop = 'b0;
@@ -299,25 +317,51 @@ generate
 
             assign vMul_vec0    = req_data1;
             assign vShift_inShift = 'h0;
-        end
-        // assign vShift_cmpl = req_sew[1] ? (req_sew[0] ? 7'd64 : 7'd32) : (req_sew[0] ? 7'd16 : 7'd8); // fixme - doesn't work for vv
-        // assign vShift_mult = (req_func_id[5:2] == 4'b1010) & ~(req_sew[1] & req_sew[1]) ? 2**(vShift_cmpl-req_data0[6:0]) : 2**(req_data0[6:0]);
 
-        for (j = 0; j < 4; j = j + 1) begin
-            for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                if (j < 3) begin
-                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
-                    // FIXME add "or top"
-                end else begin
-                    assign vShift_cmpl_sew[j][i*64 +: 64] = (req_func_id[5:2] == 4'b1010)? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
+            if (MULH_SR_32_ENABLE) begin : mulh_sr_32
+                for (j = 0; j < 3; j = j + 1) begin
+                    for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                        assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                        assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+                    end
                 end
-                assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+
+                assign vShift_cmpl_sew[3] = 'h0;
+                assign vShift_mult_sew[3] = 'h0;
+
+                assign vMul_vec1   = (req_func_id[5:2] == 4'b1001 & (req_op_mnr[1]^req_op_mnr[0] == 1'b1)) ? req_data0 : vShift_mult_sew[req_sew];
+
+                assign vMul_opSel  = (req_func_id[5:2] == 4'b1001 | req_func_id[5:2] == 5'b1110) ? req_func_id[1:0] : {req_func_id[0],0};
+            end else begin
+                if (MULH_SR_ENABLE) begin : mulh_sr
+                    for (j = 0; j < 2; j = j + 1) begin
+                        for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                            assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = (req_func_id[5:2] == 4'b1010)? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                            assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+                        end
+                    end
+
+                    for (i = 0; i < (REQ_DATA_WIDTH >> 5); i = i + 1) begin
+                        assign vShift_mult_sew[2] = 2**req_data0[(i << 5) +: 32];
+                    end
+                    assign vShift_mult_sew[3] = 'h0;
+
+                    assign vMul_vec1   = (req_func_id[5:2] == 4'b1001 & (req_op_mnr[1]^req_op_mnr[0] == 1'b1)) ? req_data0 : vShift_mult_sew[req_sew];
+
+                    assign vMul_opSel  = (req_func_id[5:2] == 4'b1001 | req_func_id[5:2] == 5'b1110) ? req_func_id[1:0] : {req_func_id[0],0};
+                end else begin
+                    for (j = 0; j < 3; j = j + 1) begin
+                        for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                            assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(req_data0[(i << (j+3)) +: (1 << (j+3))]);
+                        end
+                    end
+                    assign vShift_mult_sew[3] = 'h0;
+
+                    assign vMul_vec1   = (req_func_id[5:2] == 4'b1001 & (req_op_mnr[1]^req_op_mnr[0] == 1'b1)) ? req_data0 : vShift_mult_sew[req_sew];
+                    assign vMul_opSel  = req_func_id[1:0];
+                end
             end
         end
-
-        assign vMul_vec1   = (req_func_id[5:2] == 4'b1001) ? req_data0 : vShift_mult_sew[req_sew];
-
-        assign vMul_opSel  = (req_func_id[5:2] == 4'b1001 | req_func_id == 6'b110101) ? req_func_id[1:0] : {req_func_id[0],0};
     end
     else begin
         assign vMul_vec1    = req_data0;
@@ -398,8 +442,10 @@ generate
         vMul # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
-            .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
+            .REQ_ADDR_WIDTH (REQ_ADDR_WIDTH),
             .SEW_WIDTH      (SEW_WIDTH),
+            .MULH_SR_ENABLE (MULH_SR_ENABLE),
+            .MULH_SR_32_ENABLE(MULH_SR_32_ENABLE),
             .MUL64_ENABLE   (MULT64_ENABLE),
             .FXP_ENABLE     (FXP_ENABLE),
             .OPSEL_WIDTH    (2)
