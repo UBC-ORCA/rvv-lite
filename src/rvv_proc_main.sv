@@ -24,21 +24,20 @@
 `define ADD_SUB_ENABLE    1 // a1c
 `define MIN_MAX_ENABLE    1 // a1d
 `define VEC_MOVE_ENABLE   1 // a1e
-`define SLIDE_ENABLE      1
+`define SLIDE_ENABLE      1  //--
 `define LDST_WHOLE_ENABLE 1 // a1f
 `define WIDEN_ENABLE      1 // a2
 `define NARROW_ENABLE     1 // a2
 `define REDUCTION_ENABLE  1 // a3
 `define MULT_ENABLE       1 // a4
 `define SHIFT_ENABLE      1
-`define MULH_SR_ENABLE    0 // a4b
-`define MULH_SR_32_ENABLE 0 // a5
-`define SLIDE_N_ENABLE    0 // a6
-`define MULT64_ENABLE     0 // a7
-`define SHIFT64_ENABLE    0 
-
-`define FXP_ENABLE        0 // a8
-`define MASK_ENABLE       0 // b1
+`define MULH_SR_ENABLE    1 // a4b
+`define MULH_SR_32_ENABLE 1 // a5
+`define SLIDE_N_ENABLE    1 // a6
+`define MULT64_ENABLE     1 // a7
+`define SHIFT64_ENABLE    1 
+`define FXP_ENABLE        1 // a8
+`define MASK_ENABLE       1 // b1
 
 
 module rvv_proc_main #(
@@ -335,7 +334,7 @@ module rvv_proc_main #(
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(data_in_1_f), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
+        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(8),
@@ -383,12 +382,14 @@ module rvv_proc_main #(
     assign haz_src1         = vec_haz[src_1] & en_vs1;
     assign haz_src2         = vec_haz[src_2] & en_vs2;
 
+    assign wait_cfg         = (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE);
+
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
 
     // Just stall for WAW hazards for now
     // wait_mem included because the memory port can only handle one transaction at a time
-    assign stall    = ~rst_n | (hold_reg_group & (|reg_count)) | haz_src1 | haz_src2 | haz_dest | wait_mem;
+    assign stall    = ~rst_n | (hold_reg_group & (|reg_count)) | haz_src1 | haz_src2 | haz_dest | wait_mem | wait_cfg;
 
     assign proc_rdy = ~stall;
     // ----------------------------------------- VTYPE CONTROL SIGNALS -------------------------------------------------------------------
