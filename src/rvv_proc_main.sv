@@ -29,9 +29,9 @@
 `define MULT_ENABLE       1 // a4a
 `define SHIFT_ENABLE      1
 `define MULH_SR_ENABLE    1 // a4b
-`define MULH_SR_32_ENABLE 1 // a5a
-`define WIDEN_MUL_ENABLE  0 // a5b
-`define NARROW_ENABLE     0 
+`define MULH_SR_32_ENABLE 1 // a5a  6,701, 171.6
+`define WIDEN_MUL_ENABLE  1 // a5b  6,839, 
+`define NARROW_ENABLE     1 
 `define SLIDE_N_ENABLE    0 // a6
 `define MULT64_ENABLE     0 // a7
 `define SHIFT64_ENABLE    0 
@@ -284,6 +284,9 @@ module rvv_proc_main #(
     wire  [          DW_B-1:0]  gen_avl_be;
     reg                  [2:0]  mask_off [0:3];
 
+    wire                        widen_en;
+    reg                         widen_en_d;
+
     genvar i,j;
     integer k;
 
@@ -296,8 +299,8 @@ module rvv_proc_main #(
         .width(width), .mop(mop), .mew(mew), .nf(nf), .vtype_11(vtype_11), .vtype_10(vtype_10), .vm(vm), .funct6(funct6), .cfg_type(cfg_type));
 
     // TODO: figure out how to make this single cycle, so we can fully pipeline lol
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(widen_en | widen_en_d));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(widen_en | widen_en_d));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),                      .sew(alu_resp_sew),         .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out),        .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(ld_valid&mem_port_valid_in), .sew(sew),                  .whole_reg(whole_reg_ld),.addr_in(dest_m),               .addr_out(vr_ld_addr),  .max_reg_in(wait_mem_mask ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),    .idle(agu_idle_ld));
 
@@ -398,6 +401,13 @@ module rvv_proc_main #(
     assign cfg_en    = (opcode_mjr == `OP_INSN && opcode_mnr == `CFG_TYPE);
     assign avl_set   = {(dest == 'h0),(src_1 == 'h0)}; // determines if rd and rs1 are non-zero, as AVL setting depends on this
 
+
+    if (WIDEN_ADD_ENABLE | WIDEN_MUL_ENABLE) begin
+        assign widen_en  = (opcode_mjr == `OP_INSN && opcode_mnr != `CFG_TYPE && (&funct6[5:4] & ~funct6[2]));
+    end else begin
+        assign widen_en  = 0;
+    end
+
     assign avl_eff   = avl - 1;
 
     generate
@@ -436,7 +446,7 @@ module rvv_proc_main #(
     assign s_ext_imm = {{(DATA_WIDTH-5){src_1[4]}}, src_1};
     assign alu_vr_idx_next = (|reg_count)    ? alu_vr_idx + 1 : 0;
 
-    assign reg_count_avl = (whole_reg_rd ? VLEN_B - 1 : avl_eff);
+    assign reg_count_avl = (whole_reg_rd ? VLEN_B - 1 : (widen_en ? 2*avl_eff : avl_eff));
 
     always @(posedge clk) begin
         if (~rst_n) begin
@@ -730,6 +740,8 @@ module rvv_proc_main #(
             sca_data_in_2_d <= ~stall ? sca_data_in_2 : (no_bubble ? sca_data_in_2_d : 'h0);
 
             vxrm_in_d       <= ~stall ? vxrm_in_f   : (no_bubble ? vxrm_in_d    : 'h0);
+
+            widen_en_d      <= ~stall ? widen_en    : (no_bubble ? widen_en_d   : 'h0);
 
             mem_port_req_out<= ~stall ? en_req_mem : (no_bubble & mem_port_req_out);
             mem_addr_in_d   <= ~stall ? data_in_1_f : (no_bubble ? (mem_addr_in_d + DW_B) : 'h0);
