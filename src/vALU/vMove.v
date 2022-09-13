@@ -76,9 +76,10 @@ module vMove #(
 			s4_valid 	<= s3_valid;
 			out_valid  	<= s4_valid;
 
-          	for (i = 0; i < REQ_BE_DATA_WIDTH; i = i + 1) begin
-          		s0_out_vec[i*8 +: 8] 	<= in_valid & in_be[i] ? in_vec0[i*8 +: 8] : 'h0;
-          	end
+          	// for (i = 0; i < REQ_BE_DATA_WIDTH; i = i + 1) begin
+          		// s0_out_vec[i*8 +: 8] 	<= in_valid & in_be[i] ? in_vec0[i*8 +: 8] : 'h0;
+          	// end
+          	s0_out_vec	<= in_valid ? in_vec0 : 'b0;
 			s1_out_vec 	<= s0_out_vec;
 			s2_out_vec 	<= s1_out_vec;
 			s3_out_vec 	<= s2_out_vec;

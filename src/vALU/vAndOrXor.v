@@ -11,9 +11,13 @@ module vAndOrXor #(
 	input      	[ REQ_DATA_WIDTH-1:0] 	in_vec1 ,
 	input                              	in_valid,
 	input      	[	 OPSEL_WIDTH-1:0] 	in_opSel, //01=and,10=or,11=xor
-	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec,
+	input 								in_sca	,
+	input 								in_w_reg,
+	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec ,
 	output reg							out_valid,
-	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr
+	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr,
+	output reg 						 	out_w_reg,
+	output reg 						 	out_sca
 	);
 
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s0_vec1;
@@ -21,6 +25,10 @@ module vAndOrXor #(
 	reg [RESP_DATA_WIDTH-1:0] s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
 	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
 	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
+
+	// for vMove
+	reg 						s0_w_reg, s1_w_reg, s2_w_reg, s3_w_reg, s4_w_reg;
+  	reg 						s0_sca, s1_sca, s2_sca, s3_sca, s4_sca;
 
 	always @(posedge clk) begin
 		if(rst) begin
@@ -46,6 +54,20 @@ module vAndOrXor #(
 			s3_out_addr <= 'b0;
 			s4_out_addr <= 'b0;
 			out_addr 	<= 'b0;
+
+			s0_w_reg 	<= 'b0;
+			s1_w_reg 	<= 'b0;
+			s2_w_reg 	<= 'b0;
+			s3_w_reg 	<= 'b0;
+			s4_w_reg 	<= 'b0;
+            out_w_reg  	<= 'b0;
+
+            s0_sca	 	<= 'b0;
+			s1_sca	 	<= 'b0;
+			s2_sca	 	<= 'b0;
+			s3_sca	 	<= 'b0;
+			s4_sca	 	<= 'b0;
+            out_sca	  	<= 'b0;
 		end
 
 		else begin
@@ -76,6 +98,20 @@ module vAndOrXor #(
 			s3_out_addr <= s2_out_addr;
 			s4_out_addr <= s3_out_addr;
 			out_addr 	<= s4_out_addr;
+
+			s0_w_reg 	<= in_w_reg & in_valid;
+			s1_w_reg 	<= s0_w_reg;
+			s2_w_reg 	<= s1_w_reg;
+			s3_w_reg 	<= s2_w_reg;
+			s4_w_reg 	<= s3_w_reg;
+			out_w_reg  	<= s4_w_reg;
+
+			s0_sca 		<= in_sca & in_valid;
+			s1_sca 		<= s0_sca;
+			s2_sca 		<= s1_sca;
+			s3_sca 		<= s2_sca;
+			s4_sca 		<= s3_sca;
+			out_sca  	<= s4_sca;
 		end
 	end
 

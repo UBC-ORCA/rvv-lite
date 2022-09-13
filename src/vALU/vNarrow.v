@@ -85,10 +85,6 @@ module vNarrow #(
 				default: 	s1_vec0 <= s0_vec0;
 			endcase
 
-			// s1_vec0 	<= s0_turn 	? (s0_sew[1]	? (s0_sew[0] ? {s0_vec0[31:0],32'b0} : {s0_vec0[47:32],s0_vec0[15:0],32'b0})
-			// 	: (s0_sew[0] ? {s0_vec0[55:48],s0_vec0[39:32],s0_vec0[23:16],s0_vec0[7:0],32'b0} : s0_vec0))
-			// :  (s0_sew[1]	? (s0_sew[0] ? {32'b0,s0_vec0[31:0]} : {32'b0,s0_vec0[47:32],s0_vec0[15:0]})
-			// 	: (s0_sew[0] ? {32'b0,s0_vec0[55:48],s0_vec0[39:32],s0_vec0[23:16],s0_vec0[7:0]} : s0_vec0));
 			s2_vec0 	<= s1_vec0;
 			s3_vec0 	<= s2_vec0;
 			s4_vec0 	<= s3_vec0;

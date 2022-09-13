@@ -10,6 +10,7 @@ module vMul #(
 	parameter OPSEL_WIDTH     	= 2 , 
 	parameter MULH_SR_ENABLE    = 0 ,
     parameter MULH_SR_32_ENABLE = 0 ,
+    parameter WIDEN_MUL_ENABLE  = 0 ,
     parameter MUL64_ENABLE    	= 0 ,
     parameter SHIFTR64_ENABLE 	= 0 ,
 	parameter FXP_ENABLE		= 0 
@@ -49,11 +50,11 @@ module vMul #(
 	wire signed [70:0] 	w_add1;
 
 	//Registers
-	reg signed [17:0] 	s4_b5, s4_b4, s4_b3, s4_b2;
+	reg signed [16:0] 	s4_b5, s4_b4, s4_b3, s4_b2;
 
 	reg signed [32:0] 	s4_h0, s4_h1, s4_h2, s4_h3;
 
-	reg signed [66:0] 	s4_w0, s4_w1;
+	reg signed [64:0] 	s4_w0, s4_w1;
 
 	reg signed[70:0] 	s4_d0;
 
@@ -66,6 +67,8 @@ module vMul #(
 	reg                 		s0_sr_64, s1_sr_64, s2_sr_64, s3_sr_64, s4_sr_64;
 	reg                 		s0_or_top, s1_or_top, s2_or_top, s3_or_top, s4_or_top;
 	reg 						s0_vd10, s1_vd10, s2_vd10, s3_vd10, s4_vd10; // for 64-bit
+
+	reg							s0_widen, s1_widen, s2_widen, s3_widen, s4_widen;
 
 	reg signed [		24:0] 	s0_top_bits, s1_top_bits; // keep signed for sra
 	reg [ 				24:0]	s2_top_bits, s3_top_bits, s4_top_bits;
@@ -204,6 +207,28 @@ generate
 			end
 		end
 	end
+
+	// if (WIDEN_MUL_ENABLE) begin
+		always @(posedge clk) begin
+			if (rst) begin
+				s0_widen 	<= 0;
+				s1_widen 	<= 0;
+				s2_widen 	<= 0;
+				s3_widen 	<= 0;
+				s4_widen 	<= 0;
+			end else begin
+				s0_widen 	<= in_valid & in_widen;
+				s1_widen 	<= s0_widen;
+				s2_widen 	<= s1_widen;
+				s3_widen 	<= s2_widen;
+				s4_widen 	<= s3_widen;
+			end
+		end
+	// end else begin
+		// always @(posedge clk) begin
+			// s4_widen 	<= 0;
+		// end
+	// end
 endgenerate
 
 	always @(posedge clk) begin
@@ -227,29 +252,11 @@ endgenerate
 			s4_valid  	<= 'b0;
 			out_valid 	<= 'b0;
 
-			s0_or_top 	<= 'b0;
-			s1_or_top 	<= 'b0;
-			s2_or_top 	<= 'b0;
-			s3_or_top 	<= 'b0;
-			s4_or_top 	<= 'b0;
-
 			s0_sew    	<= 'b0;
 			s1_sew    	<= 'b0;
 			s2_sew    	<= 'b0;
 			s3_sew    	<= 'b0;
 			s4_sew    	<= 'b0;
-
-			s0_fxp_s   	<= 'b0;
-			s1_fxp_s   	<= 'b0;
-			s2_fxp_s   	<= 'b0;
-			s3_fxp_s   	<= 'b0;
-			s4_fxp_s   	<= 'b0;
-
-			s0_fxp_mul 	<= 'b0;
-			s1_fxp_mul 	<= 'b0;
-			s2_fxp_mul 	<= 'b0;
-			s3_fxp_mul 	<= 'b0;
-			s4_fxp_mul 	<= 'b0;
 
 			s0_out_addr	<= 'b0;
 			s1_out_addr <= 'b0;
@@ -257,9 +264,7 @@ endgenerate
 			s3_out_addr <= 'b0;
 			s4_out_addr <= 'b0;
 			out_addr	<= 'b0;
-		end
-
-		else begin
+		end else begin
 			s4_b2     	<= m2_p1;
 			s4_b3     	<= m2_p0;
 			s4_b4     	<= m1_p1;
@@ -299,21 +304,39 @@ endgenerate
 
 	generate
 		if (MULH_SR_ENABLE) begin
-			always @(posedge clk) begin
-				if(rst) begin
-					s0_lsb    	<= 'b0;
-					s1_lsb    	<= 'b0;
-					s2_lsb    	<= 'b0;
-					s3_lsb    	<= 'b0;
-					s4_lsb    	<= 'b0;
-				end else begin
-					s0_lsb    	<= (~in_opSel[1] & in_opSel[0] & ~in_widen) & in_valid;
-					s1_lsb    	<= s0_lsb;
-					s2_lsb    	<= s1_lsb;
-					s3_lsb    	<= s2_lsb;
-					s4_lsb    	<= s3_lsb;
+			// if (WIDEN_MUL_ENABLE) begin
+				always @(posedge clk) begin
+					if(rst) begin
+						s0_lsb    	<= 'b0;
+						s1_lsb    	<= 'b0;
+						s2_lsb    	<= 'b0;
+						s3_lsb    	<= 'b0;
+						s4_lsb    	<= 'b0;
+					end else begin
+						s0_lsb    	<= (~in_opSel[1] & in_opSel[0] & ~in_widen) & in_valid;
+						s1_lsb    	<= s0_lsb;
+						s2_lsb    	<= s1_lsb;
+						s3_lsb    	<= s2_lsb;
+						s4_lsb    	<= s3_lsb;
+					end
 				end
-			end
+			// end else begin
+			// 	always @(posedge clk) begin
+			// 		if(rst) begin
+			// 			s0_lsb    	<= 'b0;
+			// 			s1_lsb    	<= 'b0;
+			// 			s2_lsb    	<= 'b0;
+			// 			s3_lsb    	<= 'b0;
+			// 			s4_lsb    	<= 'b0;
+			// 		end else begin
+			// 			s0_lsb    	<= (~in_opSel[1] & in_opSel[0]) & in_valid;
+			// 			s1_lsb    	<= s0_lsb;
+			// 			s2_lsb    	<= s1_lsb;
+			// 			s3_lsb    	<= s2_lsb;
+			// 			s4_lsb    	<= s3_lsb;
+			// 		end
+			// 	end
+			// end
 		end
 
 		if (FXP_ENABLE) begin : fxp_shift_mul
@@ -337,19 +360,19 @@ endgenerate
 					s3_fxp_mul 	<= 'b0;
 					s4_fxp_mul 	<= 'b0;
 				end else begin
-					s0_or_top 	<= in_valid ? in_or_top : 'b0;
+					s0_or_top 	<= in_valid & in_or_top;
 					s1_or_top 	<= s0_or_top;
 					s2_or_top 	<= s1_or_top;
 					s3_or_top 	<= s2_or_top;
 					s4_or_top 	<= s3_or_top;
 
-					s0_fxp_s    <= in_valid ? in_fxp_s : 'b0;
+					s0_fxp_s    <= in_valid & in_fxp_s;
 					s1_fxp_s    <= s0_fxp_s;
 					s2_fxp_s    <= s1_fxp_s;
 					s3_fxp_s    <= s2_fxp_s;
 					s4_fxp_s    <= s3_fxp_s;
 
-					s0_fxp_mul	<= in_valid ? in_fxp_mul : 'b0;
+					s0_fxp_mul	<= in_valid & in_fxp_mul;
 					s1_fxp_mul	<= s0_fxp_mul;
 					s2_fxp_mul	<= s1_fxp_mul;
 					s3_fxp_mul	<= s2_fxp_mul;
@@ -440,7 +463,7 @@ endgenerate
 					endcase
 				end
 			end
-		end else begin
+		end else begin // Not FXP
 			if(MUL64_ENABLE) begin : mul64
 				always @(posedge clk) begin
 					if(rst) begin
@@ -466,7 +489,7 @@ endgenerate
 					out_vd1 <= 'b0;
 					out_vd10<= 'b0;
 				end
-			end else begin
+			end else begin // No 64b MUL
 				if (MULH_SR_32_ENABLE) begin : mulh_sr_32
 					always @(posedge clk) begin
 						if(rst) begin
@@ -479,6 +502,7 @@ endgenerate
 								'b01 : out_vec <= s4_lsb ? {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]} :
 													{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
 								'b10 : out_vec <= s4_lsb ? {s4_w1[31:0], s4_w0[31:0]} : {s4_w1[63:32], s4_w0[63:32]};
+								'b11 : out_vec <= s4_widen ? s4_w1[63:0] : 'h0;
 								default : out_vec 	<= 'h0;
 							endcase
 						end
