@@ -3,39 +3,13 @@
 #include <cstdlib>
 #include <assert.h>
 
+#include "base.h"
+#include "menu.h"
+#include "riscv.h"
+
+#include "perf.h"
+
 #include "mm.h"
-
-int32_t* matrix_multiply_riscv_int(int32_t* A, int32_t* B, int N) {
-	vint32m8_t vA, vB, vC;
-	
-	int32_t* C = (int32_t*) calloc(N * N, sizeof(int32_t));
-	int value;
-	
-	int stride;
-
-	if (N >= 8) {
-		stride = 8;
-	} else {
-		stride = N;
-	}
-
-	for (int i = 0; i < N; i++) {
-		for (int k = 0; k < N; k++) {
-			value = A[i * N + k];
-			for (int j = 0; j < N; j+=stride) {
-				// C[i * N + j] += A[i * N + k] * B[k * N + j];	
-
-				vB = vle32_v_i32m8(&B[k * N + j], stride);
-				vC = vle32_v_i32m8(&C[i * N + j], stride);
-
-				// accumulator, constant, vector, number of elements
-				vC = vmacc_vx_i32m8(vC, value, vB, stride);
-				vse32_v_i32m8(&C[i * N + j], vC, stride);
-			}
-		}
-	}
-	return C;
-}
 
 void print_matrix_int(int32_t* A, int N) {
 	for (int i = 0; i < N; i++) {
@@ -47,7 +21,7 @@ void print_matrix_int(int32_t* A, int N) {
 }
 
 int32_t* random_matrix_int(int N) {
-	int32_t* A = (int32_t*)calloc(N * N, sizeof(int));
+	int32_t A [N * N];
 	for (int i = 0; i < N; i++) {
 		for (int j = 0; j < N; j++) {
 			A[i * N + j] = rand() % 5;	
@@ -56,52 +30,74 @@ int32_t* random_matrix_int(int N) {
 	return A;
 }
 
-int32_t* mm_scalar_int(int32_t* A, int32_t* B, int N) {
-	int32_t* C = (int32_t*)calloc(N * N, sizeof(int));
-	int value;
+void check_mm_equal_int(int32_t* rvv_mm, int32_t* scalar_mm, int N) {
+	int err = 0;
+	for (int i = 0; i < N; i++) {
+		for (int j = 0; j < N; j++) {
+			if (rvv_mm[i * N + j] - scalar_mm[i * N + j] != 0) err++;
+
+			if (rvv_mm[i*N+j] != scalar_mm[i*N+j] & err < 15) printf("Got %x, expected %x\n", rvv_mm[i*N+j], scalar_mm[i*N+j]);
+		}
+	}
+	if (err > 0)	printf("Failed with %d errors\n.", err);
+	else	printf("Correct values from the matrix multiplication.\n");
+}
+
+void rvv_mm_test() {
+	int N = 64;
+	printf("performing integer matrix mulitplication... \n");
+    int32_t* A = random_matrix_int(N);
+	int32_t* B = random_matrix_int(N);
+
+	int start = perf_get_mcycle();
+ 	// so gcc stops reordering it
+	int32_t D [N * N] = {0};
+	int32_t value;
 	for (int i = 0; i < N; i++) {
 		for (int k = 0; k < N; k++) {
 			value = A[i * N + k]; 
 			for (int j = 0; j < N; j++) {
-				C[i * N + j] += value * B[k * N + j];
+				D[i * N + j] += value * B[k * N + j];
 			}
 		}
 	}
-	return C;
-}
 
-void check_mm_equal_int(int32_t* rvv_mm, int32_t* scalar_mm, int N) {
+	int end = perf_get_mcycle();
+
+	vint32m4_t vA, vB, vC, vTmp;
+	
+	int32_t C [N * N] = {0};
+	
+	int stride = N;
+
+	int start_v = perf_get_mcycle();
+
+	vsetvl_e32m4(stride);
+
+	// vC = vmv_v_x_i32m4(0,stride);
+
 	for (int i = 0; i < N; i++) {
-		for (int j = 0; j < N; j++) {
-			assert(rvv_mm[i * N + j] - scalar_mm[i * N + j] == 0);		
+		for (int k = 0; k < N; k++) {
+			value = A[i * N + k];
+			for (int j = 0; j < N; j+=stride) {
+				// C[i * N + j] += A[i * N + k] * B[k * N + j];	
+
+				vB = vle32_v_i32m4(&B[k * N + j], stride);
+				vC = vle32_v_i32m4(&C[i * N + j], stride);
+
+				// accumulator, constant, vector, number of elements
+				vTmp = vmul_vx_i32m4(vB, value, stride);
+				vC = vadd_vv_i32m4(vC, vTmp, stride);
+
+				vse32_v_i32m4(&C[i * N + j], vC, stride);
+			}
 		}
 	}
-	printf("Correct values from the matrix multiplication.\n");
-}
-
-int rvv_mm_test() {
-	int N = 16;
-	printf("performing integer matrix mulitplication... \n");
-    int32_t* A = random_matrix_int(N);
-	int32_t* B = random_matrix_int(N);
-	int32_t* C = matrix_multiply_riscv_int(A, B, N);
-
-	printf("Matrix A: \n");
-	print_matrix_int(A, N);
-	printf("Matrix B: \n");
-	print_matrix_int(B, N);
-	printf("Matrix C: \n");
-	print_matrix_int(C, N);
-
-	int32_t* D = mm_scalar_int(A, B, N);
-	printf("Matrix D: \n");
-	print_matrix_int(D, N);
+	int end_v = perf_get_mcycle();
 
 	check_mm_equal_int(C, D, N);
-	
-	free(A);
-	free(B);
-	free(C);
-	free(D);
-	return 0;
+
+	printf("Timestamps: %d, %d, %d, %d\n", start, end, start_v, end_v);
+	printf("Cycle count: %d\n", (end_v - start_v));
+	print_float("Speedup", (float)(end-start)/(float)(end_v-start_v)); // SCALAR OVER VECTOR DUMMY
 }
