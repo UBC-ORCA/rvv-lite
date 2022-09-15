@@ -2,7 +2,7 @@ module vSlide #(
 	parameter REQ_DATA_WIDTH    	= 64,
 	parameter RESP_DATA_WIDTH   	= 64,
 	parameter REQ_ADDR_WIDTH   		= 32,
-	parameter SEW_WIDTH         	= 2 ,
+	parameter SEW_WIDTH         	= 3 ,
 	parameter REQ_BYTE_EN_WIDTH 	= 8
 ) (
 	input                             	clk      ,

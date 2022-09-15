@@ -116,7 +116,8 @@ wire                            vShift_orTop    ;
 // wire [                  6:0]    vShift_cmpl     ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl_sew [0:3];
 wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl;
-wire [                  1:0]    vSlide_sew, vWiden_sew, vAdd_sew, vMul_sew;
+wire [                  2:0]    vSlide_sew;
+wire [                  1:0]    vWiden_sew, vAdd_sew, vMul_sew;
 wire [REQ_BYTE_EN_WIDTH-1:0]    vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe;
 wire                            vMinMax_opSel, vSlide_opSel;
 wire                            vAdd_outMask;
@@ -266,6 +267,7 @@ generate
         assign vSlide_opSel     = req_func_id[0];
 
         if (SLIDE_N_ENABLE) begin
+            assign vSlide_en    = req_valid & (req_func_id[5:1] == 5'b00111);
             assign vSlide_sew   = req_data0[3] ? (req_sew + 2'b11) : (req_data0[2] ? (req_sew + 2'b10) : (req_data0[1] ? (req_sew + 2'b01) : (req_sew)));
         end else begin
             assign vSlide_sew   = req_sew;
@@ -876,7 +878,7 @@ always @(posedge clk) begin
         resp_sew        <= s6_sew;
 
         // TODO pipe these through modules instead, so timing of outputs is guaranteed
-        s0_be           <= (vWiden_add_en | vWiden_mul_en) ? vWiden_be : ((vSlide_en | vNarrow_en | vMCmp_en) ? 'h0 : req_be);
+        s0_be           <= req_valid ? (vWiden_add_en | vWiden_mul_en) ? vWiden_be : ((vSlide_en | vNarrow_en | vMCmp_en) ? 'h0 : req_be) : 'h0;
         s1_be           <= s0_be;
         s2_be           <= s1_be;
         s3_be           <= s2_be;
@@ -899,7 +901,7 @@ always @(posedge clk) begin
         s4_end          <= s3_end;
         s5_end          <= s4_end;
         s6_end          <= s5_end;
-        resp_end        <=  s6_end;
+        resp_end        <= s6_end;
 
         s0_off          <= req_valid ? req_off : 'h0;
         s1_off          <= s0_off;

@@ -241,8 +241,8 @@ module rvv_proc_main #(
     wire                        alu_sca_out;
     reg   [          DW_B-1:0]  alu_req_be;
     wire  [          DW_B-1:0]  alu_be_out;
-    reg   [              10:0]  alu_vr_idx; // MAX VALUE IS 2047
-    wire  [              10:0]  alu_vr_idx_next; // MAX VALUE IS 2047
+    reg   [              11:0]  alu_vr_idx; // MAX VALUE IS 2047
+    wire  [              11:0]  alu_vr_idx_next; // MAX VALUE IS 2047
     wire                        alu_out_w_reg; // whole register insn
 
     wire                        hold_reg_group;
@@ -272,8 +272,10 @@ module rvv_proc_main #(
 
     wire  [      OFF_BITS-1:0]  avl_max_off;
     wire  [      OFF_BITS-1:0]  avl_max_off_m;
+    wire  [      OFF_BITS-1:0]  avl_max_off_w;
     wire  [      OFF_BITS-1:0]  avl_max_off_in_rd;
     wire  [               2:0]  avl_max_reg;
+    wire  [               2:0]  avl_max_reg_w;
 
     wire  [      OFF_BITS-1:0]  avl_max_off_in_ld;
     wire  [      OFF_BITS-1:0]  avl_max_off_in_wr;
@@ -301,7 +303,7 @@ module rvv_proc_main #(
     // TODO: figure out how to make this single cycle, so we can fully pipeline lol
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(widen_en | widen_en_d));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),.whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(widen_en | widen_en_d));
-    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),                      .sew(alu_resp_sew),         .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out),        .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr));
+    addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),                      .sew(alu_resp_sew),         .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out),        .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg_w),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr));
     addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(ld_valid&mem_port_valid_in), .sew(sew),                  .whole_reg(whole_reg_ld),.addr_in(dest_m),               .addr_out(vr_ld_addr),  .max_reg_in(wait_mem_mask ? 'h0 : avl_max_reg),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),    .idle(agu_idle_ld));
 
     // TODO: make this a proper ("true dual-port ram")
@@ -370,8 +372,10 @@ module rvv_proc_main #(
         for (i = 0; i < NUM_VEC; i=i+1) begin : haz_logic
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest == i) & ((opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | en_req_mem);
-            assign vec_haz_clr[i] = (dest_m == i & en_ld & mem_port_done_ld) |
-                                    (alu_addr_out == i & alu_valid_out & alu_resp_end); // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
+            // testing to see if we can launch early if the next instruction isn't a mask op
+            assign vec_haz_clr[i] = (dest_m == i & en_ld & (mem_port_done_ld | ~logic_mop)) |
+                                    (alu_addr_out == i & alu_valid_out & (alu_resp_end | ~logic_mop));
+                                    // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
@@ -402,7 +406,7 @@ module rvv_proc_main #(
     assign avl_set   = {(dest == 'h0),(src_1 == 'h0)}; // determines if rd and rs1 are non-zero, as AVL setting depends on this
 
 
-    if (WIDEN_ADD_ENABLE | WIDEN_MUL_ENABLE) begin
+    if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin
         assign widen_en  = (opcode_mjr == `OP_INSN && opcode_mnr != `CFG_TYPE && (&funct6[5:4] & ~funct6[2]));
     end else begin
         assign widen_en  = 0;
@@ -430,17 +434,19 @@ module rvv_proc_main #(
 
     // FIXME only helps if avl < single reg lol
     assign avl_max_off   = (avl > (VLEN_B >> sew)) ? (VLEN_B/DW_B) - 1          : (avl_eff>>(DW_B_BITS - sew));
+    assign avl_max_off_w = (avl > (VLEN_B >> alu_resp_sew)) ? (VLEN_B/DW_B) - 1 : (avl_eff>>(DW_B_BITS - alu_resp_sew));
     assign avl_max_off_m = (avl > (VLEN_B >> sew)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - sew));
 
     assign avl_max_off_in_rd= logic_mop     ? avl_max_off_m : avl_max_off;
-    assign avl_max_off_in_wr= alu_mask_out  ? avl_max_off_m : avl_max_off;
+    assign avl_max_off_in_wr= alu_mask_out  ? avl_max_off_m : avl_max_off_w;
     assign avl_max_off_in_ld= wait_mem_msk  ? avl_max_off_m : avl_max_off;
 
     assign avl_max_reg    = avl_eff>>(VLEN_B_BITS - 1 - sew);
+    assign avl_max_reg_w  = avl_eff>>(VLEN_B_BITS - 1 - alu_resp_sew);
     // ---------------------------------------- ALU CONTROL --------------------------------------------------------------------------
 
     // hold values steady while waiting for multiple register groupings
-    assign hold_reg_group   = rst_n & ((reg_count > 0) | (reg_count == 0 & (en_vs3 | en_req_mem | (opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | (~logic_mop & avl > DW_B) | (logic_mop & avl > DATA_WIDTH))));
+    assign hold_reg_group   = rst_n & ((|reg_count) | (reg_count == 0 & (en_vs3 | en_req_mem | (opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | (~logic_mop & avl > DW_B) | (logic_mop & avl > DATA_WIDTH))));
 
     // SIGN-EXTENDED IMMEDIATE FOR ALU
     assign s_ext_imm = {{(DATA_WIDTH-5){src_1[4]}}, src_1};
@@ -468,8 +474,8 @@ module rvv_proc_main #(
             alu_req_end     <= 'h0;
             alu_off_agu     <= 'h0;
         end else begin
-            alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2 | ((opcode_mjr== `OP_INSN) & (opcode_mnr == `IVI_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14)) & (reg_count == 0));
-            alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14)) & (reg_count == 1));
+            alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2 | ((opcode_mjr== `OP_INSN) & (opcode_mnr == `IVI_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14) | (opcode_mnr[1:0] == 'h2 & funct6 == 6'h10)) & (reg_count == 0));
+            alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10)) & (reg_count == 1));
 
             alu_off_agu     <= vr_rd_off_1; // FIXME - make generic
         end
@@ -478,7 +484,7 @@ module rvv_proc_main #(
     // FIXME simplify
     assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
                                                             (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
-                                                            (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14));
+                                                            (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
 
     assign alu_req_off  = (funct6_d[5:3] == 3'b011) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `IVI_TYPE | opcode_mnr_d == `IVX_TYPE) ? (alu_vr_idx >> (sew + 3)) : alu_off_agu;
 
@@ -700,7 +706,7 @@ module rvv_proc_main #(
         end
     end
 
-    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(alu_vr_idx), .avl_be(gen_avl_be));
+    generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
 
 
     always @(posedge clk) begin
