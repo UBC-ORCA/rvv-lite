@@ -160,7 +160,7 @@ module mem_queue #(
     assign rvv_valid_in     = r_r_en;
     assign rvv_data_in      = {r_l_dout, r_h_dout};
     
-    assign rvv_done_ld      = (read_count == (burst_len - 1) & burst_len > 0);
+    assign rvv_done_ld      = (read_count == (burst_len - 1) & burst_len > 0 & read_count > 0);
     // must have both - FIXME we should wait until we have the right number of reqs back
     // FIXME integrate ready signal from processor lol
 
