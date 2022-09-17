@@ -21,7 +21,7 @@ void print_matrix_int(int32_t* A, int N) {
 }
 
 int32_t* random_matrix_int(int N) {
-	int32_t A [N * N];
+	int32_t*  A = new int32_t[N * N];
 	for (int i = 0; i < N; i++) {
 		for (int j = 0; j < N; j++) {
 			A[i * N + j] = rand() % 5;	
@@ -96,6 +96,9 @@ void rvv_mm_test() {
 	int end_v = perf_get_mcycle();
 
 	check_mm_equal_int(C, D, N);
+	
+	delete A;
+	delete B;
 
 	printf("Timestamps: %d, %d, %d, %d\n", start, end, start_v, end_v);
 	printf("Cycle count: %d\n", (end_v - start_v));
