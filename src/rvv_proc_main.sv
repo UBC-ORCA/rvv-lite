@@ -26,12 +26,12 @@
 `define SLIDE_ENABLE      1 // a1f
 `define WIDEN_ADD_ENABLE  1 // a2
 `define REDUCTION_ENABLE  1 // a3
-`define MULT_ENABLE       1 // a4a 
-`define SHIFT_ENABLE      1
-`define MULH_SR_ENABLE    1 // a4b 
-`define MULH_SR_32_ENABLE 1 // a5a 
-`define WIDEN_MUL_ENABLE  1 // a5b 6,232 
-`define NARROW_ENABLE     1  
+`define MULT_ENABLE       0 // a4a  6,264
+`define SHIFT_ENABLE      0 //      
+`define MULH_SR_ENABLE    0 // a4b 
+`define MULH_SR_32_ENABLE 0 // a5a
+`define WIDEN_MUL_ENABLE  0 // a5b 
+`define NARROW_ENABLE     0  
 `define SLIDE_N_ENABLE    0 // a6
 `define MULT64_ENABLE     0 // a7
 `define SHIFT64_ENABLE    0 
@@ -386,7 +386,7 @@ module rvv_proc_main #(
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
-                vec_haz[i] <= rst_n & (vec_haz_set[i] | vec_haz[i]) & ~vec_haz_clr[i];
+                vec_haz[i] <= rst_n & (vec_haz_set[i] | vec_haz[i] & ~vec_haz_clr[i]);
             end
         end
     endgenerate
@@ -777,12 +777,12 @@ module rvv_proc_main #(
 
             lumop_m         <= wait_mem ? lumop_m   : lumop_d;
             mop_m           <= wait_mem ? mop_m     : mop_d;
-            // ld_valid        <= wait_mem;
+
             wait_mem        <= wait_mem ? ~mem_port_done_ld : (opcode_mjr_d == `LD_INSN);
             wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_d == `LD_INSN) & lumop_d == 5'hB & mop_d == 'h0);
 
             vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) ? avl : out_data_e;
-            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl);
+            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) | (opcode_mjr_d[2:0] != 3'h7);
         end // end else
     end
 

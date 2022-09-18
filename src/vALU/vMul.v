@@ -512,12 +512,6 @@ endgenerate
 						endcase
 					end
 				end
-
-				always @(*) begin
-					out_vd 	 = 'b0;
-					out_vd1  = 'b0;
-					out_vd10 = 'b0;
-				end
 			end else begin // No 64b MUL
 				if (MULH_SR_32_ENABLE) begin : mulh_sr_32
 					if (WIDEN_MUL_ENABLE) begin
@@ -587,16 +581,13 @@ endgenerate
 						end
 					end
 				end
-
-				always @(*) begin
-					out_vd 	 = 'b0;
-					out_vd1  = 'b0;
-					out_vd10 = 'b0;
-				end
+			end
+			always @(*) begin
+				out_vd 	 = 'b0;
+				out_vd1  = 'b0;
+				out_vd10 = 'b0;
 			end
 		end
 	endgenerate
-
-	//TODO feed correct 8bit inputs to m's and get the correct output to registers and select the result at the last mux
 
 endmodule

@@ -2,7 +2,7 @@ module vAdd_unit_block #(
 	parameter REQ_DATA_WIDTH    = 64,
 	parameter RESP_DATA_WIDTH   = 64,
 	parameter SEW_WIDTH         = 2 ,
-	parameter OPSEL_WIDTH       = 6
+	parameter OPSEL_WIDTH       = 5
 ) (
 	input                              	clk,
 	input                              	rst,

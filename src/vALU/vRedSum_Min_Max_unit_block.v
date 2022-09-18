@@ -4,7 +4,7 @@
 module vRedSum_min_max_unit_block #(
 	parameter REQ_DATA_WIDTH  	= 32,
 	parameter RESP_DATA_WIDTH 	= 64,
-	parameter OPSEL_WIDTH     	= 9 ,
+	parameter OPSEL_WIDTH     	= 3 ,
 	parameter SEW_WIDTH       	= 2 ,
 	parameter MIN_MAX_ENABLE  	= 1
 ) (
@@ -17,7 +17,7 @@ module vRedSum_min_max_unit_block #(
 	output reg [ RESP_DATA_WIDTH-1:0] out_vec
 );
 
-	wire [ RESP_DATA_WIDTH-1:0] op_out, copy_out;
+	wire [ RESP_DATA_WIDTH-1:0] op_out;
 	wire [RESP_DATA_WIDTH+16:0] result;
 	wire [ RESP_DATA_WIDTH-1:0]	minMax_result;
 
@@ -28,7 +28,7 @@ module vRedSum_min_max_unit_block #(
 		.vec1  	(vec0[REQ_DATA_WIDTH*2-1:REQ_DATA_WIDTH]),
 		.carry	(1'b0 									),
 		.sew   	(sew									),
-		.opSel 	(opSel									),
+		.opSel 	(opSel 									),
 		.result	(result									)
 	);
 
@@ -39,7 +39,7 @@ module vRedSum_min_max_unit_block #(
 				.vec1			(vec0[REQ_DATA_WIDTH*2-1:REQ_DATA_WIDTH]),
 				.sub_result 	(result 								),
 				.sew 			(sew 									),
-				.minMax_sel 	(opSel[3] 								),
+				.minMax_sel 	(opSel[1] 								),
 				.minMax_result 	(minMax_result 							),
 				.equal			(										),
 				.lt 			(										)
@@ -48,20 +48,17 @@ module vRedSum_min_max_unit_block #(
 	endgenerate
 
 	generate
-		if(REQ_DATA_WIDTH<64) begin
-			assign op_out[RESP_DATA_WIDTH-1:REQ_DATA_WIDTH]	= 'b0;
-		end else begin
-			assign op_out	= {result[78:71],result[68:61],result[58:51],result[48:41],result[38:31],result[28:21],result[18:11],result[8:1]};
-		end
+		// if(REQ_DATA_WIDTH<64) begin
+		// 	assign op_out[RESP_DATA_WIDTH-1:REQ_DATA_WIDTH]	= 'b0;
+		// end
+		assign op_out	= {result[78:71],result[68:61],result[58:51],result[48:41],result[38:31],result[28:21],result[18:11],result[8:1]};
 	endgenerate
-
-	assign copy_out	= vec0;
 
 	always @(posedge clk) begin
 		if (rst) begin
 			out_vec <= 'h0;
 		end else begin
-			out_vec <= en ? (opSel[3] ? op_out : minMax_result) : copy_out;
+			out_vec <= en ? (opSel[2] ? minMax_result[REQ_DATA_WIDTH-1:0] : op_out[REQ_DATA_WIDTH-1:0]) : vec0[REQ_DATA_WIDTH-1:0];
 		end
 	end
 

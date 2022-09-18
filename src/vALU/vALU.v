@@ -114,12 +114,10 @@ wire [   REQ_DATA_WIDTH-1:0]    vShift_vd10     ;
 wire [                  5:0]    vShift_inShift  ;
 wire                            vShiftR64       ;
 wire                            vShift_orTop    ;
-// wire [                  6:0]    vShift_cmpl     ;
 wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl_sew [0:3];
-wire [   REQ_DATA_WIDTH-1:0]    vShift_cmpl;
 wire [                  2:0]    vSlide_sew;
 wire [                  1:0]    vWiden_sew, vAdd_sew, vMul_sew, vNarrow_sew;
-wire [REQ_BYTE_EN_WIDTH-1:0]    vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe;
+wire [REQ_BYTE_EN_WIDTH-1:0]    vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe, vRedAndOrXor_outBe, vRedSum_min_max_outBe;
 wire                            vMinMax_opSel, vSlide_opSel;
 wire                            vAdd_outMask;
 wire                            vSigned_op0, vSigned_op1;
@@ -174,7 +172,7 @@ generate
     end
 
     if (ADD_SUB_ENABLE) begin : add_sub_in
-        assign vAdd_en          = req_valid & ((req_func_id[5:3] == 3'b000) | (req_func_id[5:2] == 4'b1100) | vAAdd_en | vMCmp_en);
+        assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000 | req_func_id[5:2] == 4'b1100) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | vAAdd_en | vMCmp_en);
 
         if (MIN_MAX_ENABLE) begin
             assign vMinMax_en   = (req_func_id[5:2] == 4'b0001);
@@ -234,11 +232,11 @@ generate
     end
 
     if (REDUCTION_ENABLE) begin : red_opsel
-        assign vRedAndOrXor_en      = req_valid & (|req_func_id[1:0] & req_func_id[5:2] == 4'b0000) & (req_op_mnr == 3'h2);
-        assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr == 3'h2);
+        assign vRedAndOrXor_en      = req_valid & ((|req_func_id[1:0]) & req_func_id[5:2] == 4'b0000) & (req_op_mnr[1:0] == 'h2);
+        assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr[1:0] == 'h2);
 
         assign vRedAndOrXor_opSel   = req_func_id[1:0];
-        assign vRedSum_min_max_opSel= req_func_id[0];
+        assign vRedSum_min_max_opSel= req_func_id;
     end
 
     if (MULT_ENABLE) begin : mul_in
@@ -253,17 +251,11 @@ generate
         end
 
         if (WIDEN_MUL_ENABLE) begin
-            // assign vWiden_mul_en    = (req_func_id[5:2] == 'b1110);
-        // end else begin
-        //     assign vWiden_mul_en    = 0;
-        // end
             assign vMul_sew         = vWiden_en ? vWiden_sew : req_sew;
 
             assign vMul_in0         = vWiden_en ? vWiden_in0 : vMul_vec0;
             assign vMul_in1         = vWiden_en ? vWiden_in1 : vMul_vec1;
         end else begin
-            // assign vWiden_mul_en    = 0;
-
             assign vMul_sew         = req_sew;
 
             assign vMul_in0         = vMul_vec0;
@@ -279,7 +271,6 @@ generate
         assign vSlide_opSel     = req_func_id[0];
 
         if (SLIDE_N_ENABLE) begin
-            assign vSlide_en    = req_valid & (req_func_id[5:1] == 5'b00111);
             assign vSlide_sew   = req_data0[3] ? (req_sew + 2'b11) : (req_data0[2] ? (req_sew + 2'b10) : (req_data0[1] ? (req_sew + 2'b01) : (req_sew)));
         end else begin
             assign vSlide_sew   = req_sew;
@@ -425,7 +416,7 @@ generate
                 if (MULH_SR_ENABLE) begin : mulh_sr
                     for (j = 0; j < 2; j = j + 1) begin
                         for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                            assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                            assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << (j + 3)) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
                         end
                     end
 
@@ -434,9 +425,10 @@ generate
                     assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
                 end else begin
                     for (j = 0; j < 3; j = j + 1) begin
-                        for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                            assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_data0[(i << (j+3)) +: (1 << (j+3))];
-                        end
+                        // for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                            // assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_data0[(i << (j+3)) +: (1 << (j+3))];
+                        // end
+                        assign vShift_cmpl_sew[j] = req_data0;
                     end
 
                     assign vMul_opSel  = req_func_id[1:0];
@@ -445,11 +437,21 @@ generate
         end
     end
     else begin
-        assign vMul_vec1    = req_data0;
-        assign vMul_vec0    = req_data1;
-        assign vMul_opSel   = req_func_id[1:0];
-        assign vShift_orTop = 0;
-        assign vShift_vd10  = 0;
+        if (MULT_ENABLE) begin
+            assign vMul_vec1    = req_data0;
+            assign vMul_vec0    = req_data1;
+            assign vMul_opSel   = req_func_id[1:0];
+        end else begin
+            assign vMul_vec1    = 0;
+            assign vMul_vec0    = 0;
+            assign vMul_opSel   = 0;
+        end
+
+        assign vShift_orTop     = 0;
+        assign vShift_vd10      = 0;
+        assign vShiftR64        = 0;
+
+        assign vShift_inShift   = 0;
     end
 
     if(ADD_SUB_ENABLE | MASK_ENABLE) begin : add_sub
@@ -719,8 +721,8 @@ generate
             ) vRedAndOrXor0 (
             .clk        (clk                    ),
             .rst        (rst                    ),
-            .in_vec0    (req_data0              ),
-            .in_vec1    (req_data1              ),
+            .in_vec0    (req_data1              ),
+            .in_vec1    (req_data0              ),
             .in_valid   (vRedAndOrXor_en        ),
             .in_start   (req_start              ),
             .in_end     (req_end                ),
@@ -729,7 +731,8 @@ generate
             .in_addr    (req_addr               ),
             .out_vec    (vRedAndOrXor_outVec    ),
             .out_valid  (vRedAndOrXor_outValid  ),
-            .out_addr   (vRedAndOrXor_outAddr   )
+            .out_addr   (vRedAndOrXor_outAddr   ),
+            .out_be     (vRedAndOrXor_outBe     )
         );
 
         vRedSum_min_max #(
@@ -739,8 +742,8 @@ generate
             ) vRedSum_min_max0 (
             .clk        (clk                        ),
             .rst        (rst                        ),
-            .in_vec0    (req_data0                  ),
-            .in_vec1    (req_data1                  ),
+            .in_vec0    (req_data1                  ),
+            .in_vec1    (req_data0                  ),
             .in_valid   (vRedSum_min_max_en         ),
             .in_start   (req_start                  ),
             .in_end     (req_end                    ),
@@ -749,7 +752,8 @@ generate
             .in_addr    (req_addr                   ),
             .out_vec    (vRedSum_min_max_outVec     ),
             .out_valid  (vRedSum_min_max_outValid   ),
-            .out_addr   (vRedSum_min_max_outAddr    )
+            .out_addr   (vRedSum_min_max_outAddr    ),
+            .out_be     (vRedSum_min_max_outBe      )
         );
     end
     else begin
@@ -895,7 +899,7 @@ always @(posedge clk) begin
         resp_sew        <= vNarrow_outValid ? vNarrow_sew : s6_sew;
 
         // TODO pipe these through modules instead, so timing of outputs is guaranteed
-        s0_be           <= (req_valid & ~vSlide_en & ~vMCmp_en) ? (vWiden_en ? vWiden_be :  req_be) : 'h0;
+        s0_be           <= (req_valid & ~vSlide_en & ~vMCmp_en & ~vRedAndOrXor_en & ~vRedSum_min_max_en) ? (vWiden_en ? vWiden_be :  req_be) : 'h0;
         s1_be           <= s0_be;
         s2_be           <= s1_be;
         s3_be           <= s2_be;
@@ -929,7 +933,7 @@ always @(posedge clk) begin
         s6_off          <= s5_off;
         resp_off        <= s6_off;
 
-        s6_be           <=  vSlide_outBe        | s5_be                 | vMCmp_outBe;
+        s6_be           <=  vSlide_outBe    | s5_be     | vMCmp_outBe   | vRedAndOrXor_outBe    | vRedSum_min_max_outBe;
         req_be_out      <=  vNarrow_outValid ? vNarrow_be : s6_be;
 
         s6_valid        <= vAdd_outValid | vAndOrXor_outValid| vMul_outValid    | vSlide_outValid   | vMerge_outValid   | vMOP_outValid | vPopc_outValid    | vRedAndOrXor_outValid | vRedSum_min_max_outValid   | vID_outValid      | vFirst_outValid;
