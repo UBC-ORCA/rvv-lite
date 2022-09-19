@@ -37,7 +37,6 @@ module vAdd_unit_block #(
 	assign w_vec0	= (opSel[1] & opSel[0]) 		? ~(vec0) : vec0;
 	assign w_vec1	= (opSel[1] & (~(opSel[0])))	? ~(vec1) : vec1;
 
-
 	generate
 		for(i=0;i<8;i=i+1) begin
 			assign v0_sgn[i]	= ~opSel[4] | (opSel[2] & vec0[i*8+7]);

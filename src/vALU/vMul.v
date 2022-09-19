@@ -191,6 +191,12 @@ generate
 				s2_sr_64 	<= 'b0;
 				s3_sr_64 	<= 'b0;
 				s4_sr_64 	<= 'b0;
+
+				s0_or_top 	<= 'b0;
+				s1_or_top 	<= 'b0;
+				s2_or_top 	<= 'b0;
+				s3_or_top 	<= 'b0;
+				s4_or_top 	<= 'b0;
 			end else begin
 				s0_shift	<= in_valid ? in_shift[5:0] : 'h0;
 				s1_shift	<= (s0_shift > 7 ? s0_shift - 7 : 0);
@@ -208,6 +214,12 @@ generate
 				s2_sr_64	<= s1_sr_64;
 				s3_sr_64	<= s2_sr_64;
 				s4_sr_64 	<= s3_sr_64;
+
+				s0_or_top 	<= in_valid & in_or_top;
+				s1_or_top 	<= s0_or_top;
+				s2_or_top 	<= s1_or_top;
+				s3_or_top 	<= s2_or_top;
+				s4_or_top 	<= s3_or_top;
 			end
 		end
 	end
@@ -229,15 +241,15 @@ generate
 			end
 		end
 	end
-	else begin
-		always @(*) begin
-			s0_widen = 0;
-			s1_widen = 0;
-			s2_widen = 0;
-			s3_widen = 0;
-			s4_widen = 0;
-		end
-	end
+	// else begin
+	// 	always @(*) begin
+			// s0_widen = 0;
+			// s1_widen = 0;
+			// s2_widen = 0;
+			// s3_widen = 0;
+			// s4_widen = 0;
+		// end
+	// end
 
 	if (NARROW_ENABLE) begin
 		always @(posedge clk) begin
@@ -259,11 +271,11 @@ generate
 		end
 	end else begin
 		always @(*) begin
-			s0_narrow 	= 0;
-			s1_narrow 	= 0;
-			s2_narrow 	= 0;
-			s3_narrow 	= 0;
-			s4_narrow 	= 0;
+			// s0_narrow 	= 0;
+			// s1_narrow 	= 0;
+			// s2_narrow 	= 0;
+			// s3_narrow 	= 0;
+			// s4_narrow 	= 0;
 			out_narrow	= 0;
 		end
 	end
@@ -358,25 +370,19 @@ endgenerate
 				end
 			end
 		end 
-		else begin
-			always @(*) begin
-				s0_lsb = 0;
-				s1_lsb = 0;
-				s2_lsb = 0;
-				s3_lsb = 0;
-				s4_lsb = 0;
-			end
-		end
+		// else begin
+		// 	always @(*) begin
+		// 		s0_lsb = 0;
+		// 		s1_lsb = 0;
+		// 		s2_lsb = 0;
+		// 		s3_lsb = 0;
+		// 		s4_lsb = 0;
+		// 	end
+		// end
 
 		if (FXP_ENABLE) begin : fxp_shift_mul
 			always @(posedge clk) begin
 				if(~rst) begin
-					s0_or_top 	<= 0;
-					s1_or_top 	<= 0;
-					s2_or_top 	<= 0;
-					s3_or_top 	<= 0;
-					s4_or_top 	<= 0;
-
 					s0_fxp_s   	<= 'b0;
 					s1_fxp_s   	<= 'b0;
 					s2_fxp_s   	<= 'b0;
@@ -389,12 +395,6 @@ endgenerate
 					s3_fxp_mul 	<= 'b0;
 					s4_fxp_mul 	<= 'b0;
 				end else begin
-					s0_or_top 	<= in_valid & in_or_top;
-					s1_or_top 	<= s0_or_top;
-					s2_or_top 	<= s1_or_top;
-					s3_or_top 	<= s2_or_top;
-					s4_or_top 	<= s3_or_top;
-
 					s0_fxp_s    <= in_valid & in_fxp_s;
 					s1_fxp_s    <= s0_fxp_s;
 					s2_fxp_s    <= s1_fxp_s;
@@ -421,7 +421,7 @@ endgenerate
 											{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
 						'b010 : out_vec <= s4_lsb ? {s4_w1[31:0], s4_w0[31:0]} : {s4_w1[63:32], s4_w0[63:32]};
 
-						'b011 : out_vec <= s4_sr_64 ? (s4_or_top ? {s4_top_bits[24:0],s4_d0[70:32]} : {{32{s4_d0[63]}},s4_d0[63:32]}) : s4_d0;
+						'b011 : out_vec <= s4_lsb ? s4_d0 : (s4_sr_64 ? (s4_or_top ? {s4_top_bits[24:0],s4_d0[70:32]} : {{32{s4_d0[63]}},s4_d0[63:32]}) : 'h0);
 
 						// fxp needs middle bits
 						'b100 : out_vec <= {s4_h3[11:4],s4_h2[11:4],s4_b5[11:4],s4_b4[11:4],s4_b3[11:4],s4_b2[11:4],s4_h1[11:4],s4_h0[11:4]};
@@ -506,7 +506,7 @@ endgenerate
 												{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
 							'b10 : out_vec <= s4_lsb ? {s4_w1[31:0], s4_w0[31:0]} : {s4_w1[63:32], s4_w0[63:32]};
 
-							'b11 : out_vec <= s4_sr_64 ? (s4_or_top ? {s4_top_bits[24:0],s4_d0[70:32]} : {{32{s4_d0[63]}},s4_d0[63:32]}) : s4_d0;
+							'b11 : out_vec <= s4_lsb ? s4_d0 : (s4_sr_64 ? (s4_or_top ? {s4_top_bits[24:0],s4_d0[70:32]} : {{32{s4_d0[63]}},s4_d0[63:32]}) : 'h0);
 
 							default: out_vec <= 'h0;
 						endcase
@@ -520,13 +520,15 @@ endgenerate
 								out_vec <= 'b0;
 							end 
 							else begin
-								case (s4_sew)
-									'b00 : out_vec <= s4_lsb ? {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]} :
-														{s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
-									'b01 : out_vec <= s4_lsb ? {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]} :
-														{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
-									'b10 : out_vec <= s4_lsb ? {s4_w1[31:0], s4_w0[31:0]} : {s4_w1[63:32], s4_w0[63:32]};
-									'b11 : out_vec <= s4_widen ? s4_w1[63:0] : 'h0;
+								case ({s4_lsb,s4_sew})
+									'b000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
+									'b001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
+									'b010 : out_vec <= {s4_w1[63:32], s4_w0[63:32]};
+
+									'b100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
+									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
+									'b110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
+									'b111 : out_vec <= s4_w0[63:0]; // s4_lsb is set when s4_widen is high anyway
 									default : out_vec 	<= 'h0;
 								endcase
 							end
@@ -537,12 +539,14 @@ endgenerate
 								out_vec <= 'b0;
 							end 
 							else begin
-								case (s4_sew)
-									'b00 : out_vec <= s4_lsb ? {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]} :
-														{s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
-									'b01 : out_vec <= s4_lsb ? {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]} :
-														{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
-									'b10 : out_vec <= s4_lsb ? {s4_w1[31:0], s4_w0[31:0]} : {s4_w1[63:32], s4_w0[63:32]};
+								case ({s4_lsb,s4_sew})
+									'b000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
+									'b001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
+									'b010 : out_vec <= {s4_w1[63:32], s4_w0[63:32]};
+
+									'b100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
+									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
+									'b110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 									default : out_vec 	<= 'h0;
 								endcase
 							end
@@ -555,12 +559,13 @@ endgenerate
 								out_vec <= 'b0;
 							end 
 							else begin
-								case (s4_sew)
-									'b00 : out_vec <= s4_lsb ? {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]} :
-														{s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
-									'b01 : out_vec <= s4_lsb ? {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]} :
-														{s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
-									'b10 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
+								case ({s4_lsb,s4_sew})
+									'b000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
+									'b001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
+
+									'b100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
+									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
+									'b110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 									default : out_vec 	<= 'h0;
 								endcase
 							end

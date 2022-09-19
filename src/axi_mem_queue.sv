@@ -168,8 +168,8 @@ module mem_queue #(
     always @(posedge clk) begin
         w_turn          <= mbus_aw_ready^w_turn;
 
-        write_count     <= rvv_valid_out ? (rvv_start_out ? 1 : write_count + 1) : (ack_count[FIFO_DEPTH_BITS-1:1] == write_count ? 0 : write_count);
-        ack_count       <= (ack_count[FIFO_DEPTH_BITS-1:1] < write_count) ? (mbus_b_valid ? ack_count + 1 : ack_count) : 0;
+        write_count     <= rvv_valid_out ? (rvv_start_out ? 1 : write_count + 1) : (ack_count[FIFO_DEPTH_BITS:1] == write_count ? 0 : write_count);
+        ack_count       <= (ack_count[FIFO_DEPTH_BITS:1] < write_count) ? (mbus_b_valid ? ack_count + 1 : ack_count) : 0;
     end
 
     assign w_w_en           = rvv_valid_out;
@@ -186,5 +186,5 @@ module mem_queue #(
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty | ~w_h_empty;
 
-    assign rvv_done_st      = (ack_count[FIFO_DEPTH_BITS-1:1] == write_count) & (write_count > 0);
+    assign rvv_done_st      = (ack_count[FIFO_DEPTH_BITS:1] == write_count) & (write_count > 0);
 endmodule

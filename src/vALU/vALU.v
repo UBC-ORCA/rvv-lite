@@ -2,7 +2,7 @@
 `include "vAndOrXor.v"
 `include "vMerge.v"
 `include "vMOP.v"
-`include "vMove.v"
+// `include "vMove.v"
 `include "vMul.v"
 `include "vNarrow.v"
 `include "vPopc.v"
@@ -18,7 +18,6 @@
 
 // TODO optional 64-bit
 // TODO separate masking instructions - test area
-// TODO fix separation of mul/shift
 
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
@@ -131,7 +130,7 @@ reg  [  RESP_DATA_WIDTH-1:0]    s6_fxp_out;
 wire                            vMerge_outValid, vMOP_outValid, vPopc_outValid, vRedAndOrXor_outValid, vRedSum_min_max_outValid, vMove_outValid, 
                                 vID_outValid, vFirst_outValid, vAdd_outValid, vAndOrXor_outValid, vMul_outValid, vSlide_outValid, vNarrow_outValid;
 wire                            vMove_outWReg;
-wire [                  9:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
+wire [                  1:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
 wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vFirst_en, vAdd_en, vMinMax_en,
                                 vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vSMul_en;
@@ -163,19 +162,52 @@ generate
                 assign vAndOrXor_in0    = vMoveXS_en ? 'h0 : req_data0;
                 assign vAndOrXor_in1    = vMove_en & ~vMoveXS_en ? 'h0  : req_data1;
             end
+
+            assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
+            assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
+            if (MASK_ENABLE) begin
+                assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
+            end else begin
+                assign vMerge_en    = 0;
+            end
         end else begin
             assign vAndOrXor_opSel  = req_func_id[1:0];
 
             assign vAndOrXor_in0    = req_data0;
             assign vAndOrXor_in1    = req_data1;
+
+            assign vMoveXS_en       = 0;
+            assign vMove_en         = 0;
+            assign vMerge_en        = 0;
         end
+    end else begin
+        assign vMoveXS_en       = 0;
+        assign vMove_en         = 0;
+        assign vMerge_en        = 0;
     end
+
+    if (VEC_MOVE_ENABLE) begin : move_in
+        assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
+        assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
+        if (MASK_ENABLE) begin
+            assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
+        end else begin
+            assign vMerge_en    = 0;
+        end
+    end else begin
+        assign vMoveXS_en       = 0;
+        assign vMove_en         = 0;
+        assign vMerge_en        = 0;
+    end
+
 
     if (ADD_SUB_ENABLE) begin : add_sub_in
         assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000 | req_func_id[5:2] == 4'b1100) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | vAAdd_en | vMCmp_en);
 
         if (MIN_MAX_ENABLE) begin
             assign vMinMax_en   = (req_func_id[5:2] == 4'b0001);
+        end else begin
+            assign vMinMax_en   = 0;
         end
 
         if (FXP_ENABLE) begin
@@ -185,17 +217,11 @@ generate
         end
         
         if (WIDEN_ADD_ENABLE) begin : widen_add
-            
-        // end else begin
-        //     assign vWiden_en    = 0;
-        // end
             assign vAdd_sew         = vWiden_en ? vWiden_sew : req_sew;
 
             assign vAdd_in0         = vWiden_en ? vWiden_in0 : req_data0;
             assign vAdd_in1         = vWiden_en ? vWiden_in1 : req_data1;
         end else begin
-            // assign vWiden_en    = 'b0;
-
             assign vAdd_sew         = req_sew;
 
             assign vAdd_in0         = req_data0;
@@ -212,18 +238,6 @@ generate
         assign vSigned_op0      = req_func_id[0];
     end
 
-    if (VEC_MOVE_ENABLE) begin : move_in
-        assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
-        assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
-        if (MASK_ENABLE) begin
-            assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
-        end else begin
-            assign vMerge_en    = 0;
-        end
-    end else begin
-        assign vMove_en         = 0;
-        assign vMerge_en        = 0;
-    end
 
     if (NARROW_ENABLE) begin : narrow_in
         assign vNarrow_en       = req_valid & (req_func_id[5:2] == 4'b1011);
@@ -236,7 +250,10 @@ generate
         assign vRedSum_min_max_en   = req_valid & (req_func_id == 6'b0 | req_func_id[5:2] == 4'b0001) & (req_op_mnr[1:0] == 'h2);
 
         assign vRedAndOrXor_opSel   = req_func_id[1:0];
-        assign vRedSum_min_max_opSel= req_func_id;
+        assign vRedSum_min_max_opSel= req_func_id[2:1];
+    end else begin
+        assign vRedAndOrXor_en      = 0;
+        assign vRedSum_min_max_en   = 0;
     end
 
     if (MULT_ENABLE) begin : mul_in
@@ -319,10 +336,10 @@ generate
     else begin
         assign vWiden_en        = 0;
 
-        assign vWiden_be        = req_be;
-        assign vWiden_in0       = req_data0;
-        assign vWiden_in1       = req_data1;
-        assign vWiden_sew       = req_sew;
+        assign vWiden_be        = 0;
+        assign vWiden_in0       = 0;
+        assign vWiden_in1       = 0;
+        assign vWiden_sew       = 0;
     end
 
     if(NARROW_ENABLE) begin : narrow
@@ -344,6 +361,7 @@ generate
         );
     end
     else begin
+        assign vNarrow_sew      = 0;
         assign vNarrow_be       = 0;
         assign vNarrow_outVec   = 0;
         assign vNarrow_outValid = 0;
@@ -373,13 +391,17 @@ generate
 
             for (j = 0; j < 4; j = j + 1) begin
                 for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    if (j < 3) begin
-                        assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
-                    end else begin
-                        assign vShift_cmpl_sew[j][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
-                    end
                     assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
                 end
+            end
+
+            for (j = 0; j < 3; j = j + 1) begin
+                for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+                end
+            end
+            for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
             end
 
             assign vMul_vec1   = (req_func_id[3:0] != 4'b0111 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? vShift_mult_sew[req_sew] : req_data0;
@@ -397,42 +419,36 @@ generate
 
             for (j = 0; j < 3; j = j + 1) begin
                 for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+                    assign vShift_mult_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
                 end
             end
             assign vShift_mult_sew[3] = 'h0;
 
-            assign vMul_vec1   = (req_op_mnr[1]^req_op_mnr[0] == 1'b0) ? vShift_mult_sew[req_sew] : req_data0; // srl/sra/sll use IV[V/X/I] encoding
+            assign vMul_vec1   = ~(req_op_mnr[1]^req_op_mnr[0]) ? vShift_mult_sew[req_sew] : req_data0; // srl/sra/sll use IV[V/X/I] encoding
 
-            if (MULH_SR_32_ENABLE) begin : mulh_sr_32
-                for (j = 0; j < 3; j = j + 1) begin
-                    for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                        assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
+            if (MULH_SR_32_ENABLE | MULH_SR_ENABLE) begin : mulh_sr
+                if (MULH_SR_32_ENABLE) begin
+                    for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
+                        assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: 32] : req_data0[i*32 +: 32];
                     end
+                end else begin
+                    assign vShift_cmpl_sew[2] = req_data0;
+                end
+
+                for (i = 0; i < (REQ_DATA_WIDTH/8; i = i + 1) begin
+                    assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: 8] : req_data0[i*8 +: 8];
+                end
+                for (i = 0; i < (REQ_DATA_WIDTH/16; i = i + 1) begin
+                    assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
                 end
 
                 assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
             end else begin
-                if (MULH_SR_ENABLE) begin : mulh_sr
-                    for (j = 0; j < 2; j = j + 1) begin
-                        for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                            assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << (j + 3)) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
-                        end
-                    end
-
-                    assign vShift_cmpl_sew[2] = req_data0;
-
-                    assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
-                end else begin
-                    for (j = 0; j < 3; j = j + 1) begin
-                        // for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                            // assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_data0[(i << (j+3)) +: (1 << (j+3))];
-                        // end
-                        assign vShift_cmpl_sew[j] = req_data0;
-                    end
-
-                    assign vMul_opSel  = req_func_id[1:0];
+                for (j = 0; j < 3; j = j + 1) begin
+                    assign vShift_cmpl_sew[j] = req_data0;
                 end
+
+                assign vMul_opSel  = req_func_id[1:0];
             end
         end
     end
@@ -441,17 +457,13 @@ generate
             assign vMul_vec1    = req_data0;
             assign vMul_vec0    = req_data1;
             assign vMul_opSel   = req_func_id[1:0];
-        end else begin
-            assign vMul_vec1    = 0;
-            assign vMul_vec0    = 0;
-            assign vMul_opSel   = 0;
+
+            assign vShift_orTop     = 0;
+            assign vShift_vd10      = 0;
+            assign vShiftR64        = 0;
+    
+            assign vShift_inShift   = 0;
         end
-
-        assign vShift_orTop     = 0;
-        assign vShift_vd10      = 0;
-        assign vShiftR64        = 0;
-
-        assign vShift_inShift   = 0;
     end
 
     if(ADD_SUB_ENABLE | MASK_ENABLE) begin : add_sub
@@ -507,11 +519,17 @@ generate
     end
     else begin
         assign vStartIdx        = 0;
+
         assign vAdd_outVec      = 0;
         assign vAdd_outValid    = 0;
+        assign vMCmp_outBe      = 0;
+        assign vAdd_outMask     = 0;
         assign vAAdd_vd         = 0;
         assign vAAdd_vd1        = 0;
-        assign vMCmp_outBe      = 0;
+
+        assign vID_outVec       = 0;
+        assign vID_outAddr      = 0;
+        assign vID_outValid     = 0;
     end
 
     if(AND_OR_XOR_ENABLE) begin : and_or_xor
@@ -519,7 +537,9 @@ generate
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
             .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
-            .OPSEL_WIDTH    (2)
+            .OPSEL_WIDTH    (2),
+            .WHOLE_REG_ENABLE(WHOLE_REG_ENABLE),
+            .VEC_MOVE_ENABLE(VEC_MOVE_ENABLE)
         ) vAndOrXor_0   (
             .clk        (clk                ),
             .rst        (rst                ),
@@ -533,14 +553,15 @@ generate
             .out_vec    (vAndOrXor_outVec   ),
             .out_valid  (vAndOrXor_outValid ),
             .out_addr   (vAndOrXor_outAddr  ),
-            .out_w_reg  (vMove_outWReg    ),
-            .out_sca    (vMove_outSca     )
+            .out_w_reg  (vMove_outWReg      ),
+            .out_sca    (vMove_outSca       )
         );
     end
     else begin
         assign vAndOrXor_outVec     = 0;
         assign vAndOrXor_outValid   = 0;
         assign vAndOrXor_outAddr    = 0;
+
         assign vMove_outWReg        = 0;
         assign vMove_outSca         = 0;
     end
@@ -803,6 +824,9 @@ generate
                 end
                 assign fxp_out = s6_fxp_out;
             end else begin
+                always @(*) begin
+                    s6_fxp_out = 0;
+                end
                 assign fxp_out = 0;
             end
         end
@@ -811,17 +835,6 @@ endgenerate
 
 always @(posedge clk) begin
     if(rst) begin
-        resp_data       <= 'b0;
-        resp_valid      <= 'b0;
-
-        s0_be           <= 'b0;
-        s1_be           <= 'b0;
-        s2_be           <= 'b0;
-        s3_be           <= 'b0;
-        s4_be           <= 'b0;
-        s5_be           <= 'b0;
-        s6_be           <= 'b0;
-
         s0_vl           <= 'b0;
         s1_vl           <= 'b0;
         s2_vl           <= 'b0;
@@ -831,6 +844,24 @@ always @(posedge clk) begin
         s6_vl           <= 'b0;
         turn            <= 'b0;
         req_vl_out      <= 'b0;
+
+        s0_sew          <= 'b0;
+        s1_sew          <= 'b0;
+        s2_sew          <= 'b0;
+        s3_sew          <= 'b0;
+        s4_sew          <= 'b0;
+        s5_sew          <= 'b0;
+        s6_sew          <= 'b0;
+        resp_sew        <= 'b0;
+
+        s0_be           <= 'b0;
+        s1_be           <= 'b0;
+        s2_be           <= 'b0;
+        s3_be           <= 'b0;
+        s4_be           <= 'b0;
+        s5_be           <= 'b0;
+        s6_be           <= 'b0;
+        req_be_out      <= 'b0;
 
         s0_start        <= 'b0;
         s1_start        <= 'b0;
@@ -859,15 +890,6 @@ always @(posedge clk) begin
         s6_off          <= 'b0;
         resp_off        <= 'b0;
 
-        s0_sew          <= 'b0;
-        s1_sew          <= 'b0;
-        s2_sew          <= 'b0;
-        s3_sew          <= 'b0;
-        s4_sew          <= 'b0;
-        s5_sew          <= 'b0;
-        s6_sew          <= 'b0;
-        resp_sew        <= 'b0;
-
         s6_mask_out     <= 'b0;
         resp_mask_out   <= 'b0;
 
@@ -878,6 +900,15 @@ always @(posedge clk) begin
         resp_whole_reg  <= 'b0;
 
         resp_narrow     <= 'b0;
+
+        s6_data         <= 'b0;
+        resp_data       <= 'b0;
+
+        s6_valid        <= 'b0;
+        resp_valid      <= 'b0;
+
+        s6_addr         <= 'b0;
+        req_addr_out    <= 'b0;
     end
     else begin
         s0_vl           <= req_vl;

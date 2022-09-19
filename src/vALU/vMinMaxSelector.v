@@ -9,7 +9,7 @@ module vMinMaxSelector #(
 	input  [ REQ_DATA_WIDTH-1:0] 	vec1,
 	input  [REQ_DATA_WIDTH+16:0] 	sub_result,
 	input  [      SEW_WIDTH-1:0] 	sew,
-	input  [    OPSEL_WIDTH-1:0] 	minMax_sel,
+	input   					 	minMax_sel,
 	output [RESP_DATA_WIDTH-1:0] 	minMax_result,
 	output [     MASK_WIDTH-1:0] 	equal,
 	output [     MASK_WIDTH-1:0] 	lt

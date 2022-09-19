@@ -40,22 +40,22 @@ module vAdd_min_max #(
 
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
 	reg [ REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
-	reg [RESP_DATA_WIDTH-1:0] s2_out_vec, s3_out_vec, s4_out_vec, s5_out_vec;
-	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew, s2_sew, s3_sew;
-	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel, s2_opSel;
-	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid, s5_valid;
-	reg [                7:0] s2_gt, s2_lt, s2_equal;
-	reg 					  s3_mask, s4_mask, s5_mask;
-	reg [    		     2:0] s0_start_idx, s1_start_idx, s2_start_idx, s3_start_idx;
-	reg 					  s0_req_end, s1_req_end, s2_req_end, s3_req_end, s4_req_end;
-	reg 					  s0_req_start, s1_req_start, s2_req_start, s3_req_start;
-	reg [REQ_BYTE_EN_WIDTH-1:0] s0_out_be, s2_out_be, s3_out_be, s4_out_be, s5_out_be;
+	reg [RESP_DATA_WIDTH-1:0] s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
+	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew, s2_sew;
+	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel;
+	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
+	reg [                7:0] s1_gt, s1_lt, s1_equal;
+	reg 					  s2_mask, s3_mask, s4_mask;
+	reg [    		     2:0] s0_start_idx, s1_start_idx, s2_start_idx;
+	reg 					  s0_req_end, s1_req_end, s2_req_end, s3_req_end;
+	reg 					  s0_req_start, s1_req_start, s2_req_start;
+	reg [REQ_BYTE_EN_WIDTH-1:0] s0_out_be, s1_out_be, s2_out_be, s3_out_be, s4_out_be;
 
-	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr, s5_out_addr;
+	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
-	reg [REQ_BYTE_EN_WIDTH-1:0] s5_vd;
-	reg [REQ_BYTE_EN_WIDTH-1:0] s5_vd1;
-	reg 					  s0_avg, s1_avg, s2_avg, s3_avg, s4_avg, s5_avg;
+	reg [REQ_BYTE_EN_WIDTH-1:0] s4_vd;
+	reg [REQ_BYTE_EN_WIDTH-1:0] s4_vd1;
+	reg 					  s0_avg, s1_avg, s2_avg, s3_avg, s4_avg;
 
 	wire [REQ_DATA_WIDTH+16:0] s1_result;
 
@@ -78,12 +78,14 @@ module vAdd_min_max #(
 				.equal(w_equal),
 				.lt(w_lt)
 			);
+		end else begin
+			assign w_minMax_result 	= 0;
+			assign w_equal 			= 0;
+			assign w_lt 			= 0;
 		end
 	endgenerate
 
-
 	assign w_s1_arith_result = {s1_result[78:71],s1_result[68:61],s1_result[58:51],s1_result[48:41],s1_result[38:31],s1_result[28:21],s1_result[18:11],s1_result[8:1]};
-
 
 	vAdd_unit_block vAdd_unit0 (
 		.clk   (clk      ),
@@ -100,8 +102,8 @@ module vAdd_min_max #(
 		if (FXP_ENABLE) begin : fxp
 			avg_unit #(.DATA_WIDTH(REQ_DATA_WIDTH)) fxp_avg (
 				.clk   	(clk		),
-				.vec_in	(s3_out_vec	),
-				.sew   	(s3_sew		),
+				.vec_in	(s2_out_vec	),
+				.sew   	(s2_sew		),
 				.v_d 	(avg_vd		),
 				.v_d1  	(avg_vd1	),
 				.vec_out(avg_vec_out)
@@ -119,10 +121,10 @@ module vAdd_min_max #(
 			s1_vec0    	<= 'b0;
 			s0_vec1    	<= 'b0;
 			s1_vec1    	<= 'b0;
+			s1_out_vec 	<= 'b0;
 			s2_out_vec 	<= 'b0;
 			s3_out_vec 	<= 'b0;
-			s4_out_vec 	<= 'b0;
-			s5_out_vec	<= 'b0;
+			s4_out_vec	<= 'b0;
 			out_vec    	<= 'b0;
 
 			s0_sew     	<= 'b0;
@@ -130,29 +132,28 @@ module vAdd_min_max #(
 
 			s0_opSel   	<= 'b0;
 			s1_opSel   	<= 'b0;
-			s2_opSel   	<= 'b0;
+			s1_opSel   	<= 'b0;
 
 			s0_valid   	<= 'b0;
 			s1_valid   	<= 'b0;
+			s1_valid   	<= 'b0;
 			s2_valid   	<= 'b0;
 			s3_valid   	<= 'b0;
-			s4_valid   	<= 'b0;
-			s5_valid 	<= 'b0;
+			s4_valid 	<= 'b0;
 			out_valid  	<= 'b0;
 
-			s2_equal   	<= 'b0;
-			s2_gt      	<= 'b0;
-			s2_lt      	<= 'b0;
+			s1_equal   	<= 'b0;
+			s1_gt      	<= 'b0;
+			s1_lt      	<= 'b0;
 
 			s0_out_addr	<= 'b0;
 			s1_out_addr	<= 'b0;
+			s1_out_addr	<= 'b0;
 			s2_out_addr	<= 'b0;
 			s3_out_addr	<= 'b0;
-			s4_out_addr	<= 'b0;
-			s5_out_addr <= 'b0;
+			s4_out_addr <= 'b0;
 			out_addr   	<= 'b0;
 		end
-
 		else begin
 			s0_vec0  	<= in_valid ? in_vec0 		: 'h0;//{REQ_DATA_WIDTH{in_valid}} & in_vec0;
 			s0_vec1  	<= in_valid ? in_vec1 		: 'h0;//{REQ_DATA_WIDTH{in_valid}} & in_vec1;
@@ -170,86 +171,91 @@ module vAdd_min_max #(
 			s1_vec1  	<= s0_vec1;
 			s1_sew   	<= s0_sew;
 			s1_opSel 	<= s0_opSel;
-			// s1_valid 	<= s0_valid;
-			// s1_avg 		<= s0_avg;
-			// s1_out_addr	<= s0_out_addr;
-			// s1_start_idx<= s0_start_idx;
-			// s1_req_end	<= s0_req_end;
-			// s1_req_start<= s0_req_start;
+			s1_valid   	<= s0_valid;
+			s1_out_addr	<= s0_out_addr;
+			s1_start_idx<= s0_start_idx;
+			s1_req_end	<= s0_req_end;
+			s1_req_start<= s0_req_start;
+			s1_out_be 	<= s0_out_be;
+			s1_avg 		<= s0_avg;
 
-          	// min-max is combinational, so this returns the value a cycle early lol
-			s2_valid   	<= s0_valid;
-          	s2_opSel   	<= s0_opSel;
-			s2_out_addr	<= s0_out_addr;
-			s2_start_idx<= s0_start_idx;
-			s2_req_end	<= s0_req_end;
-			s2_req_start<= s0_req_start;
-			s2_out_be 	<= s0_out_be;
-			s2_avg 		<= s0_avg;
-			s2_sew 		<= s0_sew;
+			if (MIN_MAX_ENABLE) begin
+				s1_out_vec 	<=	s1_opSel[4] ? w_minMax_result : w_s1_arith_result;
+			end else begin
+				s1_out_vec 	<=	w_s1_arith_result;
+			end
+			s1_equal   	<= w_equal;
+			s1_gt      	<= w_gt;
+			s1_lt      	<= w_lt;
 
-			s2_out_vec 	<= s1_opSel[4] ? w_minMax_result : w_s1_arith_result;
-			s2_equal   	<= w_equal;
-			s2_gt      	<= w_gt;
-			s2_lt      	<= w_lt;
+			s2_valid   	<= s1_valid;
+			s2_out_addr	<= s1_out_addr;
 
-			s3_valid   	<= s2_valid;
-			s3_out_addr	<= s2_out_addr;
-			case(s2_opSel[8:5])
-				4'b1000 : s3_out_vec 	<= s2_equal;
-				4'b1001 : s3_out_vec 	<= ~s2_equal;
-				4'b1010,
-				4'b1011 : s3_out_vec 	<= s2_lt;
-				4'b1100,
-				4'b1101 : s3_out_vec 	<= s2_equal | s2_lt;
-				4'b1110,
-				4'b1111 : s3_out_vec 	<= ~(s2_equal | s2_lt);
-				default : s3_out_vec 	<= s2_out_vec;
-			endcase
-			s3_start_idx<= s2_start_idx;
-			s3_req_end	<= s2_req_end;
-			s3_req_start<= s2_req_start;
-			s3_out_be 	<= s2_out_be;
-			s3_avg 		<= s2_avg;
-			s3_sew 		<= s2_sew;
+			if (MASK_ENABLE) begin
+				case(s1_opSel[8:5])
+					4'b1000 : s2_out_vec 	<= s1_equal;
+					4'b1001 : s2_out_vec 	<= ~s1_equal;
+					4'b1010,
+					4'b1011 : s2_out_vec 	<= s1_lt;
+					4'b1100,
+					4'b1101 : s2_out_vec 	<= s1_equal | s1_lt;
+					4'b1110,
+					4'b1111 : s2_out_vec 	<= ~(s1_equal | s1_lt);
+					default : s2_out_vec 	<= s1_out_vec;
+				endcase
+			end else begin
+				s2_out_vec 	<= s1_out_vec;
+			end
+			s2_start_idx<= s1_start_idx;
+			s2_req_end	<= s1_req_end;
+			s2_req_start<= s1_req_start;
+			s2_out_be 	<= s1_out_be;
+			s2_avg 		<= s1_avg;
+			s2_sew 		<= s1_sew;
 
-			s4_out_vec 	<= ~s3_mask ? s3_out_vec : (s3_start_idx == 0 | s3_req_end) ? (s3_out_vec << s3_start_idx) : (s3_out_vec << s3_start_idx) | s4_out_vec;
-			s4_valid   	<= s3_valid & (~s3_mask | (s2_start_idx == 0) | s3_req_end);
+			if (MASK_ENABLE) begin
+				s3_out_vec 	<= ~s2_mask ? s2_out_vec : ((s2_start_idx == 0 | s2_req_end) ? (s2_out_vec << s2_start_idx) : ((s2_out_vec << s2_start_idx) | s3_out_vec));
+				s3_valid   	<= s2_valid & (~s2_mask | (s1_start_idx == 0) | s2_req_end);
+	         	s3_out_addr <= s2_out_addr;
+	         	s3_out_be 	<= ~s2_mask ? s2_out_be : (s2_req_start ? 'h1 : ((s2_start_idx == 0 | s3_req_end) ? {s3_out_be[REQ_BYTE_EN_WIDTH-2:0],s3_out_be[REQ_BYTE_EN_WIDTH-1]} : s3_out_be));
+	         	s3_mask 	<= s2_mask;
+	         end else begin
+	         	s3_out_vec 	<= s2_out_vec;
+				s3_valid   	<= s2_valid;
+	         	s3_out_addr <= s2_out_addr;
+	         	s3_out_be 	<= s2_out_be;
+	         	s3_mask 	<= 0;
+	        end
+         	s3_avg 		<= s2_avg;
+
+         	s4_out_vec 	<= s3_avg ? avg_vec_out : s3_out_vec;
+         	s4_vd 		<= s3_avg ? avg_vd : 'h0;
+         	s4_vd1 		<= s3_avg ? avg_vd1 : 'h0;
+			s4_valid   	<= s3_valid;
          	s4_out_addr <= s3_out_addr;
-         	s4_out_be 	<= ~s3_mask ? s3_out_be : 
-         								s3_req_start ? 'h1 : 
-         												((s3_start_idx == 0 | s4_req_end) ? {s4_out_be[REQ_BYTE_EN_WIDTH-2:0],s4_out_be[REQ_BYTE_EN_WIDTH-1]} : s4_out_be);
+         	s4_out_be 	<= s3_valid ? s3_out_be : 'h0;
          	s4_mask 	<= s3_mask;
          	s4_avg 		<= s3_avg;
 
-         	s5_out_vec 	<= s4_avg ? avg_vec_out : s4_out_vec;
-         	s5_vd 		<= s4_avg ? avg_vd : 'h0;
-         	s5_vd1 		<= s4_avg ? avg_vd1 : 'h0;
-			s5_valid   	<= s4_valid;
-         	s5_out_addr <= s4_out_addr;
-         	s5_out_be 	<= s4_valid ? s4_out_be : 'h0;
-         	s5_mask 	<= s4_mask;
-         	s5_avg 		<= s4_avg;
-
-			out_vec   	<= s5_out_vec;
-			out_valid 	<= s5_valid;
-			out_addr  	<= s5_out_addr;
-			out_be 		<= s5_out_be;
-			out_mask 	<= s5_mask;
-			out_fxp		<= s5_avg;
-			out_vd 		<= s5_vd;
-			out_vd1 	<= s5_vd1;
+			out_vec   	<= s4_out_vec;
+			out_valid 	<= s4_valid;
+			out_addr  	<= s4_out_addr;
+			out_be 		<= s4_out_be;
+			out_mask 	<= s4_mask;
+			out_fxp		<= s4_avg;
+			out_vd 		<= s4_vd;
+			out_vd1 	<= s4_vd1;
 		end
 	end
 
 	generate
 		if (MASK_ENABLE) begin
 			always @(posedge clk) begin
-				s3_mask 	<= s2_opSel[8];
+				s2_mask <= s1_opSel[8];
 			end
 		end else begin
-			always @(posedge clk) begin
-				s3_mask <= 1'b0;
+			always @(*) begin
+				s2_mask	= 1'b0;
 			end
 		end
 	endgenerate
