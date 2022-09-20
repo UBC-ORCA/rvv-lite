@@ -29,9 +29,9 @@
 `define MULT_ENABLE       1 // a4a
 `define SHIFT_ENABLE      1 //      
 `define MULH_SR_ENABLE    1 // a4b 
-`define MULH_SR_32_ENABLE 0 // a5a
-`define WIDEN_MUL_ENABLE  0 // a5b 
-`define NARROW_ENABLE     0  
+`define MULH_SR_32_ENABLE 1 // a5a
+`define WIDEN_MUL_ENABLE  1 // a5b 
+`define NARROW_ENABLE     1  
 `define SLIDE_N_ENABLE    0 // a6
 `define MULT64_ENABLE     0 // a7
 `define SHIFT64_ENABLE    0 

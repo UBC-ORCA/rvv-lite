@@ -15,7 +15,7 @@ module vWiden #(
 	output     [REQ_BYTE_EN_WIDTH-1:0]  out_be,
 	output reg [  RESP_DATA_WIDTH-1:0] 	out_vec0,
 	output reg [  RESP_DATA_WIDTH-1:0] 	out_vec1,
-	output     [				SEW_WIDTH-1:0]  out_sew
+	output     [		SEW_WIDTH-1:0]  out_sew
 );
 
 	

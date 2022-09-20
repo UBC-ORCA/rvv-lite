@@ -260,18 +260,18 @@ generate
         assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110));
 
         if (FXP_ENABLE) begin
-            assign vSShift_en           = (req_func_id[5:1] == 5'b10101) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
-            assign vSMul_en             = (req_func_id[5:1] == 5'b10011) & (req_op_mnr[1:0] == 2'h0);
+            assign vSShift_en   = (req_func_id[5:1] == 5'b10101) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
+            assign vSMul_en     = (req_func_id[5:1] == 5'b10011) & (req_op_mnr[1:0] == 2'h0);
         end else begin
-            assign vSShift_en   = 0;
-            assign vSMul_en     = 0;
+            assign vSShift_en   = 1'b0;
+            assign vSMul_en     = 1'b0;
         end
 
         if (WIDEN_MUL_ENABLE) begin
             assign vMul_sew         = vWiden_en ? vWiden_sew : req_sew;
 
-            assign vMul_in0         = vWiden_en ? vWiden_in0 : vMul_vec0;
-            assign vMul_in1         = vWiden_en ? vWiden_in1 : vMul_vec1;
+            assign vMul_in0         = vWiden_en ? vWiden_in1 : vMul_vec0;
+            assign vMul_in1         = vWiden_en ? vWiden_in0 : vMul_vec1;
         end else begin
             assign vMul_sew         = req_sew;
 
@@ -309,12 +309,12 @@ generate
 
     if(WIDEN_ADD_ENABLE | WIDEN_MUL_ENABLE) begin : widen
         if (WIDEN_MUL_ENABLE) begin
-            assign vSigned_op1      = req_func_id[3] ? req_func_id[1] : req_func_id[0];
+            assign vSigned_op1      = req_func_id[3]&req_func_id[1] | req_func_id[0];
         end else begin
             assign vSigned_op1      = req_func_id[0];
         end
 
-        assign vWiden_en    = (&req_func_id[5:4] & ~req_func_id[2]);
+        assign vWiden_en    = (req_func_id[5] & req_func_id[4] & ~req_func_id[2]);
 
         vWiden #(
             .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
@@ -361,10 +361,10 @@ generate
         );
     end
     else begin
-        assign vNarrow_sew      = 0;
-        assign vNarrow_be       = 0;
-        assign vNarrow_outVec   = 0;
-        assign vNarrow_outValid = 0;
+        assign vNarrow_sew      = 'h0;
+        assign vNarrow_be       = 'h0;
+        assign vNarrow_outVec   = 'h0;
+        assign vNarrow_outValid = 'b0;
     end
 
     genvar i,j;
@@ -377,7 +377,7 @@ generate
                 assign vShift_upper[i*64 +: 64] = vShift_orTop ? req_data1 : {32'b0,req_data1[(i*64 + 32) +: 32]}; // upper 32b
 
                 if (FXP_ENABLE) begin
-                    assign vShift_vd10[i*64 +: 64] = vShift_orTop ? 0 : (|req_data1[(i*64) +: 32]); // lower 32b
+                    assign vShift_vd10[i*64 +: 64] = vShift_orTop ? 'h0 : (|req_data1[(i*64) +: 32]); // lower 32b
                 end else begin
                     assign vShift_vd10 = 'h0;
                 end
@@ -391,7 +391,7 @@ generate
 
             for (j = 0; j < 4; j = j + 1) begin
                 for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))]);
+                    assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
                 end
             end
 
@@ -400,21 +400,21 @@ generate
                     assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
                 end
             end
-            for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+            for (i = 0; i < REQ_DATA_WIDTH/64; i = i + 1) begin
                 assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
             end
 
-            assign vMul_vec1   = (req_func_id[3:0] != 4'b0111 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? vShift_mult_sew[req_sew] : req_data0;
+            assign vMul_vec1   = (req_func_id[3:0] != 4'b0111 & ~(req_op_mnr[1]^req_op_mnr[0])) ? vShift_mult_sew[req_sew] : req_data0;
 
-            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
+            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
         end else begin
             assign vShiftR64        = 0;
             assign vShift_orTop     = 0;
             assign vShift_vd10      = 0;
-
-            assign vMul_vec0        = req_data1;
             assign vShift_inShift   = 0;
 
+            assign vMul_vec0        = req_data1;
+           
             assign vShift_cmpl_sew[3] = 0;
 
             for (j = 0; j < 3; j = j + 1) begin
@@ -432,23 +432,27 @@ generate
                         assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: 32] : req_data0[i*32 +: 32];
                     end
                 end else begin
-                    assign vShift_cmpl_sew[2] = req_data0;
+                    for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
+                        assign vShift_cmpl_sew[2][i*32 +: 32] = req_data0[i*32 +: 32];
+                    end
                 end
 
-                for (i = 0; i < (REQ_DATA_WIDTH/8; i = i + 1) begin
+                for (i = 0; i < REQ_DATA_WIDTH/8; i = i + 1) begin
                     assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: 8] : req_data0[i*8 +: 8];
                 end
-                for (i = 0; i < (REQ_DATA_WIDTH/16; i = i + 1) begin
+                for (i = 0; i < REQ_DATA_WIDTH/16; i = i + 1) begin
                     assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
                 end
 
-                assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
+                assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
             end else begin
                 for (j = 0; j < 3; j = j + 1) begin
-                    assign vShift_cmpl_sew[j] = req_data0;
+                    for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                        assign vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = req_data0[i*(1 << (j+3)) +: (1 << (j+3))];
+                    end
                 end
 
-                assign vMul_opSel  = req_func_id[1:0];
+                assign vMul_opSel  = 'b01; // only one option for mul/sll
             end
         end
     end
@@ -965,7 +969,11 @@ always @(posedge clk) begin
         resp_off        <= s6_off;
 
         s6_be           <=  vSlide_outBe    | s5_be     | vMCmp_outBe   | vRedAndOrXor_outBe    | vRedSum_min_max_outBe;
-        req_be_out      <=  vNarrow_outValid ? vNarrow_be : s6_be;
+        if (NARROW_ENABLE) begin
+            req_be_out      <=  vNarrow_outValid ? vNarrow_be : s6_be;
+        end else begin
+            req_be_out      <=  s6_be;
+        end
 
         s6_valid        <= vAdd_outValid | vAndOrXor_outValid| vMul_outValid    | vSlide_outValid   | vMerge_outValid   | vMOP_outValid | vPopc_outValid    | vRedAndOrXor_outValid | vRedSum_min_max_outValid   | vID_outValid      | vFirst_outValid;
         resp_valid      <= s6_valid;
@@ -997,10 +1005,3 @@ always @(posedge clk) begin
     end
 end
 endmodule
-
-// equifax 1-800-465-7166
-
-// transunion 1-800-663-9980
-
-// fraud alert
-
