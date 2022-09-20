@@ -1,0 +1,22 @@
+\multicolumn{8}{|l|}{A.1 Core Instructions, decomposed:} &&&& \\ 
+~~a) Load/Store/Cfg         &  & 32 & 0 &  \\
+~~b) And/Or/Xor/Add/Sub/ID  &  & 48 & 0 &  \\
+~~c) Min/Max.               &  & 48 & 0 &  \\
+~~d) Vector Move            &  & 48 & 0 &  \\
+~~e) Whole Reg Mov/Ld/St    &  & 48 & 0 &  \\
+~~f) Vector Slide1          &  & 48 & 0 &  \\ \hline
+A.2 Widen/Narrow Add/Sub    &  & 48 & 0 &  \\ \hline
+A.3 Reduction               & 5,031 & 48 & 0 & 188.4 \\ \hline
+A.4 Mul/Shift:              &&&& \\
+~~a) Mul/ShiftL (8/16/32b)  & 6,258 & 48 & 12 & 174.9 \\
+~~b) MulH/ShiftR (8/16b)    & 7,104 & 48 & 12 & 176.1 \\ \hline
+A.5 32b + Widen/Narrow Mul/Shift &&&&   \\ 
+~~a) MulH/ShiftR (32b)      & 7,194 & 48 & 12 & 183.8 \\
+~~b) Widen/Narrow Mul/Shift & 7,085 & 48 & 12 &  \\ \hline 
+
+A.6 SlideN                  &  & 48 & 12 &  \\ \hline
+A.7 Mul/Shift (64b)         &  & 48 & 16 &  \\ \hline
+A.8 FXP                     &  & 48 & 16 &  \\ \hline
+B.1 Mask (+A.8)             &  & 48 & 16 &  \\ \hline
+Full System (w/ VexRiscv, A.8+B.1)  &  & 71 & 20 &  \\ \hline
+Full System (w/ VexRiscv + FPU, A.8+B.1)  &  & 74 & 23 &  \\ \hline

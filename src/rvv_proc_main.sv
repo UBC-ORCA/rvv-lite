@@ -457,7 +457,7 @@ module rvv_proc_main #(
 
     generate
         if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin
-            assign widen_en  = (opcode_mjr == `OP_INSN && opcode_mnr != `CFG_TYPE && (&funct6[5:4] & ~funct6[2]));
+            assign widen_en  = (opcode_mjr == `OP_INSN && opcode_mnr != `CFG_TYPE && (funct6[5] & funct6[4] & ~funct6[2]));
         end else begin
             assign widen_en  = 0;
         end

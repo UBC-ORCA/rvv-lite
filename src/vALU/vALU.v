@@ -257,7 +257,8 @@ generate
     end
 
     if (MULT_ENABLE) begin : mul_in
-        assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110));
+        assign vMul_en  = req_valid & req_func_id[5] & (req_func_id[4:2] == 3'b001 | req_func_id[3:2] == 2'b10) & ~vMove_en; // whole reg move shares op with smul
+        // assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110));
 
         if (FXP_ENABLE) begin
             assign vSShift_en   = (req_func_id[5:1] == 5'b10101) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
@@ -309,7 +310,7 @@ generate
 
     if(WIDEN_ADD_ENABLE | WIDEN_MUL_ENABLE) begin : widen
         if (WIDEN_MUL_ENABLE) begin
-            assign vSigned_op1      = req_func_id[3]&req_func_id[1] | req_func_id[0];
+            assign vSigned_op1      = (req_func_id[3]&req_func_id[1]) | req_func_id[0];
         end else begin
             assign vSigned_op1      = req_func_id[0];
         end
@@ -818,7 +819,7 @@ generate
         if (MULT_ENABLE) begin
             // need 1 cycle delay!
             always @(posedge clk) begin
-                s6_fxp_out <= vAdd_outVec | vMul_outVec;
+                s6_fxp_out <= (vAdd_outVec | vMul_outVec);
             end
             assign fxp_out = s6_fxp_out;
         end else begin
@@ -931,7 +932,11 @@ always @(posedge clk) begin
         s4_sew          <= s3_sew;
         s5_sew          <= s4_sew;
         s6_sew          <= s5_sew;
-        resp_sew        <= vNarrow_outValid ? vNarrow_sew : s6_sew;
+        if(NARROW_ENABLE) begin
+            resp_sew        <= vNarrow_outValid ? vNarrow_sew : s6_sew;
+        end else begin
+            resp_sew        <= s6_sew;
+        end
 
         // TODO pipe these through modules instead, so timing of outputs is guaranteed
         s0_be           <= (req_valid & ~vSlide_en & ~vMCmp_en & ~vRedAndOrXor_en & ~vRedSum_min_max_en) ? (vWiden_en ? vWiden_be :  req_be) : 'h0;

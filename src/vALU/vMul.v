@@ -72,7 +72,7 @@ module vMul #(
 	reg 						s0_vd10, s1_vd10, s2_vd10, s3_vd10, s4_vd10; // for 64-bit
 	reg                 		s0_narrow, s1_narrow, s2_narrow, s3_narrow, s4_narrow;
 
-	reg							s0_widen, s1_widen, s2_widen, s3_widen, s4_widen;
+	// reg							s0_widen, s1_widen, s2_widen, s3_widen, s4_widen;
 
 	reg signed [		24:0] 	s0_top_bits, s1_top_bits; // keep signed for sra
 	reg [ 				24:0]	s2_top_bits, s3_top_bits, s4_top_bits;
@@ -224,23 +224,23 @@ generate
 		end
 	end
 
-	if (WIDEN_MUL_ENABLE) begin
-		always @(posedge clk) begin
-			if (rst) begin
-				s0_widen 	<= 0;
-				s1_widen 	<= 0;
-				s2_widen 	<= 0;
-				s3_widen 	<= 0;
-				s4_widen 	<= 0;
-			end else begin
-				s0_widen 	<= in_valid & in_widen;
-				s1_widen 	<= s0_widen;
-				s2_widen 	<= s1_widen;
-				s3_widen 	<= s2_widen;
-				s4_widen 	<= s3_widen;
-			end
-		end
-	end
+	// if (WIDEN_MUL_ENABLE) begin
+	// 	always @(posedge clk) begin
+	// 		if (rst) begin
+	// 			s0_widen 	<= 0;
+	// 			s1_widen 	<= 0;
+	// 			s2_widen 	<= 0;
+	// 			s3_widen 	<= 0;
+	// 			s4_widen 	<= 0;
+	// 		end else begin
+	// 			s0_widen 	<= in_valid & in_widen;
+	// 			s1_widen 	<= s0_widen;
+	// 			s2_widen 	<= s1_widen;
+	// 			s3_widen 	<= s2_widen;
+	// 			s4_widen 	<= s3_widen;
+	// 		end
+	// 	end
+	// end
 	// else begin
 	// 	always @(*) begin
 			// s0_widen = 0;
@@ -357,7 +357,11 @@ endgenerate
 					s3_lsb    	<= 'b0;
 					s4_lsb    	<= 'b0;
 				end else begin
-					s0_lsb    	<= (~in_opSel[1] & in_opSel[0] | in_widen) & in_valid;
+					if (WIDEN_MUL_ENABLE) begin
+						s0_lsb    	<= (~in_opSel[1] & in_opSel[0] | in_widen) & in_valid;
+					end else begin
+						s0_lsb    	<= (~in_opSel[1] & in_opSel[0]) & in_valid;
+					end
 					s1_lsb    	<= s0_lsb;
 					s2_lsb    	<= s1_lsb;
 					s3_lsb    	<= s2_lsb;
@@ -515,7 +519,6 @@ endgenerate
 									'b000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
 									'b001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
 									'b010 : out_vec <= {s4_w1[63:32], s4_w0[63:32]};
-									// 'b011 : out_vec <= 'h0;
 
 									'b100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
 									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
@@ -540,8 +543,6 @@ endgenerate
 									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
 									'b110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 
-									'b011,
-									'b111 : out_vec <= 'h0;
 									default : out_vec 	<= 'h0;
 								endcase
 							end
@@ -557,14 +558,11 @@ endgenerate
 								case ({s4_lsb,s4_sew})
 									'b000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
 									'b001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
-									'b010 : out_vec <= 'h0;
 
 									'b100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
 									'b101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
 									'b110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 
-									'b011,
-									'b111 : out_vec <= 'h0;
 									default : out_vec 	<= 'h0;
 								endcase
 							end
@@ -579,7 +577,7 @@ endgenerate
 									'b00 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
 									'b01 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
 									'b10 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
-									'b11 : out_vec <= 'h0;
+
 									default : out_vec 	<= 'h0;
 								endcase
 							end
