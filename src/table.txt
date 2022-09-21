@@ -12,7 +12,8 @@ A.4 Mul/Shift:              &&&& \\
 ~~b) MulH/ShiftR (8/16b)    & 7,104 & 48 & 12 & 176.1 \\ \hline
 A.5 32b + Widen/Narrow Mul/Shift &&&&   \\ 
 ~~a) MulH/ShiftR (32b)      & 7,194 & 48 & 12 & 183.8 \\
-~~b) Widen/Narrow Mul/Shift & 7,085 & 48 & 12 &  \\ \hline 
+7,446 & 48 & 0 & 170
+~~b) Widen/Narrow Mul/Shift & 7,454 & 48 & 12 &  \\ \hline 
 
 A.6 SlideN                  &  & 48 & 12 &  \\ \hline
 A.7 Mul/Shift (64b)         &  & 48 & 16 &  \\ \hline

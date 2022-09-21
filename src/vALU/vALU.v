@@ -242,7 +242,7 @@ generate
     end
 
     if (MULT_ENABLE) begin : mul_in
-        assign vMul_en  = req_valid & req_func_id[5] & (req_func_id[4:2] == 3'b001 | req_func_id[3:2] == 2'b10) & ~vMoveWhole_en; // whole reg move shares op with smul
+        assign vMul_en  = req_valid & req_func_id[5] & ((~req_func_id[4] & req_func_id[2]) | req_func_id[3:2] == 2'b10) & ~vMoveWhole_en; // whole reg move shares op with smul
         // assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110))& ~vMoveWhole_en;
 
         if (FXP_ENABLE) begin

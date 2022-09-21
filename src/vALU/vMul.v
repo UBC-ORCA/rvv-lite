@@ -358,7 +358,7 @@ endgenerate
 					s4_lsb    	<= 'b0;
 				end else begin
 					if (WIDEN_MUL_ENABLE) begin
-						s0_lsb    	<= ((~in_opSel[1] & in_opSel[0]) | in_widen) & in_valid;
+						s0_lsb    	<= (~in_opSel[1] & in_opSel[0] | in_widen) & in_valid;
 					end else begin
 						s0_lsb    	<= (~in_opSel[1] & in_opSel[0]) & in_valid;
 					end

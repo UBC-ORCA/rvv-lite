@@ -25,12 +25,12 @@
 `define WHOLE_REG_ENABLE  1 // a1e
 `define SLIDE_ENABLE      1 // a1f
 `define WIDEN_ADD_ENABLE  1 // a2
-`define REDUCTION_ENABLE  1 // a3
-`define MULT_ENABLE       1 // a4a
-`define SHIFT_ENABLE      1 //      
-`define MULH_SR_ENABLE    1 // a4b 
-`define MULH_SR_32_ENABLE 1 // a5a
-`define WIDEN_MUL_ENABLE  1 // a5b 
+`define REDUCTION_ENABLE  0 // a3
+`define MULT_ENABLE       0 // a4a
+`define SHIFT_ENABLE      0 //      
+`define MULH_SR_ENABLE    0 // a4b 
+`define MULH_SR_32_ENABLE 0 // a5a
+`define WIDEN_MUL_ENABLE  0 // a5b 
 `define NARROW_ENABLE     0  
 `define SLIDE_N_ENABLE    0 // a6
 `define MULT64_ENABLE     0 // a7
@@ -319,7 +319,7 @@ module rvv_proc_main #(
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(sew),                              .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(avl_max_reg),                          .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(widen_en | widen_en_d));
             end
         end else begin
-            if (`MASK_ENABLE) begin
+            if (`MASK_ENABLE_EXT) begin
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : (en_vs1 ? sew : opcode_mnr[1:0])),   .whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : (en_vs1 ? avl_max_reg : avl_max_reg_s)), .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(1'b0));
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),                                .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),                            .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(1'b0));
             end else begin
