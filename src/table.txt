@@ -4,7 +4,7 @@
 ~~c) Min/Max.               &  & 48 & 0 &  \\
 ~~d) Vector Move            &  & 48 & 0 &  \\
 ~~e) Whole Reg Mov/Ld/St    &  & 48 & 0 &  \\
-~~f) Vector Slide1          &  & 48 & 0 &  \\ \hline
+~~f) Vector Slide1          & 5,000 & 48 & 0 &  \\ \hline
 A.2 Widen/Narrow Add/Sub    &  & 48 & 0 &  \\ \hline
 A.3 Reduction               & 5,031 & 48 & 0 & 188.4 \\ \hline
 A.4 Mul/Shift:              &&&& \\

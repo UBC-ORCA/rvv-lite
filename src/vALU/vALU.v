@@ -102,7 +102,7 @@ reg                             s6_mask_out;
 reg                             s6_valid;
 
 wire [   REQ_DATA_WIDTH-1:0]    vWiden_in0, vWiden_in1;
-wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1;
+wire [   REQ_DATA_WIDTH-1:0]    vAdd_in0, vAdd_in1, vMul_in0, vMul_in1, vSlide_in1, vAndOrXor_in0, vAndOrXor_in1;
 wire [   REQ_DATA_WIDTH-1:0]    vAvAdd_outVec, vScShift_outVec;
 wire [                  1:0]    vAndOrXor_opSel, vMul_opSel, vAdd_opSel;
 wire [   REQ_DATA_WIDTH-1:0]    vMul_vec1       ;
@@ -187,7 +187,7 @@ generate
     end
 
     if (ADD_SUB_ENABLE) begin : add_sub_in
-        assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000 | req_func_id[5:2] == 4'b1100) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | vAAdd_en | vMCmp_en);
+        assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | (req_func_id[5:2] == 4'b1100) | vAAdd_en | vMCmp_en);
 
         if (MIN_MAX_ENABLE) begin
             assign vMinMax_en   = (req_func_id[5:2] == 4'b0001);
@@ -283,7 +283,7 @@ generate
     end
 
     if (MASK_ENABLE) begin : mask_opsel
-        assign vMCmp_en         = (req_func_id[5:3] == 3'b011) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
+        assign vMCmp_en         = (req_func_id[5:3] == 3'b011) & ~(req_op_mnr[1]^req_op_mnr[0]);
 
         if (MASK_ENABLE_EXT) begin
             assign vMOP_en          = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h2);
@@ -536,8 +536,8 @@ generate
         ) vAndOrXor_0   (
             .clk        (clk                ),
             .rst        (rst                ),
-            .in_vec0    (req_data0          ),
-            .in_vec1    (req_data1          ),
+            .in_vec0    (vAndOrXor_in0      ),
+            .in_vec1    (vAndOrXor_in1      ),
             .in_opSel   (vAndOrXor_opSel    ),
             .in_valid   (vAndOrXor_en       ),
             .in_addr    (req_addr           ),

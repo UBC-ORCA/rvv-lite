@@ -21,7 +21,7 @@ module vAdd_min_max #(
 	input      [      OPSEL_WIDTH-1:0] 	in_opSel ,
 	input                            	in_carry ,
 	input	   [   REQ_ADDR_WIDTH-1:0] 	in_addr  ,
-	input      [                  2:0] 	in_start_idx,
+	input      [                  5:0] 	in_start_idx,
 	input 								in_req_start,
 	input 								in_req_end,
 	input	   [REQ_BYTE_EN_WIDTH-1:0]	in_be,
@@ -46,7 +46,7 @@ module vAdd_min_max #(
 	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
 	reg [                7:0] s1_gt, s1_lt, s1_equal;
 	reg 					  s2_mask, s3_mask, s4_mask;
-	reg [    		     2:0] s0_start_idx, s1_start_idx, s2_start_idx;
+	reg [    		     5:0] s0_start_idx, s1_start_idx, s2_start_idx;
 	reg 					  s0_req_end, s1_req_end, s2_req_end, s3_req_end;
 	reg 					  s0_req_start, s1_req_start, s2_req_start;
 	reg [REQ_BYTE_EN_WIDTH-1:0] s0_out_be, s1_out_be, s2_out_be, s3_out_be, s4_out_be;
@@ -67,13 +67,13 @@ module vAdd_min_max #(
 	wire [REQ_BYTE_EN_WIDTH-1:0] avg_vd, avg_vd1;
 
 	generate
-		if(MIN_MAX_ENABLE | MASK_ENABLE) begin
+		if(MIN_MAX_ENABLE | MASK_ENABLE) begin : min_max_mask
 			vMinMaxSelector vMinMaxSelector0 (
-				.vec0(s1_vec0),
-				.vec1(s1_vec1),
+				.vec0(s0_vec0),
+				.vec1(s0_vec1),
 				.sub_result(s1_result),
-				.sew(s1_sew),
-				.minMax_sel(s1_opSel[3]),
+				.sew(s0_sew),
+				.minMax_sel(s0_opSel[3]),
 				.minMax_result(w_minMax_result),
 				.equal(w_equal),
 				.lt(w_lt)
@@ -98,7 +98,7 @@ module vAdd_min_max #(
 		.result(s1_result)
 	);
 
-	generate 
+	generate
 		if (FXP_ENABLE) begin : fxp
 			avg_unit #(.DATA_WIDTH(REQ_DATA_WIDTH)) fxp_avg (
 				.clk   	(clk		),
@@ -179,7 +179,7 @@ module vAdd_min_max #(
 			s1_out_be 	<= s0_out_be;
 			s1_avg 		<= s0_avg;
 
-			if (MIN_MAX_ENABLE) begin
+			if (MIN_MAX_ENABLE | MASK_ENABLE) begin
 				s1_out_vec 	<=	s1_opSel[4] ? w_minMax_result : w_s1_arith_result;
 			end else begin
 				s1_out_vec 	<=	w_s1_arith_result;
@@ -214,10 +214,10 @@ module vAdd_min_max #(
 			s2_sew 		<= s1_sew;
 
 			if (MASK_ENABLE) begin
-				s3_out_vec 	<= ~s2_mask ? s2_out_vec : ((s2_start_idx == 0 | s2_req_end) ? (s2_out_vec << s2_start_idx) : ((s2_out_vec << s2_start_idx) | s3_out_vec));
-				s3_valid   	<= s2_valid & (~s2_mask | (s1_start_idx == 0) | s2_req_end);
+				s3_out_vec 	<= ~s2_mask ? s2_out_vec : ((s2_start_idx[2:0] == 0 | s2_req_end) ? (s2_out_vec << s2_start_idx) : ((s2_out_vec << s2_start_idx) | s3_out_vec));
+				s3_valid   	<= s2_valid & (~s2_mask | (s1_start_idx[2:0] == 0) | s2_req_end);
 	         	s3_out_addr <= s2_out_addr;
-	         	s3_out_be 	<= ~s2_mask ? s2_out_be : (s2_req_start ? 'h1 : ((s2_start_idx == 0 | s3_req_end) ? {s3_out_be[REQ_BYTE_EN_WIDTH-2:0],s3_out_be[REQ_BYTE_EN_WIDTH-1]} : s3_out_be));
+	         	s3_out_be 	<= ~s2_mask ? s2_out_be : (s2_req_start ? 'h1 : ((s2_start_idx[2:0] == 0 | s3_req_end) ? {s3_out_be[REQ_BYTE_EN_WIDTH-2:0],s3_out_be[REQ_BYTE_EN_WIDTH-1]} : s3_out_be));
 	         	s3_mask 	<= s2_mask;
 	         end else begin
 	         	s3_out_vec 	<= s2_out_vec;

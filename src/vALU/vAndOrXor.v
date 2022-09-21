@@ -82,18 +82,7 @@ module vAndOrXor #(
 	  	end
 	  	else begin
 	  		always @(*) begin
-	  	// 		s0_w_reg 	= 0;
-				// s1_w_reg 	= 0;
-				// s2_w_reg 	= 0;
-				// s3_w_reg 	= 0;
-				// s4_w_reg 	= 0;
             	out_w_reg 	= 0;
-
-    //         	s0_sca		= 0;
-				// s1_sca		= 0;
-				// s2_sca		= 0;
-				// s3_sca		= 0;
-				// s4_sca		= 0;
             	out_sca		= 0;
 	  		end
 	  	end

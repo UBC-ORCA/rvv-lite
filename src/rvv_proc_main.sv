@@ -24,7 +24,7 @@
 `define VEC_MOVE_ENABLE   1 // a1d
 `define WHOLE_REG_ENABLE  1 // a1e
 `define SLIDE_ENABLE      1 // a1f
-`define WIDEN_ADD_ENABLE  1 // a2
+`define WIDEN_ADD_ENABLE  0 // a2
 `define REDUCTION_ENABLE  0 // a3
 `define MULT_ENABLE       0 // a4a
 `define SHIFT_ENABLE      0 //      
@@ -36,7 +36,7 @@
 `define MULT64_ENABLE     0 // a7
 `define SHIFT64_ENABLE    0 
 `define FXP_ENABLE        0 // a8
-`define MASK_ENABLE       0 // b1
+`define MASK_ENABLE       1 // b1
 `define MASK_ENABLE_EXT   0
 
 module rvv_proc_main #( 
@@ -251,9 +251,6 @@ module rvv_proc_main #(
     wire                        vec_haz_clr     [0:NUM_VEC-1]; // use this to indicate that vec needs bubble????
     wire                        no_bubble;
 
-    // reg   [    ADDR_WIDTH-1:0]  ld_addr;
-    // reg   [    DATA_WIDTH-1:0]  ld_data_in;
-    // reg                         ld_valid;
     reg                         wait_mem;
     reg                         wait_mem_msk;
 
@@ -263,6 +260,7 @@ module rvv_proc_main #(
     wire                        haz_dest;
 
     wire                        logic_mop;
+    reg                         logic_mop_d;
 
     wire                        agu_addr_start_rd_1,    agu_addr_start_rd_2,    agu_addr_start_wr;
     wire                        agu_addr_end_rd_1,      agu_addr_end_rd_2,      agu_addr_end_wr;
@@ -310,41 +308,41 @@ module rvv_proc_main #(
 
     // TODO: condense if structure
     generate
-        if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin
-            if (`MASK_ENABLE) begin
+        if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin : agu_src
+            if (`MASK_ENABLE_EXT) begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : (en_vs1 ? sew : opcode_mnr[1:0])),   .whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : (en_vs1 ? avl_max_reg : avl_max_reg_s)), .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(widen_en | widen_en_d));
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),                                .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),                            .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(widen_en | widen_en_d));
-            end else begin
+            end else begin : no_mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(en_vs1 ? sew : opcode_mnr[1:0]),   .whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(en_vs1 ? avl_max_reg : avl_max_reg_s), .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(widen_en | widen_en_d));
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(sew),                              .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(avl_max_reg),                          .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(widen_en | widen_en_d));
             end
-        end else begin
-            if (`MASK_ENABLE_EXT) begin
+        end else begin : agu_src
+            if (`MASK_ENABLE_EXT) begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(logic_mop ? 'h0 : (en_vs1 ? sew : opcode_mnr[1:0])),   .whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(logic_mop ? 'h0 : (en_vs1 ? avl_max_reg : avl_max_reg_s)), .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(1'b0));
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(logic_mop ? 'h0 : sew),                                .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(logic_mop ? 'h0 : avl_max_reg),                            .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(1'b0));
-            end else begin
+            end else begin : no_mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src1   (.clk(clk), .rst_n(rst_n), .en((en_vs1 | en_vs3) & ~stall), .sew(en_vs1 ? sew : opcode_mnr[1:0]),   .whole_reg(whole_reg_rd),.addr_in(en_vs1 ? src_1 : dest),.addr_out(vr_rd_addr_1),.max_reg_in(en_vs1 ? avl_max_reg : avl_max_reg_s), .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_1),  .idle(agu_idle_rd_1),   .addr_start(agu_addr_start_rd_1),   .addr_end(agu_addr_end_rd_1), .widen(1'b0));
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_src2   (.clk(clk), .rst_n(rst_n), .en(en_vs2 & ~stall),            .sew(sew),                              .whole_reg(whole_reg_rd),.addr_in(src_2),                .addr_out(vr_rd_addr_2),.max_reg_in(avl_max_reg),                          .max_off_in(avl_max_off_in_rd), .off_out(vr_rd_off_2),  .idle(agu_idle_rd_2),   .addr_start(agu_addr_start_rd_2),   .addr_end(agu_addr_end_rd_2), .widen(1'b0));
             end
         end
 
-        if (`NARROW_ENABLE) begin
-            if (`MASK_ENABLE) begin
+        if (`NARROW_ENABLE) begin : agu_dest
+            if (`MASK_ENABLE) begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg_w),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(alu_narrow));
-            end else begin
+            end else begin : no_mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(avl_max_reg_w),   .max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(alu_narrow));
             end
-        end else begin
-            if (`MASK_ENABLE) begin
+        end else begin : agu_dest
+            if (`MASK_ENABLE) begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg_w),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(1'b0));
-            end else begin
+            end else begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(avl_max_reg_w),   .max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(1'b0));
             end
         end
 
-        if (`MASK_ENABLE_EXT) begin
-            addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(wait_mem&mem_port_valid_in), .sew(opcode_mnr_m), .whole_reg(whole_reg_ld),.addr_in(dest_m),  .addr_out(vr_ld_addr),  .max_reg_in(wait_mem_mask ? 'h0 : avl_max_reg_l),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),   .idle(agu_idle_ld), .widen(1'b0));
-        end else begin
+        if (`MASK_ENABLE_EXT) begin : agu_ld_mask
+            addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(wait_mem&mem_port_valid_in), .sew(opcode_mnr_m), .whole_reg(whole_reg_ld),.addr_in(dest_m),  .addr_out(vr_ld_addr),  .max_reg_in(wait_mem_msk ? 'h0 : avl_max_reg_l),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),   .idle(agu_idle_ld), .widen(1'b0));
+        end else begin : agu_ld_no_mask
             addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_ld     (.clk(clk), .rst_n(rst_n), .en(wait_mem&mem_port_valid_in), .sew(opcode_mnr_m), .whole_reg(whole_reg_ld),.addr_in(dest_m),  .addr_out(vr_ld_addr),  .max_reg_in(avl_max_reg_l),.max_off_in(avl_max_off_in_ld), .off_out(vr_ld_off),   .idle(agu_idle_ld), .widen(1'b0));
         end
     endgenerate
@@ -633,7 +631,7 @@ module rvv_proc_main #(
 
     // --------------------------------------------- AGU INPUT CONTROL ------------------------------------------------------------------
     if (`MASK_ENABLE_EXT) begin
-        assign logic_mop = (opcode_mnr == `MVV_TYPE) & (funct6[5:3] == 3'b011 | funct6 == 6'h10);
+        assign logic_mop = (opcode_mnr == `MVV_TYPE) & (funct6[5:3] == 3'b011 | (funct6 == 6'h10 & (|src_1)));
     end else begin
         assign logic_mop = 'b0;
     end
@@ -682,8 +680,9 @@ module rvv_proc_main #(
     // FIXME only read if mask op?
     wire is_mcmp_op, is_mcmp_op_d, first_or_cpop, first_or_cpop_d;
 
-    assign vr_rd_en_1 = ~agu_idle_rd_1 & ~is_mcmp_op_d; // don't actually read data if it's a mask op!
-    assign vr_rd_en_2 = ~agu_idle_rd_2 & ~is_mcmp_op_d; // don't actually read data if it's a mask op!
+
+    assign vr_rd_en_1 = ~agu_idle_rd_1 & ~logic_mop_d; // don't actually read data if it's a mask op!
+    assign vr_rd_en_2 = ~agu_idle_rd_2 & ~logic_mop_d; // don't actually read data if it's a mask op!
 
     always @(posedge clk) begin
         // set "active" if we're reading mask or data -- all this does is enable the alu so it's fine. rename later.
@@ -693,8 +692,8 @@ module rvv_proc_main #(
 
     generate
         if (`MASK_ENABLE) begin
-            assign is_mcmp_op = (funct6[5:3] == 3'b011 & opcode_mnr == `MVV_TYPE);
-            assign is_mcmp_op_d = (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE);
+            // assign is_mcmp_op = (funct6[5:3] == 3'b011 & opcode_mnr == `MVV_TYPE);
+            // assign is_mcmp_op_d = (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE);
 
             if (`MASK_ENABLE_EXT) begin
                 assign first_or_cpop = (funct6 == 6'h10 & opcode_mnr == `MVV_TYPE);
@@ -704,14 +703,15 @@ module rvv_proc_main #(
                 assign first_or_cpop_d = 1'b0;
             end
 
-            assign vm_rd_en_1 = ~agu_idle_rd_1 & (is_mcmp_op | is_mcmp_op_d | ~vm | ~vm_d); // only enable if it's a mask op or masked op!
-            assign vm_rd_en_2 = ~agu_idle_rd_2 & (is_mcmp_op | is_mcmp_op_d | first_or_cpop | first_or_cpop_d); // only enable if it's a mask op!
+            assign vm_rd_en_1 = ~agu_idle_rd_1 & (logic_mop | logic_mop_d | ~vm | ~vm_d); // only enable if it's a mask op or masked op!
+            assign vm_rd_en_2 = ~agu_idle_rd_2 & (logic_mop | logic_mop_d); // only enable if it's a mask op!
 
             assign vm_rd_addr_1 = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? 'h0 : vr_rd_addr_1;
             assign vm_rd_off_1  = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? alu_vr_idx_next >> (sew + 3) : vr_rd_off_1;
         end else begin
             assign is_mcmp_op = 0;
             assign is_mcmp_op_d = 0;
+
             assign vm_rd_en_1 = 0;
             assign vm_rd_en_2 = 0;
         end
@@ -744,7 +744,7 @@ module rvv_proc_main #(
     assign vr_wr_data_in    = alu_data_out;
 
     generate
-        if (`MASK_ENABLE_EXT) begin
+        if (`MASK_ENABLE) begin
             assign vm_wr_en         = alu_valid_out & alu_mask_out ? alu_be_out : 'h0;     // write mask
         end else begin
             assign vm_wr_en         = 0;
@@ -798,9 +798,9 @@ module rvv_proc_main #(
     end
 
     generate
-        if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin
+        if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin : gen_be_wide
             generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? (alu_vr_idx >> 2) : alu_vr_idx), .avl_be(gen_avl_be));
-        end else begin
+        end else begin : gen_be
             generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(alu_vr_idx), .avl_be(gen_avl_be));
         end
     endgenerate
@@ -811,28 +811,50 @@ module rvv_proc_main #(
             opcode_mjr_d    <= 'h0;
             opcode_mnr_d    <= 'h0;
             dest_d          <= 'h0;
+
+            logic_mop_d     <= 'h0;
+
             lumop_d         <= 'h0;
+            mop_d           <= 'h0;
 
             funct6_d        <= 'h0;
             vm_d            <= 'b1; // unmasked by default
-            // ld_valid        <= 'h0;
 
             sca_data_in_1_d <= 'h0;
             sca_data_in_2_d <= 'h0;
-            mem_addr_in_d   <= 'b0;
+
             vxrm_in_d       <= 'b0;
 
+            mem_port_req_out<= 'h0;
+            mem_addr_in_d   <= 'b0;
+            
             out_ack_e       <= 'b0;
+            out_data_e      <= 'h0;
             out_ack_m       <= 'b0;
 
+            opcode_mjr_m    <= 'h0;
+            opcode_mnr_m    <= 'h0;
             dest_m          <= 'h0;
 
             lumop_m         <= 'h0;
+            mop_m           <= 'h0;
+
+            wait_mem        <= 'b0;
+            wait_mem_msk    <= 'b0;
+
+            vexrv_data_out  <= 'h0;
+            vexrv_valid_out <= 'h0;
         end else begin
             // all stalling should happen here
             opcode_mjr_d    <= ~stall ? opcode_mjr  : (no_bubble ? opcode_mjr_d : 'h0);
             opcode_mnr_d    <= ~stall ? opcode_mnr  : (no_bubble ? opcode_mnr_d : 'h0);
             dest_d          <= ~stall ? dest        : (no_bubble ? dest_d       : 'h0);
+
+            if (`MASK_ENABLE_EXT) begin
+                logic_mop_d <= ~stall ? logic_mop   : (no_bubble ? logic_mop_d  : 'h0);
+            end else begin
+                logic_mop_d <= 'b0;
+            end
 
             lumop_d         <= ~stall ? src_2       : (no_bubble ? lumop_d      : 'h0);
             mop_d           <= ~stall ? mop         : (no_bubble ? mop_d        : 'h0);
@@ -849,9 +871,9 @@ module rvv_proc_main #(
             vxrm_in_d       <= ~stall ? vxrm_in_f   : (no_bubble ? vxrm_in_d    : 'h0);
 
             if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin
-                widen_en_d      <= ~stall ? widen_en    : (no_bubble ? widen_en_d   : 'h0);
+                widen_en_d  <= ~stall ? widen_en    : (no_bubble ? widen_en_d   : 'h0);
             end else begin
-                widen_en_d      <= 'b0;
+                widen_en_d  <= 'b0;
             end
 
             mem_port_req_out<= ~stall ? en_req_mem : (no_bubble & mem_port_req_out);
@@ -870,7 +892,11 @@ module rvv_proc_main #(
             mop_m           <= wait_mem ? mop_m     : mop_d;
 
             wait_mem        <= wait_mem ? ~mem_port_done_ld : (opcode_mjr_d == `LD_INSN);
-            wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_d == `LD_INSN) & lumop_d == 5'hB & mop_d == 'h0);
+            if (`MASK_ENABLE_EXT) begin
+                wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_d == `LD_INSN) & lumop_d == 5'hB & mop_d == 'h0);
+            end else begin
+                wait_mem_msk    <= 'b0;
+            end
 
             vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) ? avl : out_data_e;
             vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) | (opcode_mjr_d[2:0] != 3'h7);

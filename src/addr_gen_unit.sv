@@ -45,11 +45,11 @@ module addr_gen_unit #(
     assign addr_end         = (state & curr_reg_out == max_reg_out & curr_off_out == max_off_out & (~widen | turn));
 
     assign base_reg_out    = (addr_start ? addr_in : base_reg);
-    assign curr_reg_out    = ~addr_start ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off) & (~widen | ~turn))) : 'h0;
+    assign curr_reg_out    = (~addr_start & state_next) ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off) & (~widen | ~turn))) : 'h0;
     // assign max_reg_out     = (addr_start ? (~sew[2] ? max_reg_in : (max_reg_in >> (3'b100 - sew[1:0]))) : max_reg);
     assign max_reg_out     = (addr_start ? (whole_reg ? (1 << sew) - 1 : max_reg_in) : max_reg);
 
-    assign curr_off_out    = ~addr_start & (curr_off != max_off | widen) ? (curr_off + (curr_off != max_off & (~widen | ~turn))) : 'h0;
+    assign curr_off_out    = (~addr_start & state_next) & (curr_off != max_off | widen) ? (curr_off + (curr_off != max_off & (~widen | ~turn))) : 'h0;
     // assign max_off_out     = (addr_start ? (~sew[2] ? max_off_in : (max_off_in >> (3'b100 - sew[1:0]))) : max_off);
     assign max_off_out     = (addr_start ? (whole_reg ? (VLEN/DATA_WIDTH) - 1 : max_off_in) : max_off);
 
