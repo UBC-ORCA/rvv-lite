@@ -3,6 +3,7 @@
 
 void init_array_intrinsics( uint32_t *d, int size, int seed );
 void inc_array_intrinsics( uint32_t *d, int size, int seed, int increase );
+void init_array_px_intrinsics(unsigned int *input, const int image_width, const int image_height)
 void print_array_intrinsics( uint32_t *in, int rows, int cols, int rowlen, int max_print);
 void print_array_intrinsics_half( uint16_t *in, int rows, int cols, int rowlen, int max_print);
 

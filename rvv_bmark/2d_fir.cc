@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <riscv_vector.h>
 
-#include "2d_fir.h"
 #include "test_utils.h"
 
 // can only handle up to 16

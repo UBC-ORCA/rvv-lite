@@ -22,7 +22,7 @@ void inc_array_intrinsics( uint32_t *d, int size, int seed, int increase )
 
 void init_array_px_intrinsics(unsigned int *input, const int image_width, const int image_height)
 {
-    int aux = 1;
+    unsigned int aux = 1;
     for (int i = 0; i < image_width*image_height; ++i) {
         input[i] = aux;
         aux++;
