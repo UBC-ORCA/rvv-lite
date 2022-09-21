@@ -45,6 +45,7 @@ module vALU #(
     parameter MULT64_ENABLE     = 1 ,
     parameter SHIFT64_ENABLE    = 1 ,
     parameter MASK_ENABLE       = 1 ,
+    parameter MASK_ENABLE_EXT   = 1 ,
     parameter FXP_ENABLE        = 1 
 ) (
     input                              clk         ,
@@ -133,7 +134,7 @@ wire                            vMove_outWReg;
 wire [                  1:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
 wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vFirst_en, vAdd_en, vMinMax_en,
-                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vSMul_en;
+                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vSMul_en, vMoveWhole_en;
 wire                            vMul_outNarrow;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vMerge_outAddr,
@@ -158,18 +159,18 @@ generate
             if (WHOLE_REG_ENABLE) begin
                 assign vAndOrXor_in0    = vMove_en &  (vMoveXS_en | req_whole_reg) ? 'h0    : req_data0;
                 assign vAndOrXor_in1    = vMove_en & ~(vMoveXS_en | req_whole_reg) ? 'h0    : req_data1;
+
+                assign vMoveWhole_en    = (req_func_id == 6'b100111 & req_op_mnr == 3'h3);
             end else begin
                 assign vAndOrXor_in0    = vMoveXS_en ? 'h0 : req_data0;
                 assign vAndOrXor_in1    = vMove_en & ~vMoveXS_en ? 'h0  : req_data1;
+
+                assign vMoveWhole_en    = 1'b0;
             end
 
-            assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
-            assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
-            if (MASK_ENABLE) begin
-                assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
-            end else begin
-                assign vMerge_en    = 0;
-            end
+            assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2); 
+            assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | vMoveWhole_en | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
+            
         end else begin
             assign vAndOrXor_opSel  = req_func_id[1:0];
 
@@ -178,28 +179,12 @@ generate
 
             assign vMoveXS_en       = 0;
             assign vMove_en         = 0;
-            assign vMerge_en        = 0;
         end
-    end else begin
-        assign vMoveXS_en       = 0;
-        assign vMove_en         = 0;
-        assign vMerge_en        = 0;
     end
 
-    if (VEC_MOVE_ENABLE) begin : move_in
-        assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2);
-        assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | (req_func_id == 6'b100111 & req_op_mnr == 3'h3) | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
-        if (MASK_ENABLE) begin
-            assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
-        end else begin
-            assign vMerge_en    = 0;
-        end
-    end else begin
-        assign vMoveXS_en       = 0;
-        assign vMove_en         = 0;
-        assign vMerge_en        = 0;
+    if (MASK_ENABLE_EXT) begin
+        assign vMerge_en    = req_valid & (req_func_id == 6'b010111) & ~req_mask;
     end
-
 
     if (ADD_SUB_ENABLE) begin : add_sub_in
         assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000 | req_func_id[5:2] == 4'b1100) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | vAAdd_en | vMCmp_en);
@@ -240,9 +225,9 @@ generate
 
 
     if (NARROW_ENABLE) begin : narrow_in
-        assign vNarrow_en       = req_valid & (req_func_id[5:2] == 4'b1011);
+        assign vNarrow_en       = req_valid & (req_func_id[5:2] == 4'b1011) & ~(req_op_mnr[1]^req_op_mnr[0]);
     end else begin
-        assign vNarrow_en       = 'b0;
+        assign vNarrow_en       = 1'b0;
     end
 
     if (REDUCTION_ENABLE) begin : red_opsel
@@ -252,13 +237,13 @@ generate
         assign vRedAndOrXor_opSel   = req_func_id[1:0];
         assign vRedSum_min_max_opSel= req_func_id[2:1];
     end else begin
-        assign vRedAndOrXor_en      = 0;
-        assign vRedSum_min_max_en   = 0;
+        assign vRedAndOrXor_en      = 1'b0;
+        assign vRedSum_min_max_en   = 1'b0;
     end
 
     if (MULT_ENABLE) begin : mul_in
-        assign vMul_en  = req_valid & req_func_id[5] & (req_func_id[4:2] == 3'b001 | req_func_id[3:2] == 2'b10) & ~vMove_en; // whole reg move shares op with smul
-        // assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110));
+        assign vMul_en  = req_valid & req_func_id[5] & (req_func_id[4:2] == 3'b001 | req_func_id[3:2] == 2'b10) & ~vMoveWhole_en; // whole reg move shares op with smul
+        // assign vMul_en          = req_valid & ((req_func_id[5:2] == 4'b1001) | (req_func_id[5:2] == 4'b1010) | (req_func_id[5:2] == 4'b1110))& ~vMoveWhole_en;
 
         if (FXP_ENABLE) begin
             assign vSShift_en   = (req_func_id[5:1] == 5'b10101) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
@@ -298,14 +283,17 @@ generate
     end
 
     if (MASK_ENABLE) begin : mask_opsel
-        assign vMOP_en          = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h2);
         assign vMCmp_en         = (req_func_id[5:3] == 3'b011) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0);
-        assign vPopc_en         = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
-        assign vFirst_en        = req_valid & (req_func_id == 'h10) & (req_data0 == 'h11); // First uses VWXUNARY0
 
+        if (MASK_ENABLE_EXT) begin
+            assign vMOP_en          = req_valid & (req_func_id[5:3] == 3'b011) & (req_op_mnr === 3'h2);
+            assign vPopc_en         = req_valid & (req_func_id == 'h10) & (req_data0 == 'h10); // Popc uses VWXUNARY0
+            assign vFirst_en        = req_valid & (req_func_id == 'h10) & (req_data0 == 'h11); // First uses VWXUNARY0
+        end
         assign vMask_opSel      = req_func_id[2:0];
     end else begin
         assign vMCmp_en         = 'b0;
+        assign vMask_opSel      = 'h0;
     end
 
     if(WIDEN_ADD_ENABLE | WIDEN_MUL_ENABLE) begin : widen
@@ -652,7 +640,7 @@ generate
         assign vSlide_outAddr   = 0;
     end
 
-    if(MASK_ENABLE) begin : mask
+    if(MASK_ENABLE_EXT) begin : mask
         vMerge # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),

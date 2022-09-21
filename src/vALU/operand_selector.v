@@ -50,7 +50,7 @@ module operand_select #(
 	assign b_op 	= (r_sew == 'b00);
 	assign h_op 	= (r_sew == 'b01);
 	assign w_op 	= (r_sew == 'b10);
-	assign d_op 	= (r_sew == 'b11);
+	// assign d_op 	= (r_sew == 'b11);
 
 	assign a0 		= b_op ? 'b0 : {{2{a0_ext}}, r_vec0[15:0]};
 	assign a1 		= b_op ? 'b0 : {{2{a1_ext}}, r_vec0[31:16]};
@@ -142,7 +142,7 @@ module operand_select #(
 			m1_a0 	<= b_op ? b_a5 : a3;
 			m1_b0 	<= b_op ? b_b5 : b1;
 			m1_a1 	<= b_op ? b_a4 : a2;
-			m1_b1 	<= b_op ? b_b4:  b0;
+			m1_b1 	<= b_op ? b_b4 : b0;
 			m2_a0 	<= b_op ? b_a3 : a1;
 			m2_b0 	<= b_op ? b_b3 : b3;
 			m2_a1 	<= b_op ? b_a2 : a0;
