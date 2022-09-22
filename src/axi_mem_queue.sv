@@ -46,7 +46,7 @@ end
 
 endmodule
 
-module mem_queue #(
+module mem_queue_32 #(
     parameter MBUS_ADDR_WIDTH    = 32,               // We need to get this from VexRiscV
     parameter MBUS_DATA_WIDTH    = 32,
     parameter MBUS_DW_B          = MBUS_DATA_WIDTH>>3,
@@ -110,7 +110,7 @@ module mem_queue #(
     reg                         start_read = 0;
     reg [  FIFO_DEPTH_BITS-1:0] read_count = 0;
 
-    reg [  FIFO_DEPTH_BITS-1:0] write_count = 0;
+    reg [    FIFO_DEPTH_BITS:0] write_count = 0;
     reg [    FIFO_DEPTH_BITS:0] ack_count = 0;
 
     FIFObuffer #(.DATA_WIDTH(MBUS_ADDR_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) ar_buf_h   (.clk(clk), .rst_n(rst_n), .r_en(ar_h_r_en),   .w_en(ar_w_en), .data_in(ar_h_din), .data_out(ar_h_dout), .EMPTY(ar_h_empty));
@@ -168,8 +168,9 @@ module mem_queue #(
     always @(posedge clk) begin
         w_turn          <= mbus_aw_ready^w_turn;
 
-        write_count     <= rvv_valid_out ? (rvv_start_out ? 1 : write_count + 1) : (ack_count[FIFO_DEPTH_BITS:1] == write_count ? 0 : write_count);
-        ack_count       <= (ack_count[FIFO_DEPTH_BITS:1] < write_count) ? (mbus_b_valid ? ack_count + 1 : ack_count) : 0;
+        write_count     <= (ack_count == write_count & (write_count > 0)) ? 0 : write_count + (mbus_aw_ready & mbus_aw_valid);
+        // write_count     <= rvv_valid_out ? (rvv_start_out ? 1 : write_count + 1) : (ack_count[FIFO_DEPTH_BITS:1] == write_count ? 0 : write_count);
+        ack_count       <= (ack_count < write_count) ? ack_count + mbus_b_valid : 0;
     end
 
     assign w_w_en           = rvv_valid_out;
@@ -186,5 +187,102 @@ module mem_queue #(
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty | ~w_h_empty;
 
-    assign rvv_done_st      = (ack_count[FIFO_DEPTH_BITS:1] == write_count) & (write_count > 0);
+    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0);
+endmodule
+
+module mem_queue #(
+    parameter MBUS_ADDR_WIDTH    = 32,               // We need to get this from VexRiscV
+    parameter MBUS_DATA_WIDTH    = 32,
+    parameter MBUS_DW_B          = MBUS_DATA_WIDTH>>3,
+    parameter RVV_DATA_WIDTH     = 64,
+    parameter RVV_DW_B           = RVV_DATA_WIDTH>>3,
+    parameter FIFO_DEPTH_BITS    = 9
+) (
+    input                           clk,
+    input                           rst_n,
+
+    output  [ MBUS_ADDR_WIDTH-1:0]  mbus_ar_addr  ,
+    output                          mbus_ar_valid ,
+    input                           mbus_ar_ready ,
+    input   [ MBUS_DATA_WIDTH-1:0]  mbus_r_data   ,
+    input                           mbus_r_valid  ,
+    output                          mbus_r_ready  ,
+
+    output  [ MBUS_ADDR_WIDTH-1:0]  mbus_aw_addr  ,
+    output                          mbus_aw_valid ,
+    input                           mbus_aw_ready ,
+    output  [ MBUS_DATA_WIDTH-1:0]  mbus_w_data   ,
+    output                          mbus_w_valid  ,
+    output  [       MBUS_DW_B-1:0]  mbus_w_strb   ,
+
+    input                           mbus_b_resp  ,
+    input                           mbus_b_valid ,
+    output                          mbus_b_ready ,
+    
+    output  [  RVV_DATA_WIDTH-1:0]  rvv_data_in,
+    output                          rvv_valid_in,
+    input   [ MBUS_ADDR_WIDTH-1:0]  rvv_addr_out,
+    input   [  RVV_DATA_WIDTH-1:0]  rvv_data_out,
+    input                           rvv_valid_out,
+    input                           rvv_req_out,
+    input                           rvv_start_out,
+    input   [        RVV_DW_B-1:0]  rvv_be_out,
+    input                           rvv_ready_out,
+
+    output                          rvv_done_ld,
+    output                          rvv_done_st
+    );
+
+    wire                        r_r_en;
+    wire                        ar_l_empty, w_l_empty;
+
+    reg  [FIFO_DEPTH_BITS-1:0]  burst_len;   // it's entirely possible we get 2048 element burst eventually, right?
+    wire [FIFO_DEPTH_BITS-1:0]  r_l_pop;
+
+    // track what turn we're on
+    reg                         r_out  = 0; // indicated whether there is an outstanding read request
+
+    reg                         start_read = 0;
+    reg [  FIFO_DEPTH_BITS-1:0] read_count = 0;
+
+    reg [    FIFO_DEPTH_BITS:0] write_count = 0;
+    reg [    FIFO_DEPTH_BITS:0] ack_count = 0;
+
+    FIFObuffer #(.DATA_WIDTH(MBUS_ADDR_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) ar_buf_l   (.clk(clk), .rst_n(rst_n), .r_en(mbus_ar_ready),   .w_en(rvv_req_out), .data_in(rvv_addr_out), .data_out(mbus_ar_addr), .EMPTY(ar_l_empty));
+    FIFObuffer #(.DATA_WIDTH(MBUS_ADDR_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) aw_buf_l   (.clk(clk), .rst_n(rst_n), .r_en(mbus_aw_ready & mbus_w_valid),    .w_en(rvv_valid_out),  .data_in(rvv_addr_out), .data_out(mbus_aw_addr));
+    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) w_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(mbus_aw_ready & mbus_w_valid),    .w_en(rvv_valid_out),  .data_in(rvv_data_out), .data_out(mbus_w_data),  .EMPTY(w_l_empty));
+    FIFObuffer #(.DATA_WIDTH(MBUS_DATA_WIDTH),.DEPTH_BITS(FIFO_DEPTH_BITS)) r_buf_l    (.clk(clk), .rst_n(rst_n), .r_en(r_r_en),      .w_en(mbus_r_valid & r_out),.data_in(mbus_r_data),    .data_out(rvv_data_in),  .POP(r_l_pop));
+
+    always @(posedge clk) begin
+        r_out           <= r_out ? ~mbus_r_valid : mbus_ar_ready; // signal that we have an un-acked request
+
+        burst_len       <= ~rvv_done_ld ? burst_len + rvv_req_out : 'h0;
+
+        start_read      <= (r_l_pop == burst_len) & (burst_len > 0) & rvv_ready_out;
+
+        read_count      <= ~rvv_done_ld & r_r_en ? read_count + 1 : 0;
+    end
+
+    assign mbus_ar_valid    = ~ar_l_empty;
+    assign mbus_r_ready     = r_out; // todo change this maybe idk
+    
+    assign r_r_en           = start_read | (read_count > 0);
+    assign rvv_valid_in     = r_r_en;
+    
+    assign rvv_done_ld      = (read_count == (burst_len - 1) & burst_len > 0 & read_count > 0);
+
+    // WRITE BUFFERING
+    always @(posedge clk) begin
+        write_count     <= rvv_done_st ? 0 : write_count + (mbus_aw_ready & mbus_aw_valid);
+        ack_count       <= ~rvv_done_st ? ack_count + mbus_b_valid : 0;
+    end
+
+    assign mbus_b_ready     = (write_count > 0);
+
+    assign mbus_aw_valid    = mbus_w_valid;
+
+    assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
+    assign mbus_w_valid     = ~w_l_empty;
+
+    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0);
 endmodule
