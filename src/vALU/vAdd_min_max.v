@@ -79,9 +79,9 @@ module vAdd_min_max #(
 				.lt(w_lt)
 			);
 		end else begin
-			assign w_minMax_result 	= 0;
-			assign w_equal 			= 0;
-			assign w_lt 			= 0;
+			assign w_minMax_result 	= 'h0;
+			assign w_equal 			= 'h0;
+			assign w_lt 			= 'h0;
 		end
 	endgenerate
 
@@ -179,8 +179,8 @@ module vAdd_min_max #(
 			s1_out_be 	<= s0_out_be;
 			s1_avg 		<= s0_avg;
 
-			if (MIN_MAX_ENABLE | MASK_ENABLE) begin
-				s1_out_vec 	<=	s1_opSel[4] ? w_minMax_result : w_s1_arith_result;
+			if (MIN_MAX_ENABLE) begin
+				s1_out_vec 	<=	s0_opSel[4] ? w_minMax_result : w_s1_arith_result;
 			end else begin
 				s1_out_vec 	<=	w_s1_arith_result;
 			end

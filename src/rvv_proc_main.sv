@@ -18,26 +18,26 @@
 `define MVX_TYPE 3'h6
 `define CFG_TYPE 3'h7
 
-`define AND_OR_XOR_ENABLE 1 // a1b
-`define ADD_SUB_ENABLE    1 // 
-`define MIN_MAX_ENABLE    1 // a1c
-`define VEC_MOVE_ENABLE   1 // a1d
-`define WHOLE_REG_ENABLE  1 // a1e
-`define SLIDE_ENABLE      1 // a1f
+`define AND_OR_XOR_ENABLE 0 // a1b - 3,758
+`define ADD_SUB_ENABLE    0 // 
+`define MIN_MAX_ENABLE    0 // a1c
+`define MASK_ENABLE       0 // a1d
+`define VEC_MOVE_ENABLE   0 // a1e
+`define WHOLE_REG_ENABLE  0 // a1f
+`define SLIDE_ENABLE      0 // a1g
 `define WIDEN_ADD_ENABLE  0 // a2
 `define REDUCTION_ENABLE  0 // a3
 `define MULT_ENABLE       0 // a4a
 `define SHIFT_ENABLE      0 //      
 `define MULH_SR_ENABLE    0 // a4b 
-`define MULH_SR_32_ENABLE 0 // a5a
-`define WIDEN_MUL_ENABLE  0 // a5b 
+`define MULH_SR_32_ENABLE 0 // a4c
+`define WIDEN_MUL_ENABLE  0 // a4d 
 `define NARROW_ENABLE     0  
-`define SLIDE_N_ENABLE    0 // a6
-`define MULT64_ENABLE     0 // a7
+`define SLIDE_N_ENABLE    0 // a5
+`define MULT64_ENABLE     0 // a6
 `define SHIFT64_ENABLE    0 
 `define FXP_ENABLE        0 // a8
-`define MASK_ENABLE       1 // b1
-`define MASK_ENABLE_EXT   0
+`define MASK_ENABLE_EXT   0 // b1
 
 module rvv_proc_main #( 
     parameter VLEN              = 16384,            // vector length in bits
@@ -126,6 +126,7 @@ module rvv_proc_main #(
     wire  [    DATA_WIDTH-1:0]  vm_rd_data_out_2; 
 
     reg   [    INSN_WIDTH-1:0]  insn_in_f;
+    reg                         insn_valid_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_1_f;
     reg   [VEX_DATA_WIDTH-1:0]  data_in_2_f;
     reg   [               1:0]  vxrm_in_f;
@@ -209,7 +210,7 @@ module rvv_proc_main #(
     // VTYPE values
     wire  [               1:0]  sew; // we dont do fractional
     wire  [          XLEN-1:0]  vtype;
-    wire                        vill;
+    wire                        vill, vill_insn;
 
     wire  [          XLEN-1:0]  vtype_nxt;
     wire  [               1:0]  avl_set;
@@ -253,6 +254,7 @@ module rvv_proc_main #(
 
     reg                         wait_mem;
     reg                         wait_mem_msk;
+    wire                        wait_cfg;
 
     // Detect hazards for operands
     wire                        haz_src1;
@@ -372,7 +374,6 @@ module rvv_proc_main #(
             // FIXME
             extract_mask #(.DATA_WIDTH(DATA_WIDTH)) vm_alu (.en(~vm_d), .vmask_in(vm_rd_data_out_1[(vr_rd_off_1>>sew)*8 +: 8]), .sew(sew), .reg_off(mask_off[sew]), .vmask_out(vmask_ext));
         end else begin
-            assign vmask_ext = {DW_B{1'b1}};
             assign vm_rd_data_out_1 = 'h0;
             assign vm_rd_data_out_2 = 'h0;
         end
@@ -387,7 +388,7 @@ module rvv_proc_main #(
             .WIDEN_ADD_ENABLE(`WIDEN_ADD_ENABLE),.WIDEN_MUL_ENABLE(`WIDEN_MUL_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),
             .MULH_SR_ENABLE(`MULH_SR_ENABLE),.MULH_SR_32_ENABLE(`MULH_SR_32_ENABLE), .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),
             .SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE),.MASK_ENABLE_EXT(`MASK_ENABLE_EXT),.FXP_ENABLE(`FXP_ENABLE))
-            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_whole_reg (alu_req_w_reg), .req_vxrm (vxrm_in_d),
+            alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_vxrm (vxrm_in_d),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .resp_mask_out(alu_mask_out), .req_be_out(alu_be_out),
         .resp_start(alu_resp_start), .resp_end(alu_resp_end), .resp_off(alu_off_out), .resp_whole_reg(alu_out_w_reg), .resp_sew(alu_resp_sew), .resp_sca_out(alu_sca_out), .resp_narrow(alu_narrow));
@@ -398,6 +399,7 @@ module rvv_proc_main #(
     // -------------------------------------------------- FETCH AND HAZARD DETECTION -----------------------------------------------------------------------
     always @(posedge clk) begin
         insn_in_f       <= rst_n ? (stall ? insn_in_f : (insn_valid ? insn_in : 'h0)) : 'h0;
+        insn_valid_f    <= rst_n ? (stall ? insn_valid_f : insn_valid) : 'b0;
         data_in_1_f     <= (stall ? data_in_1_f : vexrv_data_in_1);
         data_in_2_f     <= (stall ? data_in_2_f : vexrv_data_in_2);
     end
@@ -462,13 +464,10 @@ module rvv_proc_main #(
         end
 
         if (`WHOLE_REG_ENABLE) begin
-            assign alu_req_w_reg = (funct6_d == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE); // whole reg move
-
             assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d[5:0] == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
             assign whole_reg_ld   = (mop_m == 'h0 & lumop_m == 'h8 & opcode_mjr_m == `LD_INSN); // required for when the data actually comes back
         end else begin
             assign whole_reg_rd = 0;
-            assign alu_req_w_reg= 0;
             assign whole_reg_ld = 0;
         end
     endgenerate
@@ -492,6 +491,7 @@ module rvv_proc_main #(
             assign avl_max_off_in_ld= wait_mem_msk  ? avl_max_off_l_m : avl_max_off_l;
         end else begin
             assign avl_max_off_in_rd= en_vs1 ? avl_max_off : avl_max_off_s;
+            assign avl_max_off_in_ld= avl_max_off_l;
         end
     end else begin
         assign avl_max_off_in_rd= en_vs1 ? avl_max_off : avl_max_off_s;
@@ -899,7 +899,7 @@ module rvv_proc_main #(
             end
 
             vexrv_data_out  <= (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) ? avl : out_data_e;
-            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) | (opcode_mjr_d[2:0] != 3'h7);
+            vexrv_valid_out <= out_ack_e | out_ack_m | (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE & new_vl) | (opcode_mjr_m[2:0] == 3'h3); // random opcode that vfu recognizes as valid incorrectly
         end // end else
     end
 

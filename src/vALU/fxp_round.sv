@@ -27,7 +27,7 @@ generate
 				3'b101: 	r_vec[(i<<3)] <= v_d[i] & v_d10[i];
 				3'b110: 	r_vec[(i<<3)] <= 1'b0;
 				3'b111:		r_vec[(i<<3)] <= ~v_d[i] & v_d10[i];
-				default: 	r_vec[(i<<3)] <= 'h0;
+				default: 	r_vec[(i<<3)] <= 1'b0;
 			endcase
 		end
 	end
@@ -37,7 +37,7 @@ always @(posedge clk) begin
 	if (rst) begin
 		base_vec <= 'h0;
 	end else begin
-		base_vec <= in_valid ? vec_in : 'h0;
+		base_vec <= vec_in;
 	end
 end
 

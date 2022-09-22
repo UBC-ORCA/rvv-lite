@@ -2,7 +2,6 @@
 `include "vAndOrXor.v"
 `include "vMerge.v"
 `include "vMOP.v"
-// `include "vMove.v"
 `include "vMul.v"
 `include "vNarrow.v"
 `include "vPopc.v"
@@ -64,7 +63,6 @@ module vALU #(
     input                              req_end     ,
     input                              req_mask    ,
     input      [                  7:0] req_off     ,
-    input                              req_whole_reg,
     input      [                  1:0] req_vxrm    ,
     output reg                         resp_valid  ,
     output reg                         resp_start  ,
@@ -134,7 +132,7 @@ wire                            vMove_outWReg;
 wire [                  1:0]    vRedAndOrXor_opSel, vRedSum_min_max_opSel;
 wire [                  2:0]    vMask_opSel;
 wire                            vMove_en, vMerge_en, vMOP_en, vPopc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vFirst_en, vAdd_en, vMinMax_en,
-                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vSMul_en, vMoveWhole_en;
+                                vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vSShift_en, vMoveXS_en, vMoveSX_en, vSMul_en, vMoveWhole_en;
 wire                            vMul_outNarrow;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vMerge_outAddr,
@@ -144,6 +142,8 @@ wire [REQ_BYTE_EN_WIDTH-1:0]    vAAdd_vd, vAAdd_vd1, vMul_vd, vMul_vd1, vMul_vd1
 
 wire                            vMove_outSca;
 
+wire                            vAAdd_outFXP, vMul_outFXP;
+
 assign vID_en               = req_valid & (req_func_id == 'h14) & (req_data0 == 'h11); // vid uses VMUNARY0
 
 assign vSlide_insert        = 0;
@@ -151,14 +151,14 @@ assign req_ready            = 1'b1; //TODO: control
 
 generate
     if (AND_OR_XOR_ENABLE) begin : and_or_xor_opsel
-        assign vAndOrXor_en     = req_valid & ((req_func_id[5:2] == 4'b0010) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0) | vMove_en);
+        assign vAndOrXor_en     = req_valid & (((req_func_id[5:2] == 4'b0010) & ~(req_op_mnr[1]^req_op_mnr[0])) | vMove_en);
 
         if (VEC_MOVE_ENABLE) begin
             assign vAndOrXor_opSel  = vMove_en ? 2'b10 : req_func_id[1:0];
 
             if (WHOLE_REG_ENABLE) begin
-                assign vAndOrXor_in0    = vMove_en &  (vMoveXS_en | req_whole_reg) ? 'h0    : req_data0;
-                assign vAndOrXor_in1    = vMove_en & ~(vMoveXS_en | req_whole_reg) ? 'h0    : req_data1;
+                assign vAndOrXor_in0    = vMove_en &  (vMoveXS_en | vMoveWhole_en) ? 'h0    : req_data0;
+                assign vAndOrXor_in1    = vMove_en & ~(vMoveXS_en | vMoveWhole_en) ? 'h0    : req_data1;
 
                 assign vMoveWhole_en    = (req_func_id == 6'b100111 & req_op_mnr == 3'h3);
             end else begin
@@ -168,8 +168,9 @@ generate
                 assign vMoveWhole_en    = 1'b0;
             end
 
+            assign vMoveSX_en       = (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6); 
             assign vMoveXS_en       = (req_func_id == 'h10) & (req_data0 == 'h0) & (req_op_mnr == 3'h2); 
-            assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | vMoveWhole_en | (req_func_id == 'h10) & (req_data1 == 'h0) & (req_op_mnr == 3'h6) | vMoveXS_en);
+            assign vMove_en         = req_valid & (((req_func_id == 6'b010111) & req_mask) | vMoveWhole_en | vMoveSX_en | vMoveXS_en);
             
         end else begin
             assign vAndOrXor_opSel  = req_func_id[1:0];
@@ -177,8 +178,10 @@ generate
             assign vAndOrXor_in0    = req_data0;
             assign vAndOrXor_in1    = req_data1;
 
-            assign vMoveXS_en       = 0;
-            assign vMove_en         = 0;
+            assign vMoveXS_en       = 1'b0;
+            assign vMove_en         = 1'b0;
+
+            assign vMoveWhole_en    = 1'b0;
         end
     end
 
@@ -190,45 +193,42 @@ generate
         assign vAdd_en          = req_valid & (((req_func_id[5:3] == 3'b000) & (req_op_mnr[1]^req_op_mnr[0] == 1'b0)) | (req_func_id[5:2] == 4'b1100) | vAAdd_en | vMCmp_en);
 
         if (MIN_MAX_ENABLE) begin
-            assign vMinMax_en   = (req_func_id[5:2] == 4'b0001);
+            assign vMinMax_en       = (req_func_id[5:2] == 4'b0001);
+            assign vMinMax_opSel    = req_func_id[1];
         end else begin
-            assign vMinMax_en   = 0;
+            assign vMinMax_en       = 1'b0;
+            assign vMinMax_opSel    = 1'b0;
         end
 
         if (FXP_ENABLE) begin
             assign vAAdd_en     = (req_func_id[5:2] == 4'b0010) & (req_op_mnr[1:0] == 2'h2); // averaging add - reuse add unit
         end else begin
-            assign vAAdd_en     = 0;
+            assign vAAdd_en     = 1'b0;
         end
         
         if (WIDEN_ADD_ENABLE) begin : widen_add
-            assign vAdd_sew         = vWiden_en ? vWiden_sew : req_sew;
+            assign vAdd_sew     = vWiden_en ? vWiden_sew : req_sew;
 
-            assign vAdd_in0         = vWiden_en ? vWiden_in0 : req_data0;
-            assign vAdd_in1         = vWiden_en ? vWiden_in1 : req_data1;
+            assign vAdd_in0     = vWiden_en ? vWiden_in0 : req_data0;
+            assign vAdd_in1     = vWiden_en ? vWiden_in1 : req_data1;
         end else begin
-            assign vAdd_sew         = req_sew;
+            assign vAdd_sew     = req_sew;
 
-            assign vAdd_in0         = req_data0;
-            assign vAdd_in1         = req_data1;
+            assign vAdd_in0     = req_data0;
+            assign vAdd_in1     = req_data1;
         end
 
         if (MASK_ENABLE) begin
-            assign vAdd_opSel       = (req_func_id[2] | vMCmp_en) ? 2'b10 : req_func_id[1:0];
+            assign vAdd_opSel   = (req_func_id[2] | vMCmp_en) ? 2'b10 : req_func_id[1:0];
         end else begin
-            assign vAdd_opSel       = (req_func_id[2]) ? 2'b10 : req_func_id[1:0];
+            assign vAdd_opSel   = (req_func_id[2]) ? 2'b10 : req_func_id[1:0];
         end
 
-        assign vMinMax_opSel    = req_func_id[1];
         assign vSigned_op0      = req_func_id[0];
     end
 
 
-    if (NARROW_ENABLE) begin : narrow_in
-        assign vNarrow_en       = req_valid & (req_func_id[5:2] == 4'b1011) & ~(req_op_mnr[1]^req_op_mnr[0]);
-    end else begin
-        assign vNarrow_en       = 1'b0;
-    end
+
 
     if (REDUCTION_ENABLE) begin : red_opsel
         assign vRedAndOrXor_en      = req_valid & ((|req_func_id[1:0]) & req_func_id[5:2] == 4'b0000) & (req_op_mnr[1:0] == 'h2);
@@ -332,6 +332,8 @@ generate
     end
 
     if(NARROW_ENABLE) begin : narrow
+        assign vNarrow_en       = req_valid & (req_func_id[5:2] == 4'b1011) & ~(req_op_mnr[1]^req_op_mnr[0]);
+
         vNarrow #(
             .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
             .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
@@ -350,6 +352,8 @@ generate
         );
     end
     else begin
+        assign vNarrow_en       = 1'b0;
+
         assign vNarrow_sew      = 'h0;
         assign vNarrow_be       = 'h0;
         assign vNarrow_outVec   = 'h0;
@@ -395,7 +399,7 @@ generate
 
             assign vMul_vec1   = (req_func_id[3:0] != 4'b0111 & ~(req_op_mnr[1]^req_op_mnr[0])) ? vShift_mult_sew[req_sew] : req_data0;
 
-            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
+            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
         end else begin
             assign vShiftR64        = 0;
             assign vShift_orTop     = 0;
@@ -433,7 +437,7 @@ generate
                     assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
                 end
 
-                assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],0} : req_func_id[1:0]; // opsel is normal except for shift right
+                assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
             end else begin
                 for (j = 0; j < 3; j = j + 1) begin
                     for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
@@ -441,7 +445,7 @@ generate
                     end
                 end
 
-                assign vMul_opSel  = 'b01; // only one option for mul/sll
+                assign vMul_opSel  = 2'b01; // only one option for mul/sll
             end
         end
     end
@@ -449,7 +453,7 @@ generate
         if (MULT_ENABLE) begin
             assign vMul_vec1    = req_data0;
             assign vMul_vec0    = req_data1;
-            assign vMul_opSel   = req_func_id[1:0];
+            assign vMul_opSel   = 2'b01;
 
             assign vShift_orTop     = 0;
             assign vShift_vd10      = 0;
@@ -459,8 +463,8 @@ generate
         end
     end
 
-    if(ADD_SUB_ENABLE | MASK_ENABLE) begin : add_sub
-        assign vStartIdx            = req_vr_idx << ('h3 - req_sew);
+    if(ADD_SUB_ENABLE) begin : add_sub
+        assign vStartIdx    = req_vr_idx << ('h3 - req_sew);
 
         vID #(
             .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH),
@@ -501,28 +505,30 @@ generate
             .in_req_end  (req_end       ),
             .in_be      (req_be         ),
             .in_avg     (vAAdd_en       ),
+            .in_carry   (1'b0           ),
             .out_vec    (vAdd_outVec    ),
             .out_valid  (vAdd_outValid  ),
             .out_addr   (vAdd_outAddr   ),
             .out_be     (vMCmp_outBe    ),
             .out_mask   (vAdd_outMask   ),
             .out_vd     (vAAdd_vd       ),
-            .out_vd1    (vAAdd_vd1      )
+            .out_vd1    (vAAdd_vd1      ),
+            .out_fxp    (vAAdd_outFXP   )
         );
     end
     else begin
-        assign vStartIdx        = 0;
+        assign vStartIdx        = 'h0;
 
-        assign vAdd_outVec      = 0;
-        assign vAdd_outValid    = 0;
-        assign vMCmp_outBe      = 0;
-        assign vAdd_outMask     = 0;
-        assign vAAdd_vd         = 0;
-        assign vAAdd_vd1        = 0;
+        assign vAdd_outVec      = 'h0;
+        assign vAdd_outValid    = 1'b0;
+        assign vMCmp_outBe      = 'h0;
+        assign vAdd_outMask     = 1'b0;
+        assign vAAdd_vd         = 'h0;
+        assign vAAdd_vd1        = 'h0;
 
-        assign vID_outVec       = 0;
-        assign vID_outAddr      = 0;
-        assign vID_outValid     = 0;
+        assign vID_outVec       = 'h0;
+        assign vID_outAddr      = 'h0;
+        assign vID_outValid     = 1'b0;
     end
 
     if(AND_OR_XOR_ENABLE) begin : and_or_xor
@@ -541,7 +547,7 @@ generate
             .in_opSel   (vAndOrXor_opSel    ),
             .in_valid   (vAndOrXor_en       ),
             .in_addr    (req_addr           ),
-            .in_w_reg   (req_whole_reg      ),
+            .in_w_reg   (vMoveWhole_en      ),
             .in_sca     (vMoveXS_en         ),
             .out_vec    (vAndOrXor_outVec   ),
             .out_valid  (vAndOrXor_outValid ),
@@ -595,18 +601,14 @@ generate
             .out_vd     (vMul_vd        ),
             .out_vd1    (vMul_vd1       ),
             .out_vd10   (vMul_vd10      ),
-            .out_narrow (vMul_outNarrow )
+            .out_narrow (vMul_outNarrow ),
+            .out_fxp    (vMul_outFXP    )
         );
     end
     else begin
-        assign vMul_outVec      = 0;
-        assign vMul_outValid    = 0;
-        assign vMul_outAddr     = 0;
-
-        assign vMul_vd          = 0;
-        assign vMul_vd1         = 0;
-        assign vMul_vd10        = 0;
-        assign vMul_outNarrow   = 0;
+        assign vMul_outVec      = 'h0;
+        assign vMul_outValid    = 'b0;
+        assign vMul_outAddr     = 'h0;
     end
 
     if(SLIDE_ENABLE) begin : slide
@@ -782,7 +784,7 @@ generate
 
     if (FXP_ENABLE) begin : fxp_round
         fxp_round #(.DATA_WIDTH(REQ_DATA_WIDTH)) fxp (.clk(clk), .rst (rst),
-            .vxrm (s5_vxrm), .in_valid(vAdd_outValid | vMul_outValid), .vec_in(vAdd_outVec | vMul_outVec),
+            .vxrm (s5_vxrm), .in_valid(vAAdd_outFXP | vMul_outFXP), .vec_in(vAdd_outVec | vMul_outVec),
             .v_d(vAAdd_vd | vMul_vd), .v_d1(vAAdd_vd1 | vMul_vd1), .v_d10(vAAdd_vd1 | vMul_vd10),
             .vec_out(fxp_out));
 
