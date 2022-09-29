@@ -69,14 +69,14 @@ module vAdd_min_max #(
 	generate
 		if(MIN_MAX_ENABLE | MASK_ENABLE) begin : min_max_mask
 			vMinMaxSelector vMinMaxSelector0 (
-				.vec0(s0_vec0),
-				.vec1(s0_vec1),
-				.sub_result(s1_result),
-				.sew(s0_sew),
-				.minMax_sel(s0_opSel[3]),
-				.minMax_result(w_minMax_result),
-				.equal(w_equal),
-				.lt(w_lt)
+				.vec0			(s0_vec0		),
+				.vec1			(s0_vec1		),
+				.sub_result		(s1_result 		),
+				.sew 			(s0_sew			),
+				.minMax_sel 	(s0_opSel[3]	),
+				.minMax_result 	(w_minMax_result),
+				.equal 			(w_equal 		),
+				.lt 			(w_lt 			)
 			);
 		end else begin
 			assign w_minMax_result 	= 'h0;
@@ -88,14 +88,14 @@ module vAdd_min_max #(
 	assign w_s1_arith_result = {s1_result[78:71],s1_result[68:61],s1_result[58:51],s1_result[48:41],s1_result[38:31],s1_result[28:21],s1_result[18:11],s1_result[8:1]};
 
 	vAdd_unit_block vAdd_unit0 (
-		.clk   (clk      ),
-		.rst   (rst      ),
-		.vec0  (s0_vec0  ),
-		.vec1  (s0_vec1  ),
-		.carry (1'b0	 ),
-		.sew   (s0_sew   ),
-		.opSel (s0_opSel ),
-		.result(s1_result)
+		.clk   (clk      		),
+		.rst   (rst      		),
+		.vec0  (s0_vec0  		),
+		.vec1  (s0_vec1  		),
+		.carry (s0_carry_in 	),
+		.sew   (s0_sew   		),
+		.opSel (s0_opSel[4:0]	),
+		.result(s1_result 		)
 	);
 
 	generate
@@ -166,6 +166,18 @@ module vAdd_min_max #(
 			s0_req_start<= in_valid ? in_req_start 	: 'h0;
 			s0_out_be   <= in_valid ? in_be			: 'h0;
 			s0_avg		<= in_valid ? in_avg		: 'h0;
+
+			if (MASK_ENABLE_EXT) begin
+				case({in_valid,in_sew})
+					3'b100: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
+					3'b101: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
+					3'b110: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
+					3'b111: s0_carry_in <= {64'b0,in_be[0]};
+					default: s0_carry_in <= 'h0;
+				endcase
+			end else begin
+				s0_carry_in <= 'h0;
+			end
 
 			s1_vec0  	<= s0_vec0;
 			s1_vec1  	<= s0_vec1;

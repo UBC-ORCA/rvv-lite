@@ -18,22 +18,22 @@
 `define MVX_TYPE 3'h6
 `define CFG_TYPE 3'h7
 
-`define AND_OR_XOR_ENABLE 0 // a1b - 3,758
-`define ADD_SUB_ENABLE    0 // 
-`define MIN_MAX_ENABLE    0 // a1c
-`define MASK_ENABLE       0 // a1d
-`define VEC_MOVE_ENABLE   0 // a1e
-`define WHOLE_REG_ENABLE  0 // a1f
-`define SLIDE_ENABLE      0 // a1g
-`define WIDEN_ADD_ENABLE  0 // a2
-`define REDUCTION_ENABLE  0 // a3
-`define MULT_ENABLE       0 // a4a
-`define SHIFT_ENABLE      0 //      
-`define MULH_SR_ENABLE    0 // a4b 
-`define MULH_SR_32_ENABLE 0 // a4c
-`define WIDEN_MUL_ENABLE  0 // a4d 
-`define NARROW_ENABLE     0  
-`define SLIDE_N_ENABLE    0 // a5
+`define AND_OR_XOR_ENABLE 1 // a1b
+`define ADD_SUB_ENABLE    1 // 
+`define MIN_MAX_ENABLE    1 // a1c
+`define MASK_ENABLE       1 // a1d
+`define VEC_MOVE_ENABLE   1 // a1e
+`define WHOLE_REG_ENABLE  1 // a1f
+`define SLIDE_ENABLE      1 // a1g
+`define WIDEN_ADD_ENABLE  1 // a2
+`define REDUCTION_ENABLE  1 // a3
+`define MULT_ENABLE       1 // a4a
+`define SHIFT_ENABLE      1 //      
+`define MULH_SR_ENABLE    1 // a4b 
+`define MULH_SR_32_ENABLE 1 // a4c
+`define WIDEN_MUL_ENABLE  1 // a4d 
+`define NARROW_ENABLE     1  
+`define SLIDE_N_ENABLE    1 // a5
 `define MULT64_ENABLE     0 // a6
 `define SHIFT64_ENABLE    0 
 `define FXP_ENABLE        0 // a8
@@ -335,9 +335,9 @@ module rvv_proc_main #(
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(avl_max_reg_w),   .max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(alu_narrow));
             end
         end else begin : agu_dest
-            if (`MASK_ENABLE) begin : mask
+            if (`MASK_ENABLE_EXT) begin : mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(alu_mask_out ? 'h0 : avl_max_reg_w),.max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(1'b0));
-            end else begin : mask
+            end else begin : no_mask
                 addr_gen_unit #(.ADDR_WIDTH(ADDR_WIDTH),.DATA_WIDTH(DATA_WIDTH),.VLEN(VLEN)) agu_dest   (.clk(clk), .rst_n(rst_n), .en(en_vd),  .sew(alu_resp_sew), .whole_reg(alu_out_w_reg),.addr_in(alu_addr_out), .addr_out(vr_wr_addr),  .max_reg_in(avl_max_reg_w),   .max_off_in(avl_max_off_in_wr), .off_out(vr_wr_off),    .idle(agu_idle_wr), .widen(1'b0));
             end
         end
@@ -359,11 +359,32 @@ module rvv_proc_main #(
     // TODO: make this a proper "true dual-port ram"
     generate
         if (`MASK_ENABLE) begin : mask_file
-            mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vmr (.clk(clk),.rst_n(rst_n),
-                        .rd_en_1(vm_rd_en_1),           .rd_en_2(vm_rd_en_2),               .wr_en(vm_in_en),    
-                        .rd_addr_1(vm_rd_addr_1),       .rd_addr_2(vr_rd_addr_2),           .wr_addr(vm_in_addr),
-                        .rd_off_1(vm_rd_off_1),         .rd_off_2(vr_rd_off_2),             .wr_off(vm_in_off),  
-                        .rd_data_out_1(vm_rd_data_out_1), .rd_data_out_2(vm_rd_data_out_2),   .wr_data_in(vm_in_data));
+            if (`MASK_ENABLE_EXT) begin : full
+                mask_regfile #(.VLEN(VLEN), .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .OFF_BITS(OFF_BITS)) vmr (.clk(clk),.rst_n(rst_n),
+                            .rd_en_1(vm_rd_en_1),           .rd_en_2(vm_rd_en_2),               .wr_en(vm_in_en),    
+                            .rd_addr_1(vm_rd_addr_1),       .rd_addr_2(vr_rd_addr_2),           .wr_addr(vm_in_addr),
+                            .rd_off_1(vm_rd_off_1),         .rd_off_2(vr_rd_off_2),             .wr_off(vm_in_off),  
+                            .rd_data_out_1(vm_rd_data_out_1), .rd_data_out_2(vm_rd_data_out_2),   .wr_data_in(vm_in_data));
+            end else begin : vm0
+                // only vm0 for initial mask insns
+                reg [DATA_WIDTH-1:0] mask_data [(VLEN_B/DATA_WIDTH)-1:0];
+                reg [DATA_WIDTH-1:0] vm0;
+
+                integer j;
+                always @(posedge clk) begin
+                    for (j = 0; j < DW_B; j=j+1) begin
+                        if (vm_wr_en[j]) begin
+                            mask_data[alu_off_out][j*BYTE +: BYTE]  <= vr_wr_data_in[j*BYTE +: BYTE];
+                        end
+                    end
+                    if (vm_rd_en_1) begin
+                        vm0  <= mask_data[vm_rd_off_1];
+                    end
+                end
+
+                assign vm_rd_data_out_1 = vm0;
+                assign vm_rd_data_out_2 = 'h0;
+            end
 
             always @(posedge clk) begin
                 mask_off[0] <= 0;
@@ -371,23 +392,24 @@ module rvv_proc_main #(
                 mask_off[2] <= vr_rd_off_1[1:0] << 1;
                 mask_off[3] <= vr_rd_off_1[2:0];
             end
+
             // FIXME
             extract_mask #(.DATA_WIDTH(DATA_WIDTH)) vm_alu (.en(~vm_d), .vmask_in(vm_rd_data_out_1[(vr_rd_off_1>>sew)*8 +: 8]), .sew(sew), .reg_off(mask_off[sew]), .vmask_out(vmask_ext));
-        end else begin
+        end else begin : no_mask_file
             assign vm_rd_data_out_1 = 'h0;
             assign vm_rd_data_out_2 = 'h0;
         end
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
+        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f[VLEN_B_BITS-1:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
-    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(8),
+    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(VLEN_B_BITS),
             .AND_OR_XOR_ENABLE(`AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(`ADD_SUB_ENABLE),.MIN_MAX_ENABLE(`MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(`VEC_MOVE_ENABLE),.WHOLE_REG_ENABLE(`WHOLE_REG_ENABLE),
             .WIDEN_ADD_ENABLE(`WIDEN_ADD_ENABLE),.WIDEN_MUL_ENABLE(`WIDEN_MUL_ENABLE),.NARROW_ENABLE(`NARROW_ENABLE),.REDUCTION_ENABLE(`REDUCTION_ENABLE),.MULT_ENABLE(`MULT_ENABLE),
             .MULH_SR_ENABLE(`MULH_SR_ENABLE),.MULH_SR_32_ENABLE(`MULH_SR_32_ENABLE), .MULT64_ENABLE(`MULT64_ENABLE),.SHIFT_ENABLE(`SHIFT_ENABLE),.SLIDE_ENABLE(`SLIDE_ENABLE),
-            .SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE),.MASK_ENABLE_EXT(`MASK_ENABLE_EXT),.FXP_ENABLE(`FXP_ENABLE))
+            .SLIDE_N_ENABLE(`SLIDE_N_ENABLE),.MASK_ENABLE(`MASK_ENABLE),.MASK_ENABLE_EXT(`MASK_ENABLE_EXT),.FXP_ENABLE(`FXP_ENABLE), .SHIFT64_ENABLE(`SHIFT64_ENABLE))
             alu (.clk(clk), .rst(~rst_n), .req_mask(vm_d), .req_be(alu_req_be), .req_vr_idx(alu_vr_idx), .req_start(alu_req_start), .req_end(alu_req_end), .req_vxrm (vxrm_in_d),
         .req_valid(alu_enable), .req_op_mnr(opcode_mnr_d), .req_func_id(funct6_d), .req_sew(sew), .req_data0(alu_data_in1), .req_data1(alu_data_in2), .req_addr(dest_d), .req_off(alu_req_off),
         .resp_valid(alu_valid_out), .resp_data(alu_data_out), .req_addr_out(alu_addr_out), .req_vl(avl), .req_vl_out(alu_avl_out), .resp_mask_out(alu_mask_out), .req_be_out(alu_be_out),
@@ -422,9 +444,15 @@ module rvv_proc_main #(
             // we shouldn't set the hazard unless we are actually processing a new instruction I think
             assign vec_haz_set[i] = (~stall & dest == i) & ((opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE) | en_req_mem);
             // testing to see if we can launch early if the next instruction isn't a mask op
-            assign vec_haz_clr[i] = (dest_m == i & en_ld & (mem_port_done_ld | ~logic_mop)) |
-                                    (alu_addr_out == i & alu_valid_out & (alu_resp_end | ~logic_mop));
-                                    // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
+            if (`MASK_ENABLE_EXT) begin
+                assign vec_haz_clr[i] = (dest_m == i & en_ld & (mem_port_done_ld | ~logic_mop)) |
+                                        (alu_addr_out == i & alu_valid_out & (alu_resp_end | (alu_resp_start & ~logic_mop)));
+            end else begin
+                // clear it once only
+                assign vec_haz_clr[i] = (dest_m == i & en_ld) | (alu_addr_out == i & alu_valid_out & alu_resp_start);
+            end
+            
+            // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
             always @(posedge clk) begin
                 // set high if incoming vector is going to overwrite the destination, or it has a hazard that isn't being cleared this cycle
                 // else, set low
@@ -478,21 +506,16 @@ module rvv_proc_main #(
     assign avl_max_off_s = (avl > (VLEN_B >> opcode_mnr[1:0])) ? (VLEN_B/DW_B) - 1  : (avl_eff>>(DW_B_BITS - opcode_mnr[1:0]));
     assign avl_max_off_l = (avl > (VLEN_B >> opcode_mnr_m)) ? (VLEN_B/DW_B) - 1     : (avl_eff>>(DW_B_BITS - opcode_mnr_m));
 
-    if (`MASK_ENABLE) begin
+    if (`MASK_ENABLE_EXT) begin
         assign avl_max_off_m = (avl > (VLEN_B >> sew)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - sew));
 
         assign avl_max_off_in_wr= alu_mask_out  ? avl_max_off_m : avl_max_off_w;
 
-        if (`MASK_ENABLE_EXT) begin
-            assign avl_max_off_l_m = (avl > (VLEN_B >> opcode_mnr_m)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - opcode_mnr_m));
-            assign avl_max_off_s_m = (avl > (VLEN_B >> opcode_mnr[1:0])) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - opcode_mnr[1:0]));
+        assign avl_max_off_l_m = (avl > (VLEN_B >> opcode_mnr_m)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - opcode_mnr_m));
+        assign avl_max_off_s_m = (avl > (VLEN_B >> opcode_mnr[1:0])) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - opcode_mnr[1:0]));
 
-            assign avl_max_off_in_rd= en_vs1 ? (logic_mop ? avl_max_off_m : avl_max_off) : (logic_mop ? avl_max_off_s_m : avl_max_off_s);
-            assign avl_max_off_in_ld= wait_mem_msk  ? avl_max_off_l_m : avl_max_off_l;
-        end else begin
-            assign avl_max_off_in_rd= en_vs1 ? avl_max_off : avl_max_off_s;
-            assign avl_max_off_in_ld= avl_max_off_l;
-        end
+        assign avl_max_off_in_rd= en_vs1 ? (logic_mop ? avl_max_off_m : avl_max_off) : (logic_mop ? avl_max_off_s_m : avl_max_off_s);
+        assign avl_max_off_in_ld= wait_mem_msk  ? avl_max_off_l_m : avl_max_off_l;
     end else begin
         assign avl_max_off_in_rd= en_vs1 ? avl_max_off : avl_max_off_s;
         assign avl_max_off_in_wr= avl_max_off_w;
@@ -657,22 +680,17 @@ module rvv_proc_main #(
     // make single write port!
     assign mem_port_ready_out = wait_mem & agu_idle_wr;
 
-    assign vr_in_en     = ~agu_idle_wr ? vr_wr_en       : vr_ld_en;
-    assign vr_in_addr   = ~agu_idle_wr ? vr_wr_addr     : vr_ld_addr;
-    assign vr_in_off    = ~agu_idle_wr ? vr_wr_off      : vr_ld_off;
-    assign vr_in_data   = ~agu_idle_wr ? vr_wr_data_in  : vr_ld_data_in;
+    assign vr_in_en     = agu_idle_wr ? vr_ld_en       : vr_wr_en;
+    assign vr_in_addr   = agu_idle_wr ? vr_ld_addr     : vr_wr_addr;
+    assign vr_in_off    = agu_idle_wr ? vr_ld_off      : vr_wr_off;
+    assign vr_in_data   = agu_idle_wr ? vr_ld_data_in  : vr_wr_data_in;
 
     generate
-        if (`MASK_ENABLE) begin
+        if (`MASK_ENABLE_EXT) begin
             assign vm_in_en     = alu_valid_out ? vm_wr_en       : vm_ld_en;
             assign vm_in_addr   = alu_valid_out ? alu_addr_out   : vr_ld_addr;
             assign vm_in_off    = alu_valid_out ? alu_off_out    : vr_ld_off;
             assign vm_in_data   = alu_valid_out ? vr_wr_data_in  : vr_ld_data_in;
-        end else begin
-            assign vm_in_en     = 0;
-            assign vm_in_addr   = 0;
-            assign vm_in_off    = 0;
-            assign vm_in_data   = 0;
         end
     endgenerate
 
@@ -692,28 +710,22 @@ module rvv_proc_main #(
 
     generate
         if (`MASK_ENABLE) begin
-            // assign is_mcmp_op = (funct6[5:3] == 3'b011 & opcode_mnr == `MVV_TYPE);
-            // assign is_mcmp_op_d = (funct6_d[5:3] == 3'b011 & opcode_mnr_d == `MVV_TYPE);
-
             if (`MASK_ENABLE_EXT) begin
                 assign first_or_cpop = (funct6 == 6'h10 & opcode_mnr == `MVV_TYPE);
                 assign first_or_cpop_d = (funct6_d == 6'h10 & opcode_mnr_d == `MVV_TYPE);
+
+                assign vm_rd_en_1 = ~agu_idle_rd_1 & (logic_mop | logic_mop_d | ~vm | ~vm_d | first_or_cpop | first_or_cpop_d | (opcode_mnr_d == `ST_INSN & lumop_d == 5'hB & mop_d == 'h0)); // only enable if it's a mask op or masked op!
+
+                assign vm_rd_addr_1 = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? 'h0 : vr_rd_addr_1;
+                assign vm_rd_en_2 = ~agu_idle_rd_2 & (logic_mop | logic_mop_d); // only enable if it's a mask op!
             end else begin
                 assign first_or_cpop = 1'b0;
                 assign first_or_cpop_d = 1'b0;
+
+                assign vm_rd_en_1 = ~agu_idle_rd_1 & (~vm | ~vm_d); // only enable if it's a mask op or masked op!
             end
 
-            assign vm_rd_en_1 = ~agu_idle_rd_1 & (logic_mop | logic_mop_d | ~vm | ~vm_d); // only enable if it's a mask op or masked op!
-            assign vm_rd_en_2 = ~agu_idle_rd_2 & (logic_mop | logic_mop_d); // only enable if it's a mask op!
-
-            assign vm_rd_addr_1 = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? 'h0 : vr_rd_addr_1;
             assign vm_rd_off_1  = (~vm_d | (~vm  & ~stall)) & ~agu_idle_rd_1 ? alu_vr_idx_next >> (sew + 3) : vr_rd_off_1;
-        end else begin
-            assign is_mcmp_op = 0;
-            assign is_mcmp_op_d = 0;
-
-            assign vm_rd_en_1 = 0;
-            assign vm_rd_en_2 = 0;
         end
     endgenerate
 
@@ -723,9 +735,15 @@ module rvv_proc_main #(
 
     // TODO update with mask ld/st
     assign mem_port_valid_out   = rst_n & en_mem_out;
-    assign mem_port_data_out    = vr_rd_data_out_1;
     assign mem_port_addr_out    = mem_addr_in_d; // why bother checking validity? thats what the valid signal is for...
     assign mem_port_be_out      = {(MEM_DW_B){1'b1}};
+
+    if (`MASK_ENABLE_EXT) begin
+        assign mem_mask_out         = (lumop_d == 5'hB & mop_d == 'h0);
+        assign mem_port_data_out    = mem_mask_out ? vm_rd_data_out_1 : vr_rd_data_out_1;
+    end else begin
+        assign mem_port_data_out    = vr_rd_data_out_1;
+    end
 
     // LOAD
     assign vr_ld_data_in    = mem_port_data_in;
@@ -747,7 +765,7 @@ module rvv_proc_main #(
         if (`MASK_ENABLE) begin
             assign vm_wr_en         = alu_valid_out & alu_mask_out ? alu_be_out : 'h0;     // write mask
         end else begin
-            assign vm_wr_en         = 0;
+            assign vm_wr_en         = 'h0;
         end
     endgenerate
 
@@ -799,9 +817,9 @@ module rvv_proc_main #(
 
     generate
         if (`WIDEN_ADD_ENABLE | `WIDEN_MUL_ENABLE) begin : gen_be_wide
-            generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? (alu_vr_idx >> 2) : alu_vr_idx), .avl_be(gen_avl_be));
+            generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
         end else begin : gen_be
-            generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(alu_vr_idx), .avl_be(gen_avl_be));
+            generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(alu_vr_idx[10:0]), .avl_be(gen_avl_be));
         end
     endgenerate
 

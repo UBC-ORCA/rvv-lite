@@ -1,23 +1,86 @@
-\multicolumn{8}{|l|}{A.1 Core Instructions, decomposed:} &&&& \\ 
-~~a) Load/Store/Cfg         &  & 32 & 0 &  \\
-~~b) And/Or/Xor/Add/Sub/ID  &  & 48 & 0 &  \\
-~~c) Min/Max.               &  & 48 & 0 &  \\
-~~d) Vector Move            &  & 48 & 0 &  \\
-~~e) Whole Reg Mov/Ld/St    &  & 48 & 0 &  \\
-~~f) Vector Slide1          & 5,000 & 48 & 0 &  \\ \hline
-A.2 Widen/Narrow Add/Sub    &  & 48 & 0 &  \\ \hline
-A.3 Reduction               & 5,031 & 48 & 0 & 188.4 \\ \hline
-A.4 Mul/Shift:              &&&& \\
-~~a) Mul/ShiftL (8/16/32b)  & 6,258 & 48 & 12 & 174.9 \\
-~~b) MulH/ShiftR (8/16b)    & 7,104 & 48 & 12 & 176.1 \\ \hline
-A.5 32b + Widen/Narrow Mul/Shift &&&&   \\ 
-~~a) MulH/ShiftR (32b)      & 7,194 & 48 & 12 & 183.8 \\
-7,446 & 48 & 0 & 170
-~~b) Widen/Narrow Mul/Shift & 7,454 & 48 & 12 &  \\ \hline 
+\label{tab:synthesis}
+\begin{tabular}{|l|rrr|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
 
-A.6 SlideN                  &  & 48 & 12 &  \\ \hline
-A.7 Mul/Shift (64b)         &  & 48 & 16 &  \\ \hline
-A.8 FXP                     &  & 48 & 16 &  \\ \hline
-B.1 Mask (+A.8)             &  & 48 & 16 &  \\ \hline
-Full System (w/ VexRiscv, A.8+B.1)  &  & 71 & 20 &  \\ \hline
-Full System (w/ VexRiscv + FPU, A.8+B.1)  &  & 74 & 23 &  \\ \hline
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&&&&&& \\ 
+~~a) Load/Store/Cfg                     &  1,213 &   355 & 860 & 22 & 16 & 6 & 0 & 181.1 \\
+~~b) And/Or/Xor/Add/Sub/ID              &  2,642 & 1,795 & 851 & 38 & 32 & 6 & 0 & 178.8 \\
+~~c) Min/Max.                           &  2,688 & 1,875 & 813 & 38 & 32 & 6 & 0 & 177.9 \\
+~~d) Basic Mask                         &  3,163 & 2,342 & 823 & 39 & 33 & 6 & 0 & 163.9 \\
+~~e) Vector Move                        &  3,301 & 2,483 & 819 & 39 & 33 & 6 & 0 & 164.8 \\
+~~f) Whole Reg Mov/Ld/St                &  3,360 & 2,539 & 822 & 39 & 33 & 6 & 0 & 179.5 \\
+~~g) Vector Slide1                      &  3,716 & 2,897 & 821 & 39 & 33 & 6 & 0 & 174.6 \\ \hline
+A.2 Widening Add/Sub                    &  3,998 & 3,173 & 828 & 39 & 33 & 6 & 0 & 188.6 \\ \hline
+% There is no narrowing add/sub in rvv!
+A.3 Reduction                           &  4,590 & 3,769 & 823 & 39 & 33 & 6 & 0 & 163.9 \\ \hline
+A.4 Mul/Shift:                          &&&&&&&& \\
+~~a) Mul/ShiftL (8/16/32b)              &  5,289 & 4,433 & 860 & 39 & 33 & 6 & 12 & 175.7 \\
+~~b) MulH/ShiftR (8/16b)                &  5,371 & 4,547 & 826 & 39 & 33 & 6 & 12 & 172.9 \\
+% \hline
+% A.5 32b + Widen/Narrow Mul/Shift &&&&   \\ 
+~~c) MulH/ShiftR (32b)                  &  5,711 & 4,897 & 818 & 39 & 33 & 6 & 12 & 178.7 \\
+~~d) Widening Mul, Narrowing Shift      &  5,949 & 5,100 & 853 & 39 & 33 & 6 & 12 & 174.9 \\
+
+A.5 Slide-by-N                          &  5,995 & 5,171 & 827 & 42 & 36 & 6 & 12 & 172.8 \\
+A.6 Mul/Shift (64b)                     &  6,288 & 5,455 & 834 & 42 & 36 & 6 & 16 & 176.4 \\ \hline
+A.7 FXP                                 &  6,611 & 5,794 & 818 & 42 & 36 & 6 & 16 & 166.0 \\ \hline
+
+B.1 Mask (+A.8)                         &  7,337 & 6,538 & 799 & 42 & 36 & 6 & 16 & 160.7 \\ \hline
+Full System (w/ VexRiscv, A.8+B.1)      & 17,020 & 6,502 & 842 & 61 & 36 & 6 & 16 & 156.4 \\ \hline
+Full System (w/ VexRiscv + FPU, A.8+B.1)& 19,723 & 6,538 & 799 & 64 & 36 & 6 & 16 & 160.7 \\ \hline
+\end{tabular}
+\end{table*}
+
+\label{tab:synthesis}
+\begin{tabular}{|l|rrr|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
+
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&&&&&& \\ 
+~~a) Load/Store/Cfg                     &  1,213 &   355 & 860 & 22 & 16 & 6 & 0 & 181.1 \\
+~~b) And/Or/Xor/Add/Sub/ID              &  2,642 & 1,795 & 851 & 38 & 32 & 6 & 0 & 178.8 \\
+~~c) Min/Max.                           &  2,693 & 1,875 & 820 & 38 & 32 & 6 & 0 & 174.3 \\
+~~d) Basic Mask                         &  3,491 & 2,674 & 821 & 42 & 36 & 6 & 0 & 175.4 \\
+~~e) Vector Move                        &  3,512 & 2,676 & 836 & 42 & 36 & 6 & 0 & 174.9 \\
+~~f) Whole Reg Mov/Ld/St                &  3,562 & 2,727 & 838 & 42 & 36 & 6 & 0 & 176.8 \\
+~~g) Vector Slide1                      &  3,923 & 3,117 & 809 & 42 & 36 & 6 & 0 & 174.6 \\ \hline
+A.2 Widen/Narrow Add/Sub                &  4,162 & 3,339 & 826 & 42 & 36 & 6 & 0 & 174.8 \\ \hline
+% There is no narrowing add/sub in rvv!
+A.3 Reduction                           &  4,830 & 3,970 & 861 & 42 & 36 & 6 & 0 & 173.6 \\ \hline
+A.4 Mul/Shift:                          &&&&&&&& \\
+~~a) Mul/ShiftL (8/16/32b)              &  5,518 & 4,651 & 869 & 42 & 36 & 6 & 12 & 162.8 \\
+~~b) MulH/ShiftR (8/16b)                &  5,531 & 4,715 & 818 & 42 & 36 & 6 & 12 & 173.5 \\
+% \hline
+% A.5 32b + Widen/Narrow Mul/Shift &&&&   \\ 
+~~c) MulH/ShiftR (32b)                  &  5,849 & 4,941 & 910 & 42 & 36 & 6 & 12 & 168.1 \\
+~~d) Widening Mul, Narrowing Shift      &  5,976 & 5,161 & 820 & 42 & 36 & 6 & 12 & 176.8 \\
+A.5 Slide-by-N                          &  5,995 & 5,171 & 827 & 42 & 36 & 6 & 12 & 172.8 \\
+A.6 Mul/Shift (64b)                     &  6,288 & 5,455 & 834 & 42 & 36 & 6 & 16 & 176.4 \\ \hline
+A.7 FXP                                 &  6,611 & 5,794 & 818 & 42 & 36 & 6 & 16 & 166.0 \\ \hline
+
+B.1 Mask (+A.8)                         &  7,337 & 6,538 & 799 & 42 & 36 & 6 & 16 & 160.7 \\ \hline
+Full System (w/ VexRiscv, A.8+B.1)      & 17,020 & 6,502 & 842 & 61 & 36 & 6 & 16 & 156.4 \\ \hline
+Full System (w/ VexRiscv + FPU, A.8+B.1)& 19,723 & 6,538 & 799 & 64 & 36 & 6 & 16 & 160.7 \\ \hline
+\end{tabular}
+\end{table*}

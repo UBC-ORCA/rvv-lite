@@ -24,7 +24,7 @@ module vALU #(
     parameter RESP_DATA_WIDTH   = 64,
     parameter SEW_WIDTH         = 2 ,
     parameter REQ_ADDR_WIDTH    = 32,
-    parameter REQ_VL_WIDTH      = 8 ,
+    parameter REQ_VL_WIDTH      = 12 ,
     parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH>>3,
     parameter AND_OR_XOR_ENABLE = 1 ,
     parameter ADD_SUB_ENABLE    = 1 ,
@@ -58,7 +58,7 @@ module vALU #(
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
     input      [     REQ_VL_WIDTH-1:0] req_vl      ,
-    input      [                 10:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
+    input      [                 11:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
     input                              req_mask    ,
@@ -363,6 +363,12 @@ generate
     genvar i,j;
 
     if(SHIFT_ENABLE) begin : shift
+        for (j = 0; j < 3; j = j + 1) begin
+            for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
+                assign vShift_mult_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
+            end
+        end
+
         if (SHIFT64_ENABLE) begin : shift64
             assign vShiftR64 = req_func_id[3] & (req_sew[1] & req_sew[0]);
 
@@ -382,71 +388,51 @@ generate
 
             assign vShift_inShift = vShiftR64 ? req_data0[5:0] - 7 : 'h0; // upper bits shift by 0-25 bits
 
-            for (j = 0; j < 4; j = j + 1) begin
-                for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    assign vShift_mult_sew[j][(i << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
-                end
-            end
-
-            for (j = 0; j < 3; j = j + 1) begin
-                for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    assign vShift_cmpl_sew[j][(i << (j+3)) +: (1 << (j+3))] = req_func_id[3] ? (1'b1 << j + 3) - req_data0[(i << (j+3)) +: (1 << (j+3))] : req_data0[(i << (j+3)) +: (1 << (j+3))];
-                end
-            end
             for (i = 0; i < REQ_DATA_WIDTH/64; i = i + 1) begin
                 assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
+
+                assign vShift_mult_sew[3][i*64 +: 64] = 2**(vShift_cmpl_sew[3][i*64 +: 64]);
             end
 
             assign vMul_vec1   = (req_func_id[3:0] != 4'b0111 & ~(req_op_mnr[1]^req_op_mnr[0])) ? vShift_mult_sew[req_sew] : req_data0;
-
-            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
         end else begin
-            assign vShiftR64        = 0;
-            assign vShift_orTop     = 0;
-            assign vShift_vd10      = 0;
-            assign vShift_inShift   = 0;
+            assign vShiftR64        = 'b0;
+            assign vShift_orTop     = 'b0;
+            assign vShift_vd10      = 'b0;
+            assign vShift_inShift   = 'h0;
 
             assign vMul_vec0        = req_data1;
            
             assign vShift_cmpl_sew[3] = 0;
 
-            for (j = 0; j < 3; j = j + 1) begin
-                for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                    assign vShift_mult_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
-                end
-            end
             assign vShift_mult_sew[3] = 'h0;
 
             assign vMul_vec1   = ~(req_op_mnr[1]^req_op_mnr[0]) ? vShift_mult_sew[req_sew] : req_data0; // srl/sra/sll use IV[V/X/I] encoding
+        end
 
-            if (MULH_SR_32_ENABLE | MULH_SR_ENABLE) begin : mulh_sr
-                if (MULH_SR_32_ENABLE) begin
-                    for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
-                        assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: 32] : req_data0[i*32 +: 32];
-                    end
-                end else begin
-                    for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
-                        assign vShift_cmpl_sew[2][i*32 +: 32] = req_data0[i*32 +: 32];
-                    end
+        if (MULH_SR_32_ENABLE | MULH_SR_ENABLE) begin : mulh_sr
+            if (MULH_SR_32_ENABLE) begin
+                for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
+                    assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: 32] : req_data0[i*32 +: 32];
                 end
-
-                for (i = 0; i < REQ_DATA_WIDTH/8; i = i + 1) begin
-                    assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: 8] : req_data0[i*8 +: 8];
-                end
-                for (i = 0; i < REQ_DATA_WIDTH/16; i = i + 1) begin
-                    assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
-                end
-
-                assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
             end else begin
-                for (j = 0; j < 3; j = j + 1) begin
-                    for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-                        assign vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = req_data0[i*(1 << (j+3)) +: (1 << (j+3))];
-                    end
-                end
-
-                assign vMul_opSel  = 2'b01; // only one option for mul/sll
+                assign vShift_cmpl_sew[2] = req_data0;
             end
+
+            for (i = 0; i < REQ_DATA_WIDTH/8; i = i + 1) begin
+                assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: 8] : req_data0[i*8 +: 8];
+            end
+            for (i = 0; i < REQ_DATA_WIDTH/16; i = i + 1) begin
+                assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
+            end
+
+            assign vMul_opSel  = (req_func_id[5:3] == 3'b101 & ~(req_op_mnr[1]^req_op_mnr[0])) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
+        end else begin
+            for (j = 0; j < 3; j = j + 1) begin
+                assign vShift_cmpl_sew[j] = req_data0;
+            end
+
+            assign vMul_opSel  = 2'b01; // only one option for mul/sll
         end
     end
     else begin
@@ -500,7 +486,7 @@ generate
             .in_valid   (vAdd_en        ),
             .in_opSel   ({vMCmp_en,vMask_opSel,vMinMax_en,vMinMax_opSel,vSigned_op0,vAdd_opSel}),
             .in_addr    (req_addr       ),
-            .in_start_idx(vStartIdx     ),
+            .in_start_idx(vStartIdx[5:0]),
             .in_req_start(req_start     ),
             .in_req_end  (req_end       ),
             .in_be      (req_be         ),

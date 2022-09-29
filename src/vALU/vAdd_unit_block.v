@@ -8,7 +8,7 @@ module vAdd_unit_block #(
 	input                              	rst,
 	input      [  REQ_DATA_WIDTH-1:0] 	vec0,
 	input      [  REQ_DATA_WIDTH-1:0] 	vec1,
-	input 								carry,
+	input 	   [  REQ_DATA_WIDTH-1:0]	carry,
 	input      [	   SEW_WIDTH-1:0]	sew,
 	input      [	 OPSEL_WIDTH-1:0]	opSel,
 	output     [RESP_DATA_WIDTH+16:0]	result
