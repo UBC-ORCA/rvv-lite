@@ -34,8 +34,8 @@
 `define WIDEN_MUL_ENABLE  1 // a4d 
 `define NARROW_ENABLE     1  
 `define SLIDE_N_ENABLE    1 // a5
-`define MULT64_ENABLE     0 // a6
-`define SHIFT64_ENABLE    0 
+`define MULT64_ENABLE     1 // a6
+`define SHIFT64_ENABLE    1 
 `define FXP_ENABLE        0 // a8
 `define MASK_ENABLE_EXT   0 // b1
 

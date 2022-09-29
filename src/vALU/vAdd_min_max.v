@@ -10,6 +10,7 @@ module vAdd_min_max #(
 	parameter OPSEL_WIDTH     = 9 ,
 	parameter MIN_MAX_ENABLE  = 1 ,
 	parameter MASK_ENABLE	  = 1 ,
+	parameter MASK_ENABLE_EXT = 1 ,
 	parameter FXP_ENABLE      = 1
 ) (
 	input                            	clk      ,
@@ -26,6 +27,7 @@ module vAdd_min_max #(
 	input 								in_req_end,
 	input	   [REQ_BYTE_EN_WIDTH-1:0]	in_be,
 	input 								in_avg,
+	input 								in_mask,
 	output reg [  RESP_DATA_WIDTH-1:0] 	out_vec  ,
 	output reg                       	out_valid,
 	output reg [   REQ_ADDR_WIDTH-1:0] 	out_addr ,
@@ -38,32 +40,35 @@ module vAdd_min_max #(
 
 	genvar i;
 
-	reg [ REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
-	reg [ REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
-	reg [RESP_DATA_WIDTH-1:0] s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
-	reg [      SEW_WIDTH-1:0] s0_sew, s1_sew, s2_sew;
-	reg [    OPSEL_WIDTH-1:0] s0_opSel, s1_opSel;
-	reg                       s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
-	reg [                7:0] s1_gt, s1_lt, s1_equal;
-	reg 					  s2_mask, s3_mask, s4_mask;
-	reg [    		     5:0] s0_start_idx, s1_start_idx, s2_start_idx;
-	reg 					  s0_req_end, s1_req_end, s2_req_end, s3_req_end;
-	reg 					  s0_req_start, s1_req_start, s2_req_start;
+	reg [	REQ_DATA_WIDTH-1:0] s0_vec0, s1_vec0;
+	reg [	REQ_DATA_WIDTH-1:0] s0_vec1, s1_vec1;
+	reg [	REQ_DATA_WIDTH-1:0] s0_carry_in;
+	reg 						s0_carry_res, s1_carry_res, s2_carry_res;
+	reg [  RESP_DATA_WIDTH-1:0] s1_out_vec, s2_out_vec, s3_out_vec, s4_out_vec;
+	reg [    	 SEW_WIDTH-1:0] s0_sew, s1_sew, s2_sew;
+	reg [      OPSEL_WIDTH-1:0] s0_opSel, s1_opSel;
+	reg                       	s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
+	reg [                  7:0] s1_gt, s1_lt, s1_equal;
+	reg 					  	s2_mask, s3_mask, s4_mask;
+	reg [    		       5:0] s0_start_idx, s1_start_idx, s2_start_idx;
+	reg 					  	s0_req_end, s1_req_end, s2_req_end, s3_req_end;
+	reg 					  	s0_req_start, s1_req_start, s2_req_start;
 	reg [REQ_BYTE_EN_WIDTH-1:0] s0_out_be, s1_out_be, s2_out_be, s3_out_be, s4_out_be;
 
-	reg [ REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
+	reg [	REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
 	reg [REQ_BYTE_EN_WIDTH-1:0] s4_vd;
 	reg [REQ_BYTE_EN_WIDTH-1:0] s4_vd1;
-	reg 					  s0_avg, s1_avg, s2_avg, s3_avg, s4_avg;
+	reg 					  	s0_avg, s1_avg, s2_avg, s3_avg, s4_avg;
 
-	wire [REQ_DATA_WIDTH+16:0] s1_result;
+	wire [ REQ_DATA_WIDTH+16:0] s1_result;
 
-	wire [RESP_DATA_WIDTH-1:0] w_minMax_result  ;
-	wire [RESP_DATA_WIDTH-1:0] w_s1_arith_result;
-	wire [                7:0] w_gt, w_lt, w_equal;
+	wire [ RESP_DATA_WIDTH-1:0] w_minMax_result  ;
+	wire [ RESP_DATA_WIDTH-1:0] w_s1_arith_result;
+	reg  [ RESP_DATA_WIDTH-1:0] w_s1_carry_result;
+	wire [                 7:0] w_gt, w_lt, w_equal;
 
-	wire [RESP_DATA_WIDTH-1:0] avg_vec_out;
+	wire [  RESP_DATA_WIDTH-1:0] avg_vec_out;
 	wire [REQ_BYTE_EN_WIDTH-1:0] avg_vd, avg_vd1;
 
 	generate
@@ -87,15 +92,30 @@ module vAdd_min_max #(
 
 	assign w_s1_arith_result = {s1_result[78:71],s1_result[68:61],s1_result[58:51],s1_result[48:41],s1_result[38:31],s1_result[28:21],s1_result[18:11],s1_result[8:1]};
 
+	if (MASK_ENABLE_EXT) begin
+		always @(*) begin
+			case (s0_sew)
+				2'b00:	w_s1_carry_result = {{(RESP_DATA_WIDTH-8){0}},s1_result[79],s1_result[69],s1_result[59],s1_result[49],s1_result[39],s1_result[29],s1_result[19],s1_result[9]};
+				2'b01:	w_s1_carry_result = {{(RESP_DATA_WIDTH-4){0}},s1_result[79],s1_result[59],s1_result[39],s1_result[19]};
+				2'b10:	w_s1_carry_result = {{(RESP_DATA_WIDTH-2){0}},s1_result[79],s1_result[39]};
+				2'b11:	w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[79]};
+			endcase
+		end
+	end else begin
+		always @(*) begin
+			w_s1_carry_result = 'h0;
+		end
+	end
+
 	vAdd_unit_block vAdd_unit0 (
-		.clk   (clk      		),
-		.rst   (rst      		),
-		.vec0  (s0_vec0  		),
-		.vec1  (s0_vec1  		),
-		.carry (s0_carry_in 	),
-		.sew   (s0_sew   		),
-		.opSel (s0_opSel[4:0]	),
-		.result(s1_result 		)
+		.clk   		(clk      		),
+		.rst   		(rst      		),
+		.vec0  		(s0_vec0  		),
+		.vec1  		(s0_vec1  		),
+		.carry  	(s0_carry_in 	),
+		.sew   		(s0_sew   		),
+		.opSel 		(s0_opSel[4:0]	),
+		.result		(s1_result 		)
 	);
 
 	generate
@@ -153,6 +173,11 @@ module vAdd_min_max #(
 			s3_out_addr	<= 'b0;
 			s4_out_addr <= 'b0;
 			out_addr   	<= 'b0;
+
+			s0_carry_res<= 'b0;
+			s1_carry_res<= 'b0;
+
+			s0_carry_in	<= 'h0;
 		end
 		else begin
 			s0_vec0  	<= in_valid ? in_vec0 		: 'h0;//{REQ_DATA_WIDTH{in_valid}} & in_vec0;
@@ -168,15 +193,27 @@ module vAdd_min_max #(
 			s0_avg		<= in_valid ? in_avg		: 'h0;
 
 			if (MASK_ENABLE_EXT) begin
-				case({in_valid,in_sew})
-					3'b100: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
-					3'b101: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
-					3'b110: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
-					3'b111: s0_carry_in <= {64'b0,in_be[0]};
+				case({in_valid,in_mask,in_carry,in_opSel[1],in_sew})
+					// adc/madc
+					6'b111000: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
+					6'b111001: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
+					6'b111010: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
+					6'b111011: s0_carry_in <= {63'b0,in_be[0]};
+
+					// sbc/msbc
+					6'b111100: s0_carry_in <= {{8{in_be[7]}},{8{in_be[6]}},{8{in_be[5]}},{8{in_be[4]}},{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
+					6'b111101: s0_carry_in <= {{16{in_be[6]}},{16{in_be[4]}},{16{in_be[2]}},{16{in_be[0]}}};
+					6'b111110: s0_carry_in <= {{32{in_be[4]}},{32{in_be[0]}}};
+					6'b111111: s0_carry_in <= {64{in_be[0]}};
+
 					default: s0_carry_in <= 'h0;
 				endcase
+				s0_carry_res	<= ~in_mask & in_carry;
+				s1_carry_res 	<= s0_carry_res;
 			end else begin
-				s0_carry_in <= 'h0;
+				s0_carry_in 	<= 'h0;
+				s0_carry_res	<= 'b0;
+				s1_carry_res 	<= 'b0;
 			end
 
 			s1_vec0  	<= s0_vec0;
@@ -192,9 +229,22 @@ module vAdd_min_max #(
 			s1_avg 		<= s0_avg;
 
 			if (MIN_MAX_ENABLE) begin
-				s1_out_vec 	<=	s0_opSel[4] ? w_minMax_result : w_s1_arith_result;
+				if (MASK_ENABLE_EXT) begin
+					case({s0_opSel[4],s0_carry_res})
+						2'b00: s1_out_vec 	<=	w_s1_arith_result;
+						2'b01: s1_out_vec 	<=	w_s1_carry_result;
+						2'b10: s1_out_vec 	<=	w_minMax_result;
+						default: s1_out_vec <= 'h0;
+					endcase
+				end else begin
+					s1_out_vec 	<=	s0_opSel[4] ? w_minMax_result : w_s1_arith_result;
+				end
 			end else begin
-				s1_out_vec 	<=	w_s1_arith_result;
+				if (MASK_ENABLE_EXT) begin
+					s1_out_vec 	<=	s0_carry_res ? w_s1_carry_result : w_s1_arith_result;
+				end else begin
+					s1_out_vec 	<=	w_s1_arith_result;
+				end
 			end
 			s1_equal   	<= w_equal;
 			s1_gt      	<= w_gt;
@@ -263,7 +313,11 @@ module vAdd_min_max #(
 	generate
 		if (MASK_ENABLE) begin
 			always @(posedge clk) begin
-				s2_mask <= s1_opSel[8];
+				if (MASK_ENABLE_EXT) begin
+					s2_mask <= s1_opSel[8] | s1_carry_res;
+				end else begin
+					s2_mask <= s1_opSel[8];
+				end
 			end
 		end else begin
 			always @(*) begin

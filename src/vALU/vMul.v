@@ -200,15 +200,15 @@ generate
 				s4_or_top 	<= 'b0;
 			end else begin
 				s0_shift	<= in_valid ? in_shift[5:0] : 'h0;
-				s1_shift	<= (s0_shift > 7 ? s0_shift - 7 : 0);
-				s2_shift 	<= (s1_shift > 6 ? s1_shift - 6 : 0);
-				s3_shift 	<= (s2_shift > 6 ? s2_shift - 7 : 0);
+				s1_shift	<= 'h0;//(s0_shift > 7 ? s0_shift - 7 : 0);
+				s2_shift 	<= 'h0;//(s1_shift > 6 ? s1_shift - 6 : 0);
+				s3_shift 	<= 'h0;//(s2_shift > 6 ? s2_shift - 7 : 0);
 
 				s0_top_bits	<= in_valid	? in_vec0[63:39] : 'h0;
-				s1_top_bits <= (s0_top_bits >> (s0_shift > 7 ? 7 : s0_shift));
-				s2_top_bits <= (s1_top_bits >> (s1_shift > 6 ? 6 : s1_shift));
-				s3_top_bits <= (s2_top_bits >> (s2_shift > 6 ? 6 : s2_shift));
-				s4_top_bits <= (s3_top_bits >> s3_shift);
+				s1_top_bits <= s0_top_bits >> s0_shift;
+				s2_top_bits <= s1_top_bits;// >> (s1_shift > 6 ? 6 : s1_shift));
+				s3_top_bits <= s2_top_bits;// >> (s2_shift > 6 ? 6 : s2_shift));
+				s4_top_bits <= s3_top_bits;// >> s3_shift);
 
 				s0_sr_64	<= in_valid ? in_sr_64 : 'b0;
 				s1_sr_64	<= s0_sr_64;

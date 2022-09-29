@@ -26,7 +26,7 @@ module vRedSum_min_max_unit_block #(
 		.rst   	(rst 									),
 		.vec0  	(vec0[REQ_DATA_WIDTH-1:0]				),
 		.vec1  	(vec0[REQ_DATA_WIDTH*2-1:REQ_DATA_WIDTH]),
-		.carry	(1'b0 									),
+		.carry	('h0 									),
 		.sew   	(sew									),
 		.opSel 	('h0 									),
 		.result	(result									)
