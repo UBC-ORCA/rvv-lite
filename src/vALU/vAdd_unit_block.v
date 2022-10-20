@@ -2,7 +2,8 @@ module vAdd_unit_block #(
 	parameter REQ_DATA_WIDTH    = 64,
 	parameter RESP_DATA_WIDTH   = 64,
 	parameter SEW_WIDTH         = 2 ,
-	parameter OPSEL_WIDTH       = 5
+	parameter OPSEL_WIDTH       = 5 ,
+	parameter ENABLE_64_BIT		= 0
 ) (
 	input                              	clk,
 	input                              	rst,
@@ -27,12 +28,18 @@ module vAdd_unit_block #(
 	assign is_sub 	= opSel[1];
 	assign v0_ext0	= is_sub;
 	assign v1_ext0	= is_sub;
-	assign v0_ext1	= (sew[1] | sew[0]) ? 1'b1 : is_sub;
-	assign v1_ext1	= (sew[1] | sew[0]) ? 1'b0 : is_sub;
-	assign v0_ext2	= (sew[1]) ? 1'b1 : is_sub;
-	assign v1_ext2	= (sew[1]) ? 1'b0 : is_sub;
-	assign v0_ext4	= (sew[1] & sew[0]) ? 1'b1 : is_sub;
-	assign v1_ext4	= (sew[1] & sew[0]) ? 1'b0 : is_sub;
+	assign v0_ext1	= (sew[1] | sew[0]) | is_sub;
+	assign v1_ext1	= ~(sew[1] | sew[0]) & is_sub;
+	assign v0_ext2	=  (sew[1]) | is_sub;
+	assign v1_ext2	= ~(sew[1]) & is_sub;
+
+	if (ENABLE_64_BIT) begin
+		assign v0_ext4	=  (sew[1] & sew[0]) | is_sub;
+		assign v1_ext4	= ~(sew[1] & sew[0]) & is_sub;
+	end else begin
+		assign v0_ext4	= is_sub;
+		assign v1_ext4	= is_sub;
+	end
 
 	assign w_vec0	= (opSel[1] & opSel[0]) 		? ~(vec0) : vec0;
 	assign w_vec1	= (opSel[1] & (~(opSel[0])))	? ~(vec1) : vec1;

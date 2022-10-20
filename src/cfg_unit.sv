@@ -1,9 +1,12 @@
+`define MIN(a,b) {(a > b) ? b : a};
+
 module cfg_unit #(
     parameter XLEN          = 32,
     parameter VLEN          = 16384,
     parameter DATA_WIDTH    = 64,
     parameter VLMAX         = VLEN >> 3,
-    parameter VLEN_B_BITS   = 12  
+    parameter VLEN_B_BITS   = $clog2(VLMAX),
+    parameter ENABLE_64_BIT = 1
 ) (
     input                           clk,
     input                           en,
@@ -21,11 +24,11 @@ module cfg_unit #(
     
     wire [           1:0]   sew_nxt;
     // wire [           2:0]   vlmul_nxt;
-    wire                    vill_nxt;
+    // wire                    vill_nxt;
 
     // assign vlmul_nxt   = vtype_nxt[5:3];//vtype_nxt[2:0];
     assign sew_nxt     = vtype_nxt[4:3]; // only need bottom 2 bits (00,01,10,11)
-    assign vill_nxt    = vtype_nxt[XLEN-1];
+    // assign vill_nxt    = vtype_nxt[XLEN-1];
     // we only support 1 mode
     // assign vlmax        = VLMAX;//~vlmul_nxt[2] ? (VLEN_B << vlmul_nxt) >> (sew_nxt) : (VLEN_B >> (3'b100 - vlmul_nxt[1:0] + sew_nxt));
 
@@ -33,21 +36,17 @@ module cfg_unit #(
         if (en) begin
             // Update AVL directly if using vsetivli
             // TODO: register version, which is more reasonable tbh (5 bits is too small for a vector lol)
-            case (avl_set)
-                2'b00,
-                2'b10:  avl <= (avl_new < VLMAX & avl_new > 0) ? avl_new : VLMAX;
-                2'b01:  avl <= VLMAX;
-                default:    avl <= avl;
-            endcase // cfg_type
+            avl <= ~(&avl_set) ? (~avl_set[0] ? avl_new : VLMAX)
+                                : avl;
 
             new_vl <=   ~(&avl_set); // signals when to write back new vl
 
             if (cfg_type[0] | ~cfg_type[1]) begin
                 // update vtype values if using vset{i}vli
                 sew     <= sew_nxt;
-                vill    <= vill_nxt;
             end
         end
     end
 
 endmodule
+

@@ -1,15 +1,15 @@
 module vID #(
     parameter REQ_BYTE_EN_WIDTH = 8,
-    parameter REQ_ADDR_WIDTH    = 32,
-    parameter RESP_DATA_WIDTH   = 64
+    parameter REQ_ADDR_WIDTH    = 5,
+    parameter RESP_DATA_WIDTH   = 64,
+    parameter ENABLE_64_BIT     = 1
 ) (
     input                               clk,
     input                               rst,
     input       [   REQ_ADDR_WIDTH-1:0] in_addr,
-    input       [                  2:0] in_sew,
+    input       [                  1:0] in_sew,
     input                               in_valid,
     input       [                 11:0] in_start_idx,
-    // input       [REQ_BYTE_EN_WIDTH-1:0] in_mask,
     output reg  [   REQ_ADDR_WIDTH-1:0] out_addr,
     output reg  [  RESP_DATA_WIDTH-1:0] out_vec,
     output reg                          out_valid
@@ -25,12 +25,19 @@ module vID #(
 
     generate
         // Assign each element to the appropriate spot in the vector
-        // FIXME lmul < 1?
-        for (j = 0; j < 4; j = j + 1) begin
+        for (j = 0; j < 3; j = j + 1) begin
             for (i = 0; i < REQ_BYTE_EN_WIDTH>>j; i = i + 1) begin
-                assign s0_data[j][i*(1<<(j+3)) +: (1<<(j+3))] = (i + in_start_idx); //{(8<<j){(in_mask[i])}} & (i + in_start_idx);
+                assign s0_data[j][i*(1<<(j+3)) +: (1<<(j+3))] = (i + in_start_idx);
             end
         end
+        if (ENABLE_64_BIT) begin
+            for (i = 0; i < REQ_BYTE_EN_WIDTH>>3; i = i + 1) begin
+                assign s0_data[3][i*64 +: 64] = (i + in_start_idx);
+            end
+        end else begin
+            assign s0_data[3] = 'h0;
+        end
+
     endgenerate
 
     always @(posedge clk) begin

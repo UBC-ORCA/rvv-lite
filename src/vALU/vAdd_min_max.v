@@ -1,5 +1,8 @@
 // `include "vMinMaxSelector.v"
 // `include "vAdd_unit_block.v"
+`include "avg_unit.sv"
+
+`define MIN(a,b) {(a > b) ? b : a}
 
 module vAdd_min_max #(
 	parameter REQ_DATA_WIDTH  = 64,
@@ -11,7 +14,8 @@ module vAdd_min_max #(
 	parameter MIN_MAX_ENABLE  = 1 ,
 	parameter MASK_ENABLE	  = 1 ,
 	parameter MASK_ENABLE_EXT = 1 ,
-	parameter FXP_ENABLE      = 1
+	parameter FXP_ENABLE      = 1 ,
+	parameter ENABLE_64_BIT	  = 0
 ) (
 	input                            	clk      ,
 	input                            	rst      ,
@@ -73,7 +77,12 @@ module vAdd_min_max #(
 
 	generate
 		if(MIN_MAX_ENABLE | MASK_ENABLE) begin : min_max_mask
-			vMinMaxSelector vMinMaxSelector0 (
+			vMinMaxSelector #(
+				.REQ_DATA_WIDTH(REQ_DATA_WIDTH),
+				.RESP_DATA_WIDTH(RESP_DATA_WIDTH),
+				.SEW_WIDTH(SEW_WIDTH),
+				.ENABLE_64_BIT(ENABLE_64_BIT)
+			) vMinMaxSelector0 (
 				.vec0			(s0_vec0		),
 				.vec1			(s0_vec1		),
 				.sub_result		(s1_result 		),
@@ -98,7 +107,14 @@ module vAdd_min_max #(
 				2'b00:	w_s1_carry_result = {{(RESP_DATA_WIDTH-8){0}},s1_result[79],s1_result[69],s1_result[59],s1_result[49],s1_result[39],s1_result[29],s1_result[19],s1_result[9]};
 				2'b01:	w_s1_carry_result = {{(RESP_DATA_WIDTH-4){0}},s1_result[79],s1_result[59],s1_result[39],s1_result[19]};
 				2'b10:	w_s1_carry_result = {{(RESP_DATA_WIDTH-2){0}},s1_result[79],s1_result[39]};
-				2'b11:	w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[79]};
+				2'b11:	begin
+					if (ENABLE_64_BIT) begin
+						w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[79]};
+					end else begin
+						w_s1_carry_result = 'h0; // no 64-bit output
+					end
+				end
+				default: w_s1_carry_result = 'h0; 
 			endcase
 		end
 	end else begin
@@ -107,7 +123,14 @@ module vAdd_min_max #(
 		end
 	end
 
-	vAdd_unit_block vAdd_unit0 (
+	vAdd_unit_block #(
+		.REQ_DATA_WIDTH(REQ_DATA_WIDTH),
+		.RESP_DATA_WIDTH(RESP_DATA_WIDTH),
+		.SEW_WIDTH(SEW_WIDTH),
+		.OPSEL_WIDTH(5),
+		.ENABLE_64_BIT(ENABLE_64_BIT)
+		)
+	vAdd_unit0 (
 		.clk   		(clk      		),
 		.rst   		(rst      		),
 		.vec0  		(s0_vec0  		),
@@ -120,7 +143,10 @@ module vAdd_min_max #(
 
 	generate
 		if (FXP_ENABLE) begin : fxp
-			avg_unit #(.DATA_WIDTH(REQ_DATA_WIDTH)) fxp_avg (
+			avg_unit #(
+				.DATA_WIDTH(REQ_DATA_WIDTH),
+				.ENABLE_64_BIT(ENABLE_64_BIT)
+			) fxp_avg (
 				.clk   	(clk		),
 				.vec_in	(s2_out_vec	),
 				.sew   	(s2_sew		),
@@ -129,18 +155,17 @@ module vAdd_min_max #(
 				.vec_out(avg_vec_out)
 			);
 		end else begin
-			assign avg_vd = 'h0;
-			assign avg_vd1 = 'h0;
-			assign avg_vec_out = 'h0;
+			assign avg_vd 		= 'h0;
+			assign avg_vd1 		= 'h0;
+			assign avg_vec_out 	= 'h0;
 		end
 	endgenerate
 
 	always @(posedge clk) begin
 		if(rst) begin
 			s0_vec0    	<= 'b0;
-			s1_vec0    	<= 'b0;
 			s0_vec1    	<= 'b0;
-			s1_vec1    	<= 'b0;
+
 			s1_out_vec 	<= 'b0;
 			s2_out_vec 	<= 'b0;
 			s3_out_vec 	<= 'b0;
@@ -149,18 +174,30 @@ module vAdd_min_max #(
 
 			s0_sew     	<= 'b0;
 			s1_sew     	<= 'b0;
+			s2_sew		<= 'b0;
 
 			s0_opSel   	<= 'b0;
 			s1_opSel   	<= 'b0;
-			s1_opSel   	<= 'b0;
 
 			s0_valid   	<= 'b0;
-			s1_valid   	<= 'b0;
 			s1_valid   	<= 'b0;
 			s2_valid   	<= 'b0;
 			s3_valid   	<= 'b0;
 			s4_valid 	<= 'b0;
 			out_valid  	<= 'b0;
+
+			s0_start_idx<= 'h0;
+			s1_start_idx<= 'h0;
+			s2_start_idx<= 'h0;
+
+			s0_req_start<= 'b0;
+			s1_req_start<= 'b0;
+			s2_req_start<= 'b0;
+
+			s0_req_end	<= 'b0;
+			s1_req_end	<= 'b0;
+			s2_req_end	<= 'b0;
+			s3_req_end	<= 'b0;
 
 			s1_equal   	<= 'b0;
 			s1_gt      	<= 'b0;
@@ -178,6 +215,30 @@ module vAdd_min_max #(
 			s1_carry_res<= 'b0;
 
 			s0_carry_in	<= 'h0;
+
+			s0_avg		<= 'b0;
+			s1_avg		<= 'b0;
+			s2_avg		<= 'b0;
+			s3_avg		<= 'b0;
+			s4_avg		<= 'b0;
+
+			s4_vd 		<= 'b0;
+			s4_vd1		<= 'b0;
+			out_vd 		<= 'b0;
+			out_vd1 	<= 'b0;
+			out_fxp		<= 'b0;
+
+			s0_out_be	<= 'h0;
+			s1_out_be	<= 'h0;
+			s2_out_be	<= 'h0;
+			s3_out_be	<= 'h0;
+			s4_out_be	<= 'h0;
+			out_be 		<= 'h0;
+
+			s2_mask	 	<= 'h0;
+			s3_mask		<= 'h0;
+			s4_mask		<= 'h0;
+			out_mask	<= 'h0;
 		end
 		else begin
 			s0_vec0  	<= in_valid ? in_vec0 		: 'h0;//{REQ_DATA_WIDTH{in_valid}} & in_vec0;
@@ -193,18 +254,29 @@ module vAdd_min_max #(
 			s0_avg		<= in_valid ? in_avg		: 'h0;
 
 			if (MASK_ENABLE_EXT) begin
-				case({in_valid,in_mask,in_carry,in_opSel[1],in_sew})
+				case({(in_valid&in_mask&in_carry),in_opSel[1],in_sew})
 					// adc/madc
-					6'b111000: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
-					6'b111001: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
-					6'b111010: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
-					6'b111011: s0_carry_in <= {63'b0,in_be[0]};
-
+					4'b1000: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
+					4'b1001: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
+					4'b1010: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
+					4'b1011: begin
+						if (ENABLE_64_BIT) begin
+							s0_carry_in <= {63'b0,in_be[0]};
+						end else begin
+							s0_carry_in <= 'h0;
+						end
+					end
 					// sbc/msbc
-					6'b111100: s0_carry_in <= {{8{in_be[7]}},{8{in_be[6]}},{8{in_be[5]}},{8{in_be[4]}},{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
-					6'b111101: s0_carry_in <= {{16{in_be[6]}},{16{in_be[4]}},{16{in_be[2]}},{16{in_be[0]}}};
-					6'b111110: s0_carry_in <= {{32{in_be[4]}},{32{in_be[0]}}};
-					6'b111111: s0_carry_in <= {64{in_be[0]}};
+					4'b1100: s0_carry_in <= {{8{in_be[7]}},{8{in_be[6]}},{8{in_be[5]}},{8{in_be[4]}},{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
+					4'b1101: s0_carry_in <= {{16{in_be[6]}},{16{in_be[4]}},{16{in_be[2]}},{16{in_be[0]}}};
+					4'b1110: s0_carry_in <= {{32{in_be[4]}},{32{in_be[0]}}};
+					4'b1111: begin
+						if (ENABLE_64_BIT) begin
+							s0_carry_in <= {64{in_be[0]}};
+						end else begin
+							s0_carry_in <= 'h0;
+						end
+					end
 
 					default: s0_carry_in <= 'h0;
 				endcase
@@ -216,8 +288,6 @@ module vAdd_min_max #(
 				s1_carry_res 	<= 'b0;
 			end
 
-			s1_vec0  	<= s0_vec0;
-			s1_vec1  	<= s0_vec1;
 			s1_sew   	<= s0_sew;
 			s1_opSel 	<= s0_opSel;
 			s1_valid   	<= s0_valid;
@@ -286,7 +356,7 @@ module vAdd_min_max #(
 				s3_valid   	<= s2_valid;
 	         	s3_out_addr <= s2_out_addr;
 	         	s3_out_be 	<= s2_out_be;
-	         	s3_mask 	<= 0;
+	         	s3_mask 	<= 1'b0;
 	        end
          	s3_avg 		<= s2_avg;
 
@@ -303,10 +373,22 @@ module vAdd_min_max #(
 			out_valid 	<= s4_valid;
 			out_addr  	<= s4_out_addr;
 			out_be 		<= s4_out_be;
-			out_mask 	<= s4_mask;
-			out_fxp		<= s4_avg;
-			out_vd 		<= s4_vd;
-			out_vd1 	<= s4_vd1;
+
+			if (MASK_ENABLE) begin
+				out_mask 	<= s4_mask;
+			end else begin
+				out_mask 	<= 1'b0;
+			end
+
+			if (FXP_ENABLE) begin
+				out_fxp		<= s4_avg;
+				out_vd 		<= s4_vd;
+				out_vd1 	<= s4_vd1;
+			end else begin
+				out_fxp 	<= 1'b0;
+				out_vd 		<= 1'b0;
+				out_vd1		<= 1'b0;
+			end
 		end
 	end
 
@@ -325,45 +407,5 @@ module vAdd_min_max #(
 			end
 		end
 	endgenerate
-
-endmodule
-
-module avg_unit #(
-	parameter DATA_WIDTH 	= 64,
-	parameter DW_B 			= DATA_WIDTH>>3
-) (
-	input 						clk,
-	input  	   [DATA_WIDTH-1:0] vec_in,
-	input  	   [		   1:0] sew,
-	output reg [	  DW_B-1:0] v_d,
-	output reg [	  DW_B-1:0] v_d1, // v_d and v_d10 are the same for this op
-	output reg [DATA_WIDTH-1:0] vec_out
-);
-
-reg  [DATA_WIDTH-1:0] vec_out_sew 	[0:3];
-reg  [		DW_B-1:0] v_d_sew		[0:3];
-reg  [		DW_B-1:0] v_d1_sew		[0:3];
-
-genvar i;
-integer j;
-generate
-	for (i = 0; i < 4; i = i + 1) begin
-		always @(*) begin
-			for (j = 0; j < DW_B >> i; j = j + 1) begin
-				vec_out_sew	[i][(j<<(i+3)) +: (1<<(i+3))] = vec_in[(j<<(i+3)) + 1 +: ((1 << (i+3)) - 1)];
-
-				v_d_sew 	[i][j<<i] = vec_in[(j<<(i+3)) + 1];
-				v_d1_sew	[i][j<<i] = vec_in[j<<(i+3)];
-			end
-		end
-	end
-
-	always @(posedge clk) begin
-		vec_out <=	vec_out_sew[sew];
-
-		v_d 	<=	v_d_sew [sew];
-		v_d1 	<=	v_d1_sew[sew];
-	end
-endgenerate
 
 endmodule

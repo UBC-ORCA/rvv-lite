@@ -125,7 +125,7 @@ module mem_queue #(
     assign r_r_en           = start_read | (read_count > 0);
     assign rvv_valid_in     = r_r_en;
     
-    assign rvv_done_ld      = (read_count == (burst_len - 1) & burst_len > 0 & read_count > 0);
+    assign rvv_done_ld      = (read_count == (burst_len - 1) & ~mbus_ar_valid & read_count > 0);
 
     // WRITE BUFFERING
     always @(posedge clk) begin
@@ -140,7 +140,7 @@ module mem_queue #(
     assign mbus_w_strb      = {MBUS_DW_B{1'b1}};
     assign mbus_w_valid     = ~w_l_empty;
 
-    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0);
+    assign rvv_done_st      = (ack_count == write_count) & (write_count > 0) & ~mbus_aw_valid; // not done until the write queue is empty!
 endmodule
 
 // module mem_queue_32 #(

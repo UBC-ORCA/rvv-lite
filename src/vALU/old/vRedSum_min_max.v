@@ -1,12 +1,15 @@
 `include "vRedSum_Min_Max_unit_block.v"
 
+`define MIN(a,b) {(a > b) ? b : a}
+
 module vRedSum_min_max #(
 	parameter REQ_DATA_WIDTH    = 64,
 	parameter REQ_BE_WIDTH		= REQ_DATA_WIDTH/8,
 	parameter RESP_DATA_WIDTH   = 64,
 	parameter REQ_ADDR_WIDTH 	= 32,
 	parameter OPSEL_WIDTH       = 5,
-	parameter SEW_WIDTH         = 2 
+	parameter SEW_WIDTH         = 2,
+	parameter ENABLE_64_BIT		= 1
 ) (
 	input								clk,
 	input 								rst,
@@ -130,7 +133,11 @@ module vRedSum_min_max #(
 			s2_opSel 	<= s1_opSel;
 			s3_opSel 	<= s2_opSel;
 
-			s0_sew 		<= in_valid ? in_sew : 'h0; // 	& {SEW_WIDTH{in_valid}};
+			// if (ENABLE_64_BIT) begin
+				s0_sew 		<= in_valid ? in_sew : 'h0; // 	& {SEW_WIDTH{in_valid}};
+			// end else begin
+			// 	s0_sew 		<= in_valid ? `MIN(in_sew, 2'b10) : 'h0; // 	& {SEW_WIDTH{in_valid}};
+			// end
 			s1_sew 		<= s0_sew;
 			s2_sew 		<= s1_sew;
 			s3_sew 		<= s2_sew;
@@ -171,7 +178,14 @@ module vRedSum_min_max #(
 			3'b100:	s4_be = 'h1;
 			3'b101:	s4_be = 'h3;
 			3'b110:	s4_be = 'h7;
-			3'b111:	s4_be = 'hF;
+			3'b111: begin
+				if (ENABLE_64_BIT) begin
+					s4_be = 'hF;
+				end
+				// else begin
+					// s4_be = 'h0;
+				// end
+			end
 			default:s4_be = 'h0;
 		endcase
 	end

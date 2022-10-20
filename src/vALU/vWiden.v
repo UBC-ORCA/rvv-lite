@@ -18,7 +18,6 @@ module vWiden #(
 	output     [		SEW_WIDTH-1:0]  out_sew
 );
 
-	
     always @(*) begin
         case ({in_turn,in_sew})
             3'b110: out_vec0  = {{32{in_signed0&in_vec0[63]}},in_vec0[63:32]};

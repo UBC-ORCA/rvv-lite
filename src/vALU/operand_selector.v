@@ -1,8 +1,11 @@
+`define MIN(a,b) {(a < b) ? a : b}
+
 module operand_select #(
 	parameter INPUT_WIDTH  	= 64,
 	parameter OUTPUT_WIDTH 	= 18,
 	parameter OPSEL_WIDTH  	= 2,
-	parameter SEW_WIDTH    	= 2
+	parameter SEW_WIDTH    	= 2,
+	parameter ENABLE_64_BIT = 1
 ) (
 	input                            		clk,
 	input                            		rst,
@@ -50,7 +53,6 @@ module operand_select #(
 	assign b_op 	= (r_sew == 'b00);
 	assign h_op 	= (r_sew == 'b01);
 	assign w_op 	= (r_sew == 'b10);
-	// assign d_op 	= (r_sew == 'b11);
 
 	assign a0 		= b_op ? 'b0 : {{2{a0_ext}}, r_vec0[15:0]};
 	assign a1 		= b_op ? 'b0 : {{2{a1_ext}}, r_vec0[31:16]};
@@ -133,7 +135,11 @@ module operand_select #(
 		else begin
 			r_vec0 	<= valid ? vec0 : 'h0;
 			r_vec1 	<= valid ? vec1 : 'h0;
-			r_sew 	<= valid ? sew 	: 'h0;
+			if (ENABLE_64_BIT) begin
+				r_sew 	<= valid ? sew 	: 'h0;
+			end else begin
+				r_sew 	<= valid ? `MIN(sew,2'b10) : 'h0;
+			end
 			r_opSel <= valid ? opSel : 'h0;
 			m0_a0 	<= b_op ? b_a7 : a3;
 			m0_b0 	<= b_op ? b_b7 : b3;
