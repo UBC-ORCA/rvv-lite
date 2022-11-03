@@ -476,9 +476,17 @@ module rvv_proc_main #(
     end
 
     // FIXME simplify
-    assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
-                                                            (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
-                                                            (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14));
+    generate
+        if (ENABLE_64_BIT) begin
+            assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & ~opcode_mnr_d[2] & ~opcode_mnr_d[0]) |
+                                                                    (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
+                                                                    (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
+        end else begin
+            assign alu_enable   = (~(&sew)) & (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & ~opcode_mnr_d[2] & ~opcode_mnr_d[0]) |
+                                                                    (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
+                                                                    (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
+        end
+    endgenerate
 
     assign alu_req_off  = (funct6_d[5:3] == 3'b011) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `IVI_TYPE | opcode_mnr_d == `IVX_TYPE) ? (alu_vr_idx >> (sew + 3)) : alu_off_agu;
 
@@ -508,23 +516,47 @@ module rvv_proc_main #(
                     default:    alu_data_in1 = vr_rd_data_out_1;  // valu.vv
                 endcase
             `IVI_TYPE: begin // valu.vi
-                case (sew)
-                    2'b00:    alu_data_in1  = {DW_B{s_ext_imm_d[7:0]}};
-                    2'b01:    alu_data_in1  = {(DW_B>>1){s_ext_imm_d[15:0]}};
-                    2'b10:    alu_data_in1  = {(DW_B>>2){s_ext_imm_d[31:0]}};
-                    2'b11:    alu_data_in1  = {(DW_B>>2){s_ext_imm_d[63:0]}};
-                    default:  alu_data_in1  = {s_ext_imm_d};
+                case(funct6_d[5:1])
+                    5'b00111:   alu_data_in1    = {sca_data_in_1_d};
+                    default: begin
+                        case (sew)
+                            2'b00:    alu_data_in1  = {DW_B{s_ext_imm_d[7:0]}};
+                            2'b01:    alu_data_in1  = {(DW_B>>1){s_ext_imm_d[15:0]}};
+                            2'b10:    alu_data_in1  = {(DW_B>>2){s_ext_imm_d[31:0]}};
+                            2'b11:  begin
+                                if (ENABLE_64_BIT & DATA_WIDTH >= 64) begin
+                                    alu_data_in1    = {(DW_B>>2){s_ext_imm_d[63:0]}};
+                                end else begin
+                                    alu_data_in1    = {s_ext_imm_d};
+                                end
+                            end
+                            default:  alu_data_in1  = {s_ext_imm_d};
+                        endcase
+                    end
                 endcase
             end
             `IVX_TYPE,
             `FVF_TYPE,
             `MVX_TYPE: begin // valu.vx
-                case (sew)
-                    2'b00:    alu_data_in1  = {DW_B{sca_data_in_1_d[7:0]}};
-                    2'b01:    alu_data_in1  = {(DW_B>>1){sca_data_in_1_d[15:0]}};
-                    2'b10:    alu_data_in1  = {(DW_B>>2){sca_data_in_1_d[31:0]}};
-                    2'b11:    alu_data_in1  = {(DW_B>>3){{32{sca_data_in_1_d[31]}},{sca_data_in_1_d[31:0]}}}; // sign-extended
-                    default:  alu_data_in1  = {sca_data_in_1_d};
+                case(funct6_d)
+                    6'b010000:  alu_data_in1 = lumop_d;
+                    6'b001110,
+                    6'b001111:  alu_data_in1 = sca_data_in_1_d;
+                    default: begin
+                        case (sew)
+                            2'b00:    alu_data_in1  = {DW_B{sca_data_in_1_d[7:0]}};
+                            2'b01:    alu_data_in1  = {(DW_B>>1){sca_data_in_1_d[15:0]}};
+                            2'b10:    alu_data_in1  = {(DW_B>>2){sca_data_in_1_d[31:0]}};
+                            2'b11:  begin
+                                if (ENABLE_64_BIT & DATA_WIDTH >= 64) begin
+                                    alu_data_in1    = {(DW_B>>3){sca_data_in_1_d[31:0]}};
+                                end else begin
+                                    alu_data_in1    = {sca_data_in_1_d};
+                                end
+                            end
+                            default:  alu_data_in1  = {sca_data_in_1_d};
+                        endcase
+                    end
                 endcase
             end
             default:  alu_data_in1  = 'h0;

@@ -3,7 +3,7 @@ module vec_regfile #(
     parameter ADDR_WIDTH    = 5,            // this gives us 32 vectors
     parameter DATA_WIDTH    = 64,           // this is one vector width -- fine for access from vector accel. not fine from mem (will need aux interface)
     parameter DW_B          = DATA_WIDTH>>3, // DATA_WIDTH in bytes
-    parameter OFF_BITS      = 8,             // 2048/64 needs 8 bits
+    parameter OFF_BITS      = $clog2(VLEN/DATA_WIDTH),             // 2048/64 needs 8 bits
     parameter BYTE          = 8,
     parameter PACK_PER_REG  = VLEN/DATA_WIDTH
 ) (
