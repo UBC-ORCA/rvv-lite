@@ -36,8 +36,14 @@ module cfg_unit #(
         if (en) begin
             // Update AVL directly if using vsetivli
             // TODO: register version, which is more reasonable tbh (5 bits is too small for a vector lol)
-            avl <= ~(&avl_set) ? (~avl_set[0] ? avl_new : VLMAX)
-                                : avl;
+            case (avl_set)
+                2'b00,
+                2'b10:      avl <= avl_new;
+                2'b01:      avl <= VLMAX;
+                default:    avl <= avl;
+            endcase // avl_set
+            // avl <= ~(&avl_set) ? (avl_set[0] ? avl_new : VLMAX)
+            //                     : avl;
 
             new_vl <=   ~(&avl_set); // signals when to write back new vl
 

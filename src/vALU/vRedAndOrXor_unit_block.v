@@ -30,7 +30,11 @@ module vRedAndOrXor_unit_block #(
 		if (rst) begin
 			out_vec <= 0;
 		end else begin
-			out_vec	<= in_en ? w_vec : in_vec0;
+			if (ENABLE_64_BIT | REQ_DATA_WIDTH < 64) begin
+				out_vec	<= in_en ? w_vec : in_vec0;
+			end else begin
+				out_vec	<= in_en ? w_vec[(REQ_DATA_WIDTH/2)-1:0] : in_vec0[(REQ_DATA_WIDTH/2)-1:0];
+			end
 		end
 	end
 endmodule

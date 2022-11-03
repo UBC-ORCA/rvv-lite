@@ -99,29 +99,81 @@ module vAdd_min_max #(
 		end
 	endgenerate
 
-	assign w_s1_arith_result = {s1_result[78:71],s1_result[68:61],s1_result[58:51],s1_result[48:41],s1_result[38:31],s1_result[28:21],s1_result[18:11],s1_result[8:1]};
+	generate
+		for (i = 0; i < REQ_DATA_WIDTH/8; i = i + 1) begin
+			assign w_s1_arith_result[i*8 +: 8] = s1_result[(i*10 + 1) +: 8];
+		end
+	endgenerate
+	// assign w_s1_arith_result = {s1_result[78:71],s1_result[68:61],s1_result[58:51],s1_result[48:41],s1_result[38:31],s1_result[28:21],s1_result[18:11],s1_result[8:1]};
 
-	if (MASK_ENABLE_EXT) begin
-		always @(*) begin
-			case (s0_sew)
-				2'b00:	w_s1_carry_result = {{(RESP_DATA_WIDTH-8){0}},s1_result[79],s1_result[69],s1_result[59],s1_result[49],s1_result[39],s1_result[29],s1_result[19],s1_result[9]};
-				2'b01:	w_s1_carry_result = {{(RESP_DATA_WIDTH-4){0}},s1_result[79],s1_result[59],s1_result[39],s1_result[19]};
-				2'b10:	w_s1_carry_result = {{(RESP_DATA_WIDTH-2){0}},s1_result[79],s1_result[39]};
-				2'b11:	begin
-					if (ENABLE_64_BIT) begin
-						w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[79]};
-					end else begin
-						w_s1_carry_result = 'h0; // no 64-bit output
+	integer j;
+	generate
+		if (MASK_ENABLE_EXT) begin
+			always @(*) begin
+				case (s0_sew)
+					2'b00: begin
+						for (j = 0; j < RESP_DATA_WIDTH/8; j = j + 1) begin
+							w_s1_carry_result[j] = s1_result[(j+1)*10 - 1];
+						end
+						// w_s1_carry_result[RESP_DATA_WIDTH-1:RESP_DATA_WIDTH*(7/8)] = 'h0;
 					end
-				end
-				default: w_s1_carry_result = 'h0; 
-			endcase
+					2'b01: begin
+						for (j = 0; j < RESP_DATA_WIDTH/16; j = j + 1) begin
+							w_s1_carry_result[j] = s1_result[(j+1)*20 - 1];
+						end
+						// w_s1_carry_result[RESP_DATA_WIDTH-1:RESP_DATA_WIDTH*(15/16)] = 'h0;
+					end
+					2'b10: begin
+						for (j = 0; j < RESP_DATA_WIDTH/32; j = j + 1) begin
+							w_s1_carry_result[j] = s1_result[(j+1)*40 - 1];
+						end
+						// w_s1_carry_result[RESP_DATA_WIDTH-1:RESP_DATA_WIDTH*(15/16)] = 'h0;
+					end
+					2'b11:	begin
+						if (ENABLE_64_BIT & RESP_DATA_WIDTH >= 64) begin
+							for (j = 0; j < RESP_DATA_WIDTH/64; j = j + 1) begin
+								w_s1_carry_result[j] = s1_result[(j+1)*80 - 1];
+							end
+							// w_s1_carry_result[RESP_DATA_WIDTH-1:RESP_DATA_WIDTH*(15/16)] = 'h0;
+						end else begin
+							w_s1_carry_result = 'h0; // no 64-bit output
+						end
+					end
+					default: w_s1_carry_result = 'h0; 
+				endcase
+			end
+			// if (REQ_DATA_WIDTH >= 64) begin
+			// 	always @(*) begin
+			// 		case (s0_sew)
+			// 			2'b00:	w_s1_carry_result = {{(RESP_DATA_WIDTH-8){0}},s1_result[79],s1_result[69],s1_result[59],s1_result[49],s1_result[39],s1_result[29],s1_result[19],s1_result[9]};
+			// 			2'b01:	w_s1_carry_result = {{(RESP_DATA_WIDTH-4){0}},s1_result[79],s1_result[59],s1_result[39],s1_result[19]};
+			// 			2'b10:	w_s1_carry_result = {{(RESP_DATA_WIDTH-2){0}},s1_result[79],s1_result[39]};
+			// 			2'b11:	begin
+			// 				if (ENABLE_64_BIT) begin
+			// 					w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[79]};
+			// 				end else begin
+			// 					w_s1_carry_result = 'h0; // no 64-bit output
+			// 				end
+			// 			end
+			// 			default: w_s1_carry_result = 'h0; 
+			// 		endcase
+			// 	end
+			// end else begin
+			// 	always @(*) begin
+			// 		case (s0_sew)
+			// 			2'b00:	w_s1_carry_result = {{(RESP_DATA_WIDTH-4){0}},s1_result[39],s1_result[29],s1_result[19],s1_result[9]};
+			// 			2'b01:	w_s1_carry_result = {{(RESP_DATA_WIDTH-2){0}},s1_result[39],s1_result[19]};
+			// 			2'b10:	w_s1_carry_result = {{(RESP_DATA_WIDTH-1){0}},s1_result[39]};
+			// 			default: w_s1_carry_result = 'h0; 
+			// 		endcase
+			// 	end
+			// end
+		end else begin
+			always @(*) begin
+				w_s1_carry_result = 'h0;
+			end
 		end
-	end else begin
-		always @(*) begin
-			w_s1_carry_result = 'h0;
-		end
-	end
+	endgenerate
 
 	vAdd_unit_block #(
 		.REQ_DATA_WIDTH(REQ_DATA_WIDTH),
@@ -254,32 +306,48 @@ module vAdd_min_max #(
 			s0_avg		<= in_valid ? in_avg		: 'h0;
 
 			if (MASK_ENABLE_EXT) begin
-				case({(in_valid&in_mask&in_carry),in_opSel[1],in_sew})
-					// adc/madc
-					4'b1000: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
-					4'b1001: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
-					4'b1010: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
-					4'b1011: begin
-						if (ENABLE_64_BIT) begin
-							s0_carry_in <= {63'b0,in_be[0]};
-						end else begin
-							s0_carry_in <= 'h0;
+				if (REQ_DATA_WIDTH >= 64) begin
+					case({(in_valid&in_mask&in_carry),in_opSel[1],in_sew})
+						// adc/madc
+						4'b1000: s0_carry_in <= {7'b0,in_be[7],7'b0,in_be[6],7'b0,in_be[5],7'b0,in_be[4],7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
+						4'b1001: s0_carry_in <= {15'b0,in_be[6],15'b0,in_be[4],15'b0,in_be[2],15'b0,in_be[0]};
+						4'b1010: s0_carry_in <= {31'b0,in_be[4],31'b0,in_be[0]};
+						4'b1011: begin
+							if (ENABLE_64_BIT) begin
+								s0_carry_in <= {63'b0,in_be[0]};
+							end else begin
+								s0_carry_in <= 'h0;
+							end
 						end
-					end
-					// sbc/msbc
-					4'b1100: s0_carry_in <= {{8{in_be[7]}},{8{in_be[6]}},{8{in_be[5]}},{8{in_be[4]}},{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
-					4'b1101: s0_carry_in <= {{16{in_be[6]}},{16{in_be[4]}},{16{in_be[2]}},{16{in_be[0]}}};
-					4'b1110: s0_carry_in <= {{32{in_be[4]}},{32{in_be[0]}}};
-					4'b1111: begin
-						if (ENABLE_64_BIT) begin
-							s0_carry_in <= {64{in_be[0]}};
-						end else begin
-							s0_carry_in <= 'h0;
+						// sbc/msbc
+						4'b1100: s0_carry_in <= {{8{in_be[7]}},{8{in_be[6]}},{8{in_be[5]}},{8{in_be[4]}},{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
+						4'b1101: s0_carry_in <= {{16{in_be[6]}},{16{in_be[4]}},{16{in_be[2]}},{16{in_be[0]}}};
+						4'b1110: s0_carry_in <= {{32{in_be[4]}},{32{in_be[0]}}};
+						4'b1111: begin
+							if (ENABLE_64_BIT) begin
+								s0_carry_in <= {64{in_be[0]}};
+							end else begin
+								s0_carry_in <= 'h0;
+							end
 						end
-					end
 
-					default: s0_carry_in <= 'h0;
-				endcase
+						default: s0_carry_in <= 'h0;
+					endcase
+				end else begin
+					case({(in_valid&in_mask&in_carry),in_opSel[1],in_sew})
+						// adc/madc
+						4'b1000: s0_carry_in <= {7'b0,in_be[3],7'b0,in_be[2],7'b0,in_be[1],7'b0,in_be[0]};
+						4'b1001: s0_carry_in <= {15'b0,in_be[2],15'b0,in_be[0]};
+						4'b1010: s0_carry_in <= {31'b0,in_be[0]};
+
+						// sbc/msbc
+						4'b1100: s0_carry_in <= {{8{in_be[3]}},{8{in_be[2]}},{8{in_be[1]}},{8{in_be[0]}}};
+						4'b1101: s0_carry_in <= {{16{in_be[2]}},{16{in_be[0]}}};
+						4'b1110: s0_carry_in <= {{32{in_be[0]}}};
+
+						default: s0_carry_in <= 'h0;
+					endcase
+				end
 				s0_carry_res	<= ~in_mask & in_carry;
 				s1_carry_res 	<= s0_carry_res;
 			end else begin

@@ -245,11 +245,20 @@ module vReduction #(
             s4_end      <= s3_end;
             
             out_valid   <= s4_end;
-            case ({s4_end, s4_lop_sum})
-                2'b11: out_vec <= s4_lopOut;
-                2'b10: out_vec <= s4_sumOut;
-                default:out_vec <= 'h0;
-            endcase
+
+            if (ENABLE_64_BIT) begin
+                case ({s4_end, s4_lop_sum})
+                    2'b11: out_vec <= s4_lopOut;
+                    2'b10: out_vec <= s4_sumOut;
+                    default:out_vec <= 'h0;
+                endcase
+            end else begin
+                case ({s4_end, s4_lop_sum})
+                    2'b11: out_vec <= s4_lopOut[31:0];
+                    2'b10: out_vec <= s4_sumOut[31:0];
+                    default:out_vec <= 'h0;
+                endcase
+            end
 
             s0_out_addr <= in_valid ? in_addr : 'b0; //     & {REQ_ADDR_WIDTH{in_valid}};
             s1_out_addr <= s0_out_addr;

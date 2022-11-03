@@ -255,9 +255,9 @@ generate
         assign vSlide_opSel     = req_func_id[0];
 
         if (SLIDE_N_ENABLE) begin
-            assign vSlide_shift = req_data0[2:0] << req_sew;
+            assign vSlide_shift = vSlide_insert ? (3'b1 << req_sew) : req_data0[2:0] << req_sew;
 
-            assign vSlide_off   = req_data0 >> (3 - req_sew);
+            assign vSlide_off   = vSlide_insert ? 'h0 : req_data0 >> (3 - req_sew);
         end else begin
             assign vSlide_shift = (3'b1 << req_sew);
 
@@ -475,7 +475,7 @@ generate
         vAdd_min_max # (
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
-            .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
+            .REQ_ADDR_WIDTH (REQ_ADDR_WIDTH),
             .SEW_WIDTH      (SEW_WIDTH),
             .OPSEL_WIDTH    (9),
             .MIN_MAX_ENABLE (MIN_MAX_ENABLE),
@@ -613,7 +613,8 @@ generate
             .REQ_DATA_WIDTH (REQ_DATA_WIDTH),
             .RESP_DATA_WIDTH(RESP_DATA_WIDTH),
             .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH),
-            .ENABLE_64_BIT(ENABLE_64_BIT | SLIDE_N_ENABLE)
+            .ENABLE_64_BIT(ENABLE_64_BIT),
+            .SLIDE_N_ENABLE(SLIDE_N_ENABLE)
             ) vSlide_0 (
             .clk        (clk            ),
             .rst        (rst            ),
@@ -640,6 +641,7 @@ generate
         assign vSlide_outValid  = 0;
         assign vSlide_outVec    = 0;
         assign vSlide_outAddr   = 0;
+        assign vSlide_outOff    = 0;
     end
 
     if(MASK_ENABLE_EXT) begin : mask
@@ -879,8 +881,10 @@ always @(posedge clk) begin
 
         if (NARROW_ENABLE) begin
             resp_be      <=  vNarrow_outValid ? vNarrow_be : (vSlide_outBe    | s5_be     | vMCmp_outBe   | vRed_outBe);
+            resp_narrow  <= vNarrow_outValid;
         end else begin
             resp_be      <=  (vSlide_outBe    | s5_be     | vMCmp_outBe   | vRed_outBe);
+            resp_narrow     <= 1'b0;
         end
 
         resp_valid      <= vAdd_outValid | vAndOrXor_outValid| vMul_outValid    | vSlide_outValid   | vMerge_outValid   | vFirst_Popc_outValid    | vRed_outValid   | vID_outValid;
@@ -891,9 +895,12 @@ always @(posedge clk) begin
 
         resp_sca_out    <= vFirst_Popc_outValid| vMove_outSca;
 
-        resp_whole_reg  <= vMove_outWReg;
+        if (WHOLE_REG_ENABLE) begin
+            resp_whole_reg  <= vMove_outWReg;
+        end else begin
+            resp_whole_reg  <= 'h0;
+        end
 
-        resp_narrow     <= vNarrow_outValid;
 
         if(req_end)
             turn        <= 0;

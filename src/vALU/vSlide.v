@@ -5,7 +5,8 @@ module vSlide #(
 	parameter SEW_WIDTH         	= 3 ,
 	parameter SHIFT_WIDTH 			= $clog2(REQ_DATA_WIDTH>>3),
 	parameter REQ_BYTE_EN_WIDTH 	= 8 ,
-	parameter ENABLE_64_BIT			= 1
+	parameter ENABLE_64_BIT			= 1 ,
+	parameter SLIDE_N_ENABLE 		= 1
 ) (
 	input                             	clk      ,
 	input                              	rst      ,
@@ -45,35 +46,70 @@ module vSlide #(
 
 	reg [				  11:0]	s0_out_off, s1_out_off, s2_out_off, s3_out_off, s4_out_off;
 
-	wire [REQ_DATA_WIDTH*2-1:0] w_s0_up_vec0, w_s0_up_result, w_s0_down_vec0, w_s0_down_result;
-	wire [  REQ_DATA_WIDTH-1:0] w_s1_up_remainder, w_s1_down_remainder, w_s0_be_shifted_right, w_s0_be_shifted_left, w_s0_vec1;
+	wire [REQ_DATA_WIDTH*2-1:0] w_s0_up_vec0, w_s0_up_result, w_s0_down_vec0, w_s0_down_result, w_s0_up_result_n, w_s0_down_result_n;
+	wire [  REQ_DATA_WIDTH-1:0] w_s1_up_remainder, w_s1_down_remainder, w_s0_be_shifted_right, w_s0_be_shifted_left;
+	wire [  REQ_DATA_WIDTH-1:0] w_s0_be_r, w_s0_be_l, w_s0_vec1, w_s0_vec1_r, w_s0_vec1_l;
 
-	if (ENABLE_64_BIT) begin
-		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? s0_vec1 >> (REQ_DATA_WIDTH - (s0_shift*8)) : s0_vec1 << (REQ_DATA_WIDTH - (s0_shift*8))) : 'h0;
+	// These do not change when slide_n is enabled
 
-		assign w_s0_be_shifted_right 	= (|s0_shift) ? s0_be >> s0_shift : s0_be >> 8;
-		assign w_s0_be_shifted_left 	= (|s0_shift) ? s0_be << s0_shift : s0_be << 8;
+
+	if (SLIDE_N_ENABLE) begin
+		assign w_s0_be_r 	= s0_be >> s0_shift;
+		assign w_s0_be_l 	= s0_be << s0_shift;
 	end else begin
-		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? s0_vec1[31:0] >> (REQ_DATA_WIDTH - (s0_shift*8)) : s0_vec1[31:0] << (REQ_DATA_WIDTH - (s0_shift*8))) : 'h0;
-
-		assign w_s0_be_shifted_right 	= s0_be >> s0_shift;
-		assign w_s0_be_shifted_left 	= s0_be << s0_shift;
+		assign w_s0_be_r 	= s0_shift[0] ? s0_be >> 1 : (s0_shift[1] ? s0_be >> 2 : s0_be >> 4);
+		assign w_s0_be_l 	= s0_shift[0] ? s0_be << 1 : (s0_shift[1] ? s0_be << 2 : s0_be << 4);
 	end
 
-	assign w_s0_down_vec0      		= {s0_vec0,64'b0};
-	assign w_s1_down_remainder 		= s2_end ? s2_down_vec1_end : s1_down_remainder;
-	if (ENABLE_64_BIT) begin
-		assign w_s0_down_result		= (|s0_shift) ? (w_s0_down_vec0 >> (s0_shift*8)) : (w_s0_down_vec0 >> 64);
+	if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
+		assign w_s0_vec1_r 	= s0_shift[0] ? {{(REQ_DATA_WIDTH-8){1'b0}},s0_vec1[7:0]} :
+										(s0_shift[1] ? {{(REQ_DATA_WIDTH-16){1'b0}},s0_vec1[15:0]} :
+														(s0_shift[2] ? {{(REQ_DATA_WIDTH-32){1'b0}},s0_vec1[31:0]} :
+																		{{(REQ_DATA_WIDTH-64){1'b0}},s0_vec1[63:0]}));
+		assign w_s0_vec1_l 	= s0_shift[0] ? {s0_vec1[7:0],{(REQ_DATA_WIDTH-8){1'b0}}} :
+										(s0_shift[1] ? {s0_vec1[15:0],{(REQ_DATA_WIDTH-16){1'b0}}} :
+														(s0_shift[2] ? {s0_vec1[31:0],{(REQ_DATA_WIDTH-32){1'b0}}} : 
+																		{s0_vec1[63:0],{(REQ_DATA_WIDTH-64){1'b0}}}));
+		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? w_s0_vec1_l : w_s0_vec1_r) : 'h0;
+
+		assign w_s0_be_shifted_right 	= (|s0_shift) ? w_s0_be_r : s0_be >> 8;
+		assign w_s0_be_shifted_left 	= (|s0_shift) ? w_s0_be_l : s0_be << 8;
 	end else begin
-		assign w_s0_down_result		= w_s0_down_vec0 >> (s0_shift << 3);
+		assign w_s0_vec1_r 	= s0_shift[0] ? {{(REQ_DATA_WIDTH-8){1'b0}},s0_vec1[7:0]} :
+										(s0_shift[1] ? {{(REQ_DATA_WIDTH-16){1'b0}},s0_vec1[15:0]} :
+														{{(REQ_DATA_WIDTH-32){1'b0}},s0_vec1[31:0]});
+		assign w_s0_vec1_l 	= s0_shift[0] ? {s0_vec1[7:0],{(REQ_DATA_WIDTH-8){1'b0}}} :
+										(s0_shift[1] ? {s0_vec1[15:0],{(REQ_DATA_WIDTH-16){1'b0}}} :
+														{s0_vec1[31:0],{(REQ_DATA_WIDTH-32){1'b0}}});
+		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? w_s0_vec1_l : w_s0_vec1_r) : 'h0;
+
+		assign w_s0_be_shifted_right 	= w_s0_be_r;
+		assign w_s0_be_shifted_left 	= w_s0_be_l;
+	end
+
+	assign w_s0_down_vec0      		= {s0_vec0,{(REQ_DATA_WIDTH){1'b0}}};
+	assign w_s1_down_remainder 		= s2_end ? s2_down_vec1_end : s1_down_remainder;
+
+	if (SLIDE_N_ENABLE) begin
+		assign w_s0_down_result_n	= (w_s0_down_vec0 >> (s0_shift*8));
+		assign w_s0_up_result_n 	= (w_s0_up_vec0 << (s0_shift*8));
+	end else begin
+		assign w_s0_down_result_n	= s0_shift[0] ? (w_s0_down_vec0 >> 8) : (s0_shift[1] ? (w_s0_down_vec0 >> 16) : (w_s0_down_vec0 >> 32));
+		assign w_s0_up_result_n		= s0_shift[0] ? (w_s0_up_vec0 << 8) : (s0_shift[1] ? (w_s0_up_vec0 << 16) : (w_s0_up_vec0 << 32));
+	end
+
+	if (ENABLE_64_BIT) begin
+		assign w_s0_down_result		= (|s0_shift) ? w_s0_down_result_n : (w_s0_down_vec0 >> 64);
+	end else begin
+		assign w_s0_down_result		= w_s0_down_result_n;
 	end
 
 	assign w_s1_up_remainder 		= s1_start ? w_s0_vec1 : s2_up_remainder;
-	assign w_s0_up_vec0      		= {64'b0, s0_vec0};
-	if (ENABLE_64_BIT) begin
-		assign w_s0_up_result		= (|s0_shift) ? (w_s0_up_vec0 << (s0_shift*8)) : (w_s0_up_vec0 << 64);
+	assign w_s0_up_vec0      		= {{(REQ_DATA_WIDTH){1'b0}}, s0_vec0};
+	if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
+		assign w_s0_up_result		= (|s0_shift) ? w_s0_up_result_n : (w_s0_up_vec0 << 64);
 	end else begin
-		assign w_s0_up_result		= w_s0_up_vec0 << (s0_shift << 3);
+		assign w_s0_up_result		= w_s0_up_result_n;
 	end
 
 	always @(posedge clk) begin
@@ -147,12 +183,12 @@ module vSlide #(
 			s2_down_vec1_end 	<= s1_down_vec1_end;
 
 			s1_up_result 		<= w_s0_up_result;
-			s2_up_remainder 	<= s1_up_result[127:64];
-			s2_up_result    	<= s1_up_result[63:0] | w_s1_up_remainder;
+			s2_up_remainder 	<= s1_up_result[2*REQ_DATA_WIDTH-1:REQ_DATA_WIDTH];
+			s2_up_result    	<= s1_up_result[REQ_DATA_WIDTH-1:0] | w_s1_up_remainder;
 			s3_up_result    	<= s2_up_result;
 
-			s1_down_remainder 	<= w_s0_down_result[63:0];
-			s1_down_result    	<= w_s0_down_result[127:64];
+			s1_down_remainder 	<= w_s0_down_result[REQ_DATA_WIDTH-1:0];
+			s1_down_result    	<= w_s0_down_result[2*REQ_DATA_WIDTH-1:REQ_DATA_WIDTH];
 			s2_down_result    	<= s1_down_result;
 			s3_down_result    	<= s2_down_result | w_s1_down_remainder;
 

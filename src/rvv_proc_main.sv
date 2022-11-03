@@ -189,7 +189,7 @@ module rvv_proc_main #(
     reg   [               1:0]  mop_d;
     reg   [               5:0]  funct6_d;
     reg                         vm_d;
-    reg   [   VLEN_B_BITS-1:0]  avl_d;
+    reg   [     VLEN_B_BITS:0]  avl_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_1_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_2_d;
     reg   [               1:0]  vxrm_in_d;
@@ -206,9 +206,9 @@ module rvv_proc_main #(
     reg                         out_ack_m;
 
     // CONFIG VALUES -- config unit flops them, these are just connector wires
-    wire  [   VLEN_B_BITS-1:0]  avl; // Application Vector Length (vlen effective)
-    wire  [   VLEN_B_BITS-1:0]  avl_eff; // avl - 1
-    wire  [   VLEN_B_BITS-1:0]  reg_count_avl; // avl - 1
+    wire  [     VLEN_B_BITS:0]  avl; // Application Vector Length (vlen effective)
+    wire  [     VLEN_B_BITS:0]  avl_eff; // avl - 1
+    wire  [     VLEN_B_BITS:0]  reg_count_avl; // avl - 1
     wire                        new_vl;
 
     // VTYPE values
@@ -218,7 +218,7 @@ module rvv_proc_main #(
 
     wire  [          XLEN-1:0]  vtype_nxt;
     wire  [               1:0]  avl_set;
-    reg   [   VLEN_B_BITS-2:0]  reg_count;
+    reg   [   VLEN_B_BITS-1:0]  reg_count;
 
     wire                        agu_idle_rd_1;
     wire                        agu_idle_rd_2;
@@ -240,7 +240,7 @@ module rvv_proc_main #(
     reg   [      OFF_BITS-1:0]  alu_off_agu;
     wire  [      OFF_BITS-1:0]  alu_off_out;
     wire                        alu_valid_out;
-    wire  [   VLEN_B_BITS-1:0]  alu_avl_out;
+    wire  [     VLEN_B_BITS:0]  alu_avl_out;
     wire                        alu_mask_out;
     wire                        alu_sca_out;
     reg   [          DW_B-1:0]  alu_req_be;
@@ -379,15 +379,15 @@ module rvv_proc_main #(
             extract_mask #(.DATA_WIDTH(DATA_WIDTH), .ENABLE_64_BIT(ENABLE_64_BIT)) vm_alu (.en(~vm_d), .vmask_in(vm_rd_data_out_1[(vr_rd_off_1>>sew)*8 +: 8]), .sew(sew), .reg_off(mask_off[sew]), .vmask_out(vmask_ext));
         end else begin : no_mask_file
             assign vm_rd_data_out_1 = 'h0;
-            assign vm_rd_data_out_2 = 'h0;
+            // assign vm_rd_data_out_2 = 'h0;
         end
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN), .ENABLE_64_BIT(ENABLE_64_BIT)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f[VLEN_B_BITS-1:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
+        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f[VLEN_B_BITS:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
-    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH(VLEN_B_BITS),
+    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS+1)),
             .AND_OR_XOR_ENABLE(AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(ADD_SUB_ENABLE),.MIN_MAX_ENABLE(MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(VEC_MOVE_ENABLE),.WHOLE_REG_ENABLE(WHOLE_REG_ENABLE),
             .WIDEN_ADD_ENABLE(WIDEN_ADD_ENABLE),.WIDEN_MUL_ENABLE(WIDEN_MUL_ENABLE),.NARROW_ENABLE(NARROW_ENABLE),.REDUCTION_ENABLE(REDUCTION_ENABLE),.MULT_ENABLE(MULT_ENABLE),
             .MULH_SR_ENABLE(MULH_SR_ENABLE),.MULH_SR_32_ENABLE(MULH_SR_32_ENABLE), .MULT64_ENABLE(MULT64_ENABLE),.SHIFT_ENABLE(SHIFT_ENABLE),.SLIDE_ENABLE(SLIDE_ENABLE),
@@ -445,11 +445,11 @@ module rvv_proc_main #(
     endgenerate
   
     // FIXME this logic wouldn't work for v1 = v1 + v1
-    assign haz_dest         = vec_haz[dest] & (en_vs1 | en_vs2 | en_vs3 | en_req_mem);
-    assign haz_src1         = vec_haz[src_1] & en_vs1;
-    assign haz_src2         = vec_haz[src_2] & en_vs2;
+    assign haz_dest = vec_haz[dest] & (en_vs1 | en_vs2 | en_vs3 | en_req_mem);
+    assign haz_src1 = vec_haz[src_1] & en_vs1;
+    assign haz_src2 = vec_haz[src_2] & en_vs2;
 
-    assign wait_cfg         = (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE);
+    assign wait_cfg = (opcode_mjr_d == `OP_INSN & opcode_mnr_d == `CFG_TYPE);
 
     // Load doesn't really ever have hazards, since it just writes to a reg and that should be in order! Right?
     // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
@@ -475,7 +475,7 @@ module rvv_proc_main #(
         end
 
         if (WHOLE_REG_ENABLE) begin
-            assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6_d == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
+            assign whole_reg_rd   = (mop == 'h0 & src_2 == 'h8 & (opcode_mjr == `LD_INSN | opcode_mjr == `ST_INSN)) | (funct6 == 6'b100111 & opcode_mjr == `OP_INSN & opcode_mnr == `IVI_TYPE);
             assign whole_reg_ld   = (mop_m == 'h0 & lumop_m == 'h8 & opcode_mjr_m == `LD_INSN); // required for when the data actually comes back
         end else begin
             assign whole_reg_rd = 1'b0;
@@ -526,10 +526,10 @@ module rvv_proc_main #(
         assign avl_max_off_s_m  = avl_max_off_s;
     end
 
-    assign avl_max_reg    = avl_eff>>(VLEN_B_BITS - 1 - sew);
-    assign avl_max_reg_s  = avl_eff>>(VLEN_B_BITS - 1 - width_store);
-    assign avl_max_reg_l  = avl_eff>>(VLEN_B_BITS - 1 - opcode_mnr_m);
-    assign avl_max_reg_w  = avl_eff>>(VLEN_B_BITS - 1 - alu_resp_sew);
+    assign avl_max_reg    = avl_eff>>(VLEN_B_BITS - sew);
+    assign avl_max_reg_s  = avl_eff>>(VLEN_B_BITS - width_store);
+    assign avl_max_reg_l  = avl_eff>>(VLEN_B_BITS - opcode_mnr_m);
+    assign avl_max_reg_w  = avl_eff>>(VLEN_B_BITS - alu_resp_sew);
     // ---------------------------------------- ALU CONTROL --------------------------------------------------------------------------
 
     // hold values steady while waiting for multiple register groupings
@@ -543,7 +543,7 @@ module rvv_proc_main #(
     assign s_ext_imm = {{(DATA_WIDTH-5){src_1[4]}}, src_1};
     assign alu_vr_idx_next = (|reg_count)    ? alu_vr_idx + 1 : 0;
 
-    assign reg_count_avl = (whole_reg_rd ? VLEN_B - 1 : (widen_en ? 2*avl_eff : avl_eff));
+    assign reg_count_avl = (whole_reg_rd) ? VLEN_B - 1 : (widen_en ? 2*avl_eff : avl_eff);
 
     always @(posedge clk) begin
         if (~rst_n) begin
@@ -566,18 +566,29 @@ module rvv_proc_main #(
             alu_req_end     <= 'h0;
             alu_off_agu     <= 'h0;
         end else begin
-            alu_req_start   <= agu_addr_start_rd_1 | agu_addr_start_rd_2 | ((opcode_mjr== `OP_INSN) & (opcode_mnr == `IVI_TYPE | opcode_mnr == `IVX_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14) | (opcode_mnr[1:0] == 'h2 & funct6 == 6'h10)) & (reg_count == 0));
-            alu_req_end     <= agu_addr_end_rd_1 | agu_addr_end_rd_2 | ((opcode_mjr_d == `OP_INSN) & (opcode_mnr_d == `IVI_TYPE | (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10)) & (reg_count == 1));
+            alu_req_start   <= agu_addr_start_rd_1  | agu_addr_start_rd_2   | ((opcode_mjr  == `OP_INSN) & (opcode_mnr  == `IVI_TYPE | opcode_mnr   == `IVX_TYPE | (opcode_mnr == `MVV_TYPE & funct6 == 'h14) | (opcode_mnr[1:0] == 'h2 & funct6 == 6'h10)) & (reg_count == 0));
+            alu_req_end     <= agu_addr_end_rd_1    | agu_addr_end_rd_2     | ((opcode_mjr_d== `OP_INSN) & (opcode_mnr_d== `IVI_TYPE | (opcode_mnr_d== `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10)) & (reg_count == 1));
 
             alu_off_agu     <= vr_rd_off_1; // FIXME - make generic
         end
     end
 
     // FIXME simplify
-    assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
-                                                            (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
-                                                            (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
-
+    generate
+        if (ENABLE_64_BIT) begin
+            // assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `MVV_TYPE)) |
+                                                                    // (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
+                                                                    // (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
+            assign alu_enable   = (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & ~opcode_mnr_d[2] & ~opcode_mnr_d[0]) |
+                                                                    (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
+                                                                    (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
+        end else begin
+            assign alu_enable   = (~(&sew)) & (opcode_mjr_d == `OP_INSN) & (  ((vr_rd_active_1 | vr_rd_active_2) & ~opcode_mnr_d[2] & ~opcode_mnr_d[0]) |
+                                                                    (opcode_mnr_d == `IVI_TYPE) | (opcode_mnr_d == `IVX_TYPE) | (opcode_mnr_d == `MVX_TYPE)   |
+                                                                    (opcode_mnr_d == `MVV_TYPE & funct6_d == 'h14) | (opcode_mnr_d[1:0] == 'h2 & funct6_d == 6'h10));
+        end
+    endgenerate
+    
     assign alu_req_off  = (funct6_d[5:3] == 3'b011) & (opcode_mnr_d == `IVV_TYPE | opcode_mnr_d == `IVI_TYPE | opcode_mnr_d == `IVX_TYPE) ? (alu_vr_idx >> (sew + 3)) : alu_off_agu;
 
     // ASSIGNING FIRST SOURCE BASED ON OPCODE TYPE (VX vs VI vs VV)
@@ -638,7 +649,7 @@ module rvv_proc_main #(
                             2'b10:    alu_data_in1  = {(DW_B>>2){sca_data_in_1_d[31:0]}};
                             2'b11:  begin
                                 if (ENABLE_64_BIT) begin
-                                    alu_data_in1    = {(DW_B>>3){{32{sca_data_in_1_d[31]}},{sca_data_in_1_d[31:0]}}}; // sign-extended
+                                    alu_data_in1    = {(DW_B>>3){sca_data_in_1_d[31:0]}};
                                 end else begin
                                     alu_data_in1    = {sca_data_in_1_d};
                                 end
@@ -673,7 +684,7 @@ module rvv_proc_main #(
     assign en_vs2   = (opcode_mjr == `OP_INSN & opcode_mnr != `CFG_TYPE & funct6 != 'h17 & funct6 != 'h14) | (en_req_mem & mop[0]) | (en_vs3 & mop[0]);//  && ~hold_reg_group;
 
     // used for ALU
-    assign en_vd    = alu_valid_out & ~alu_sca_out;    // write data
+    assign en_vd    = alu_valid_out & ~alu_sca_out & alu_resp_start;    // write data
 
     // used only for STORE-FP. OR with vs1, because there is no situation where vs1 and vs3 exist for the same insn
     assign en_vs3       = (opcode_mjr == `ST_INSN);
@@ -804,7 +815,7 @@ module rvv_proc_main #(
     assign alu_req_slide1 = (opcode_mnr_d == `MVX_TYPE && funct6_d[5:1] == 5'b00111);
 
     generate
-        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH(VLEN_B_BITS), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
+        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH((VLEN_B_BITS+1)), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
     endgenerate
 
 

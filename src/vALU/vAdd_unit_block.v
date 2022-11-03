@@ -19,7 +19,7 @@ module vAdd_unit_block #(
 
 	wire [  REQ_DATA_WIDTH-1:0]	w_vec0, w_vec1;
 	wire [ REQ_DATA_WIDTH+15:0]	w_op0, w_op1;
-	wire [ REQ_DATA_WIDTH+16:0]	w_result;
+
 	wire 						is_sub;
 	wire 						v0_ext0, v0_ext1, v0_ext2, v0_ext4;
 	wire 						v1_ext0, v1_ext1, v1_ext2, v1_ext4;
@@ -51,26 +51,45 @@ module vAdd_unit_block #(
 		end
 	endgenerate
 
-	assign w_op0 	= {
-		v0_sgn[7],w_vec0[63:56],v0_ext1,
-		v0_sgn[6],w_vec0[55:48],v0_ext2,
-		v0_sgn[5],w_vec0[47:40],v0_ext1,
-		v0_sgn[4],w_vec0[39:32],v0_ext4,
-		v0_sgn[3],w_vec0[31:24],v0_ext1,
-		v0_sgn[2],w_vec0[23:16],v0_ext2,
-		v0_sgn[1],w_vec0[15:8] ,v0_ext1,
-		v0_sgn[0],w_vec0[7:0]  ,is_sub};
+	if (REQ_DATA_WIDTH >= 64) begin
+		assign w_op0 	= {
+			v0_sgn[7],w_vec0[63:56],v0_ext1,
+			v0_sgn[6],w_vec0[55:48],v0_ext2,
+			v0_sgn[5],w_vec0[47:40],v0_ext1,
+			v0_sgn[4],w_vec0[39:32],v0_ext4,
+			v0_sgn[3],w_vec0[31:24],v0_ext1,
+			v0_sgn[2],w_vec0[23:16],v0_ext2,
+			v0_sgn[1],w_vec0[15:8] ,v0_ext1,
+			v0_sgn[0],w_vec0[7:0]  ,is_sub};
 
-	assign w_op1 	= {
-		v1_sgn[7],w_vec1[63:56],v1_ext1,
-		v1_sgn[6],w_vec1[55:48],v1_ext2,
-		v1_sgn[5],w_vec1[47:40],v1_ext1,
-		v1_sgn[4],w_vec1[39:32],v1_ext4,
-		v1_sgn[3],w_vec1[31:24],v1_ext1,
-		v1_sgn[2],w_vec1[23:16],v1_ext2,
-		v1_sgn[1],w_vec1[15:8] ,v1_ext1,
-		v1_sgn[0],w_vec1[7:0]  ,is_sub};
+		assign w_op1 	= {
+			v1_sgn[7],w_vec1[63:56],v1_ext1,
+			v1_sgn[6],w_vec1[55:48],v1_ext2,
+			v1_sgn[5],w_vec1[47:40],v1_ext1,
+			v1_sgn[4],w_vec1[39:32],v1_ext4,
+			v1_sgn[3],w_vec1[31:24],v1_ext1,
+			v1_sgn[2],w_vec1[23:16],v1_ext2,
+			v1_sgn[1],w_vec1[15:8] ,v1_ext1,
+			v1_sgn[0],w_vec1[7:0]  ,is_sub};
+	end else begin
+		assign w_op0 	= {
+			v0_sgn[3],w_vec0[31:24],v0_ext1,
+			v0_sgn[2],w_vec0[23:16],v0_ext2,
+			v0_sgn[1],w_vec0[15:8] ,v0_ext1,
+			v0_sgn[0],w_vec0[7:0]  ,is_sub};
 
-	assign result 	= w_op0 + w_op1 + carry;
+		assign w_op1 	= {
+			v1_sgn[3],w_vec1[31:24],v1_ext1,
+			v1_sgn[2],w_vec1[23:16],v1_ext2,
+			v1_sgn[1],w_vec1[15:8] ,v1_ext1,
+			v1_sgn[0],w_vec1[7:0]  ,is_sub};
+	end
+
+	if (ENABLE_64_BIT) begin
+		assign result 	= w_op0 + w_op1 + carry;
+	end else begin
+		assign result[REQ_DATA_WIDTH-1:REQ_DATA_WIDTH/2] = w_op0[(REQ_DATA_WIDTH+15):(REQ_DATA_WIDTH/2+8)] + w_op1[(REQ_DATA_WIDTH+15):(REQ_DATA_WIDTH/2+8)] + carry[REQ_DATA_WIDTH-1:(REQ_DATA_WIDTH/2)];
+		assign result[(REQ_DATA_WIDTH/2)-1:0] = w_op0[(REQ_DATA_WIDTH/2+7):0] + w_op1[(REQ_DATA_WIDTH/2+7):0] + carry[(REQ_DATA_WIDTH/2)-1:0];
+	end
 
 endmodule

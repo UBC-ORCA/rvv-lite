@@ -102,7 +102,7 @@ module vFirst_Popc #(
             found       <= s4_end ? 'b0 : (w_found | found);
 
             count       <= s4_end ? 'b0 : w_count;
-            out_vec     <= s4_end ? count : 'b0;
+            out_vec     <= s4_end ? (s4_opSel ? count : idx_out) : 'b0;
 
             case ({s4_end, s4_opSel})
                 2'b11:  out_vec <= idx_out;
