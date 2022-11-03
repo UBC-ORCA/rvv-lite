@@ -21,7 +21,7 @@ void print_matrix_int(int32_t* A, int N) {
 }
 
 int32_t* random_matrix_int(int N) {
-	int32_t A [N * N];
+	int32_t*  A = new int32_t[N * N];
 	for (int i = 0; i < N; i++) {
 		for (int j = 0; j < N; j++) {
 			A[i * N + j] = rand() % 5;	
@@ -72,30 +72,41 @@ void rvv_mm_test() {
 
 	int start_v = perf_get_mcycle();
 
-	vsetvl_e32m4(stride);
+	int vl = vsetvl_e32m4(stride);
 
 	// vC = vmv_v_x_i32m4(0,stride);
 
 	for (int i = 0; i < N; i++) {
 		for (int k = 0; k < N; k++) {
 			value = A[i * N + k];
-			for (int j = 0; j < N; j+=stride) {
-				// C[i * N + j] += A[i * N + k] * B[k * N + j];	
+			int j;
+            for (j = 0; j < (N/vl)*vl; j+=vl) {
+                // C[i * N + j] += A[i * N + k] * B[k * N + j];	
 
-				vB = vle32_v_i32m4(&B[k * N + j], stride);
-				vC = vle32_v_i32m4(&C[i * N + j], stride);
+                vB = vle32_v_i32m4(&B[k * N + j ], vl);
+                vC = vle32_v_i32m4(&C[i * N + j ], vl);
 
-				// accumulator, constant, vector, number of elements
-				vTmp = vmul_vx_i32m4(vB, value, stride);
-				vC = vadd_vv_i32m4(vC, vTmp, stride);
+                // accumulator, constant, vector, number of elements
+                vTmp = vmul_vx_i32m4(vB, value, vl);
+                vC = vadd_vv_i32m4(vC, vTmp, vl);
 
-				vse32_v_i32m4(&C[i * N + j], vC, stride);
-			}
+                vse32_v_i32m4(&C[i * N + j ], vC, vl);
+            }
+            vB = vle32_v_i32m4(&B[k * N + j ], N - j);
+            vC = vle32_v_i32m4(&C[i * N + j ], N - j);
+
+            // accumulator, constant, vector, number of elements
+            vTmp = vmul_vx_i32m4(vB, value, N - j);
+            vC = vadd_vv_i32m4(vC, vTmp, N - j);
+            vse32_v_i32m4(&C[i * N + j ], vC, N - j);
 		}
 	}
 	int end_v = perf_get_mcycle();
 
 	check_mm_equal_int(C, D, N);
+	
+	delete A;
+	delete B;
 
 	printf("Timestamps: %d, %d, %d, %d\n", start, end, start_v, end_v);
 	printf("Cycle count: %d\n", (end_v - start_v));

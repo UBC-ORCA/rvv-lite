@@ -21,6 +21,8 @@ module insn_decoder
         // valu
         output                  vm,
         output [           5:0] funct6
+
+        // output                  vill
     );
   
   assign opcode_mjr = insn_in[6:0];
@@ -41,5 +43,7 @@ module insn_decoder
   assign nf         = insn_in[31:29];
   
   assign cfg_type   = insn_in[31:30];
+
+  // assign vill       = (opcode_mjr != 7'h7 & opcode_mjr != 7'h27 & opcode_mjr != 7'h57);
 
 endmodule

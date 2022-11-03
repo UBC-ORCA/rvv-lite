@@ -2,57 +2,98 @@ module vMinMaxSelector #(
 	parameter REQ_DATA_WIDTH  	= 64,
 	parameter RESP_DATA_WIDTH 	= 64,
 	parameter SEW_WIDTH       	= 2,
-	parameter OPSEL_WIDTH     	= 9,
-	parameter MASK_WIDTH      	= 8
+	parameter REQ_BE_WIDTH      = REQ_DATA_WIDTH/8,
+	parameter ENABLE_64_BIT		= 0
 ) (
 	input  [ REQ_DATA_WIDTH-1:0] 	vec0,
 	input  [ REQ_DATA_WIDTH-1:0] 	vec1,
 	input  [REQ_DATA_WIDTH+16:0] 	sub_result,
 	input  [      SEW_WIDTH-1:0] 	sew,
-	input  [    OPSEL_WIDTH-1:0] 	minMax_sel,
+	input   					 	minMax_sel,
 	output [RESP_DATA_WIDTH-1:0] 	minMax_result,
-	output [     MASK_WIDTH-1:0] 	equal,
-	output [     MASK_WIDTH-1:0] 	lt
+	output [   REQ_BE_WIDTH-1:0] 	equal,
+	output [   REQ_BE_WIDTH-1:0] 	lt
 );
 
 	genvar i;
 
-	wire [MASK_WIDTH-1:0] 	sgn_bits8;
-	wire [MASK_WIDTH-1:0] 	sgn_bits16;
-	wire [MASK_WIDTH-1:0] 	sgn_bits32;
-	wire [MASK_WIDTH-1:0] 	sgn_bits64;
-	wire [MASK_WIDTH-1:0] 	sgn_bits;
-	wire [MASK_WIDTH-1:0] 	lt8;
-	wire [MASK_WIDTH-1:0] 	lt16;
-	wire [MASK_WIDTH-1:0] 	lt32;
-	wire [MASK_WIDTH-1:0] 	lt64;
-	wire [MASK_WIDTH-1:0] 	equal8;
-	wire [MASK_WIDTH-1:0] 	equal16;
-	wire [MASK_WIDTH-1:0] 	equal32;
-	wire [MASK_WIDTH-1:0] 	equal64;
+	wire [REQ_BE_WIDTH-1:0] 	sgn_bits8;
+	wire [REQ_BE_WIDTH-1:0] 	sgn_bits16;
+	wire [REQ_BE_WIDTH-1:0] 	sgn_bits32;
+	wire [REQ_BE_WIDTH-1:0] 	sgn_bits64;
+	wire [REQ_BE_WIDTH-1:0] 	sgn_bits;
+	wire [REQ_BE_WIDTH-1:0] 	lt8;
+	wire [REQ_BE_WIDTH-1:0] 	lt16;
+	wire [REQ_BE_WIDTH-1:0] 	lt32;
+	wire [REQ_BE_WIDTH-1:0] 	lt64;
+	wire [REQ_BE_WIDTH-1:0] 	equal8;
+	wire [REQ_BE_WIDTH-1:0] 	equal16;
+	wire [REQ_BE_WIDTH-1:0] 	equal32;
+	wire [REQ_BE_WIDTH-1:0] 	equal64;
 
-	assign sgn_bits8 	= {sub_result[79],sub_result[69],sub_result[59],sub_result[49],sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
-	assign sgn_bits16	= {sub_result[79],sub_result[79],sub_result[59],sub_result[59],sub_result[39],sub_result[39],sub_result[19],sub_result[19]};
-	assign sgn_bits32	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[39],sub_result[39],sub_result[39],sub_result[39]};
-	assign sgn_bits64	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79]};
+	if (REQ_DATA_WIDTH >= 64) begin // FIXME generalize
+		assign sgn_bits8 	= {sub_result[79],sub_result[69],sub_result[59],sub_result[49],sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
+		assign sgn_bits16	= {sub_result[79],sub_result[79],sub_result[59],sub_result[59],sub_result[39],sub_result[39],sub_result[19],sub_result[19]};
+		assign sgn_bits32	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[39],sub_result[39],sub_result[39],sub_result[39]};
+		if (ENABLE_64_BIT) begin
+			assign sgn_bits64	= {sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79],sub_result[79]};
+		end else begin
+			assign sgn_bits64	= 'h0;
+		end
+	end else begin
+		assign sgn_bits8 	= {sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
+		assign sgn_bits16	= {sub_result[39],sub_result[39],sub_result[19],sub_result[19]};
+		assign sgn_bits32	= {sub_result[39],sub_result[39],sub_result[39],sub_result[39]};
+		assign sgn_bits64	= 'h0;
+	end
 
-	assign lt8 			= {sub_result[79],sub_result[69],sub_result[59],sub_result[49],sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
-	assign lt16			= {sub_result[79],sub_result[59],sub_result[39],sub_result[19]};
-	assign lt32			= {sub_result[79],sub_result[39]};
-	assign lt64			= {sub_result[79]};
+	if (REQ_DATA_WIDTH >= 64) begin // FIXME generalize
+		assign lt8 			= {sub_result[79],sub_result[69],sub_result[59],sub_result[49],sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
+		assign lt16			= {4'b0,sub_result[79],sub_result[59],sub_result[39],sub_result[19]};
+		assign lt32			= {6'b0,sub_result[79],sub_result[39]};
+		if (ENABLE_64_BIT) begin
+			assign lt64		= {7'b0,sub_result[79]};
+		end else begin
+			assign lt64		= 'h0;
+		end
+	end else begin
+		assign lt8 			= {sub_result[39],sub_result[29],sub_result[19],sub_result[9] };
+		assign lt16			= {2'b0,sub_result[39],sub_result[19]};
+		assign lt32			= {3'b0,sub_result[39]};
+		assign lt64			= 'h0;
+	end
 
-	assign sgn_bits 	= sew[1] ? (sew[0] ? sgn_bits64 : sgn_bits32) : (sew[0] ? sgn_bits16 : sgn_bits8);
-
-	for(i=0;i<8;i=i+1) begin
+	for(i=0;i<REQ_DATA_WIDTH/8;i=i+1) begin
 		assign minMax_result[8*i+7:8*i] = (sgn_bits[i] ^ minMax_sel) ? vec0[8*i+7:8*i]   : vec1[8*i+7:8*i];
 		assign equal8[i] 				= (sub_result[10*i+9:10*i+1] == 'b0);
 	end
 
-	assign equal16 	= {{equal8[7] & equal8[6]},{equal8[5] & equal8[4]},{equal8[3] & equal8[2]},{equal8[1] & equal8[0]}};
-	assign equal32 	= {{equal8[7] & equal8[6] & equal8[5] & equal8[4]},{equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
-	assign equal64 	= {{equal8[7] & equal8[6] & equal8[5] & equal8[4] & equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
+	if (REQ_DATA_WIDTH >= 64) begin // FIXME generalize
+		assign equal16 	= {4'b0,{equal8[7] & equal8[6]},{equal8[5] & equal8[4]},{equal8[3] & equal8[2]},{equal8[1] & equal8[0]}};
+		assign equal32 	= {6'b0,{equal8[7] & equal8[6] & equal8[5] & equal8[4]},{equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
+		if (ENABLE_64_BIT) begin
+			assign equal64 	= {{equal8[7] & equal8[6] & equal8[5] & equal8[4] & equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
+		end else begin
+			assign equal64	= 'h0;
+		end
+	end else begin
+		assign equal16 	= {2'b0,{equal8[3] & equal8[2]},{equal8[1] & equal8[0]}};
+		assign equal32 	= {3'b0,{equal8[3] & equal8[2] & equal8[1] & equal8[0]}};
+		assign equal64	= 'h0;
+	end
 
-	assign equal 	= sew[1] ? (sew[0] ? equal64 : equal32): (sew[0] ? equal16 : equal8);
+	if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
+		assign sgn_bits = sew[1] ? (sew[0] ? sgn_bits64 : sgn_bits32) : (sew[0] ? sgn_bits16 : sgn_bits8);
 
-	assign lt 		= sew[1] ? (sew[0] ? lt64 : lt32) : (sew[0] ? lt16 : lt8);
+		assign equal 	= sew[1] ? (sew[0] ? equal64 : equal32): (sew[0] ? equal16 : equal8);
+
+		assign lt 		= sew[1] ? (sew[0] ? lt64 : lt32) : (sew[0] ? lt16 : lt8);	
+	end else begin
+		assign sgn_bits = sew[1] ? sgn_bits32 : (sew[0] ? sgn_bits16 : sgn_bits8);
+
+		assign equal 	= sew[1] ? equal32: (sew[0] ? equal16 : equal8);
+
+		assign lt 		= sew[1] ? lt32 : (sew[0] ? lt16 : lt8);	
+	end
+
 endmodule

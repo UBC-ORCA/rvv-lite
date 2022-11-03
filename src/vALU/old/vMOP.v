@@ -2,7 +2,6 @@ module vMOP #(
 	parameter REQ_DATA_WIDTH  	= 64,
 	parameter RESP_DATA_WIDTH 	= 64,
 	parameter REQ_ADDR_WIDTH 	= 32,
-	parameter SEW_WIDTH       	= 2,
 	parameter OPSEL_WIDTH     	= 3,
 	parameter MIN_MAX_ENABLE  	= 1
 ) (
@@ -53,9 +52,9 @@ module vMOP #(
 		end
 
 		else begin
-			s0_m0 		<= in_valid ? in_m0 	: 'h0;//	& {REQ_DATA_WIDTH{in_valid}};
-			s0_m1 		<= in_valid ? in_m1 	: 'h0;//	& {REQ_DATA_WIDTH{in_valid}};
-			s0_opSel 	<= in_valid ? in_opSel 	: 'h0;//& {OPSEL_WIDTH{in_valid}};
+			s0_m0 		<= in_valid ? in_m0 	: 'h0;
+			s0_m1 		<= in_valid ? in_m1 	: 'h0;
+			s0_opSel 	<= in_valid ? in_opSel 	: 'h0;
 
 			case(s0_opSel)
 				3'b000: s1_out_vec 	<= s0_m0 & ~s0_m1;
