@@ -3,10 +3,7 @@
 module vPopc #(
 	parameter REQ_DATA_WIDTH  	= 64,
 	parameter RESP_DATA_WIDTH 	= 64,
-	parameter REQ_ADDR_WIDTH 	= 32,
-	parameter SEW_WIDTH       	= 2,
-	parameter OPSEL_WIDTH     	= 3,
-	parameter MIN_MAX_ENABLE  	= 1
+	parameter REQ_ADDR_WIDTH 	= 32
 ) (
 	input                            	clk,
 	input                            	rst,
@@ -22,6 +19,7 @@ module vPopc #(
 	reg 	[  RESP_DATA_WIDTH-1:0] count;
 	wire 	[  RESP_DATA_WIDTH-1:0] w_count;
 	wire 	[  RESP_DATA_WIDTH-1:0] w_s1_mask;
+	
  	reg 	[  RESP_DATA_WIDTH-1:0] s0_mask;
  	reg 							s0_valid;
 	reg 							s0_end, s1_end, s2_end, s3_end, s4_end;

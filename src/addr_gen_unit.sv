@@ -2,7 +2,7 @@ module addr_gen_unit #(
     parameter VLEN          = 16384,
     parameter DATA_WIDTH    = 64,
     parameter ADDR_WIDTH    = 5,    // this gives us 32 vectors
-    parameter OFF_WIDTH     = 8
+    parameter OFF_WIDTH     = $clog2(VLEN/DATA_WIDTH)
 ) (
     // FIXME for avl of uneven length across regs
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
@@ -15,6 +15,7 @@ module addr_gen_unit #(
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
     input                       whole_reg,
     input                       widen,
+    input   [ OFF_WIDTH-1:0]    off_in,
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
     output  [ OFF_WIDTH-1:0]    off_out,
     output                      addr_start,
@@ -36,21 +37,18 @@ module addr_gen_unit #(
 
     assign addr_out         = base_reg_out + curr_reg_out;
     assign off_out          = curr_off_out;
-    assign idle             = ~state_next;
+    assign idle             = (widen & ~en & ~state) | (~widen & ~state_next);
 
-    assign state_next       = rst_n & (en | (state & (curr_reg_out != max_reg_out | curr_off_out != max_off_out | (widen & ~turn))));
+    assign state_next       = rst_n & (en | (state & (curr_reg != max_reg | curr_off != max_off | (widen & ~turn))));
 
     assign addr_start       = (~state | (curr_reg == max_reg & curr_off == max_off & (~widen | turn))) & en; // start of addr when en in idle state or when en while resetting
-    // assign addr_end         = ((sew[2] | ~(|sew)) & en) | (state_next & curr_reg_out == max_reg_out & curr_off_out == max_off_out);
-    assign addr_end         = (state_next & curr_reg_out == max_reg_out & curr_off_out == max_off_out & (~widen | turn));
+    assign addr_end         = (state & curr_reg_out == max_reg_out & curr_off_out == max_off_out & (~widen | turn));
 
     assign base_reg_out    = (addr_start ? addr_in : base_reg);
-    assign curr_reg_out    = ~addr_start ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off)) & (~widen | turn)) : 'h0;
-    // assign max_reg_out     = (addr_start ? (~sew[2] ? max_reg_in : (max_reg_in >> (3'b100 - sew[1:0]))) : max_reg);
+    assign curr_reg_out    = (~addr_start & state_next) ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off) & (~widen | ~turn))) : 'h0;
     assign max_reg_out     = (addr_start ? (whole_reg ? (1 << sew) - 1 : max_reg_in) : max_reg);
 
-    assign curr_off_out    = ~addr_start & (curr_off != max_off & (~widen | turn)) ? (curr_off + (curr_off != max_off & (~widen | turn))) : 'h0;
-    // assign max_off_out     = (addr_start ? (~sew[2] ? max_off_in : (max_off_in >> (3'b100 - sew[1:0]))) : max_off);
+    assign curr_off_out    = (~addr_start & ((state_next & ~widen) | (state & widen))) & (curr_off != max_off | widen) ? (curr_off + (curr_off != max_off & (~widen | ~turn))) : (addr_start ? off_in : 'h0);
     assign max_off_out     = (addr_start ? (whole_reg ? (VLEN/DATA_WIDTH) - 1 : max_off_in) : max_off);
 
     assign turn_next        = widen & (en | state) ? ~turn : 0;

@@ -1,11 +1,15 @@
 `include "vRedAndOrXor_unit_block.v"
 
+`define MIN(a,b) {(a > b) ? b : a}
+
 module vRedAndOrXor #(
 	parameter REQ_DATA_WIDTH    = 64,
+	parameter REQ_BE_WIDTH		= REQ_DATA_WIDTH/8,
 	parameter RESP_DATA_WIDTH   = 64,
 	parameter REQ_ADDR_WIDTH 	= 32,
-	parameter OPSEL_WIDTH       = 2,
-	parameter SEW_WIDTH         = 2 
+	parameter OPSEL_WIDTH       = 2 ,
+	parameter SEW_WIDTH         = 2 ,
+	parameter ENABLE_64_BIT		= 1
 ) (
 	input                  				clk,
 	input                              	rst,
@@ -19,25 +23,28 @@ module vRedAndOrXor #(
 	input 		[ REQ_ADDR_WIDTH-1:0] 	in_addr,
 	output reg 	[ REQ_ADDR_WIDTH-1:0] 	out_addr,
 	output reg 	[RESP_DATA_WIDTH-1:0] 	out_vec,
-	output reg                         	out_valid
+	output reg                         	out_valid,
+	output reg 	[	REQ_BE_WIDTH-1:0]	out_be
 );
 	
-	reg	[REQ_DATA_WIDTH-1:0]	s0_vec0;
-	reg [	OPSEL_WIDTH-1:0]	s0_opSel, s1_opSel, s2_opSel, s3_opSel;
-	reg [	  SEW_WIDTH-1:0]	s0_sew, s1_sew, s2_sew, s3_sew;
+	reg	[ REQ_DATA_WIDTH-1:0]	s0_vec0;
+	reg [	 OPSEL_WIDTH-1:0]	s0_opSel, s1_opSel, s2_opSel, s3_opSel;
+	reg [	   SEW_WIDTH-1:0]	s0_sew, s1_sew, s2_sew, s3_sew, s4_sew;
 	reg 						s0_start, s1_start, s2_start, s3_start;
 	reg 						s0_end, s1_end, s2_end, s3_end, s4_end;
+	reg [ REQ_DATA_WIDTH-1:0]	s0_vec1, s1_vec1, s2_vec1, s3_vec1;
 	reg [ REQ_ADDR_WIDTH-1:0] 	s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
 
 	wire [REQ_DATA_WIDTH-1:0]	s1_out, s2_out, s3_out, s4_out;
+	reg  [	REQ_BE_WIDTH-1:0]	s4_be;
 
 	vRedAndOrXor_unit_block # (
 		.REQ_DATA_WIDTH	(64)
 	) b64 (
 		.clk		(clk),
 		.rst		(rst),
-		.in_vec0 	({s3_out,s4_out}),
-		.in_en 		(~s3_start),
+		.in_vec0 	({s3_out,(s3_start ? s3_vec1 : s4_out)}),
+		.in_en 		(1'b1),
 		.in_opSel 	(s3_opSel),
 		.out_vec 	(s4_out)
 	);
@@ -102,6 +109,10 @@ module vRedAndOrXor #(
 			s4_end 		<= 'b0;
 			out_valid 	<= 'b0;
 
+			s0_vec1 	<= 'b0;
+			s1_vec1 	<= 'b0;
+			s2_vec1 	<= 'b0;
+			s3_vec1 	<= 'b0;
 			out_vec 	<= 'b0;
 
 			s0_out_addr	<= 'b0;
@@ -118,7 +129,11 @@ module vRedAndOrXor #(
 			s2_opSel 	<= s1_opSel;
 			s3_opSel 	<= s2_opSel;
 
-			s0_sew 		<= in_valid ? in_sew : 'h0; //	& {SEW_WIDTH{in_valid}};
+			// if (ENABLE_64_BIT) begin
+				s0_sew 		<= in_valid ? in_sew : 'h0; // 	& {SEW_WIDTH{in_valid}};
+			// end else begin
+			// 	s0_sew 		<= in_valid ? `MIN(in_sew, 2'b10) : 'h0; // 	& {SEW_WIDTH{in_valid}};
+			// end
 			s1_sew 		<= s0_sew;
 			s2_sew 		<= s1_sew;
 			s3_sew 		<= s2_sew;
@@ -127,6 +142,11 @@ module vRedAndOrXor #(
 			s1_start 	<= s0_start;
 			s2_start 	<= s1_start;
 			s3_start 	<= s2_start;
+
+			s0_vec1 	<= in_vec1;
+			s1_vec1 	<= s0_vec1;
+			s2_vec1 	<= s1_vec1;
+			s3_vec1 	<= s2_vec1;
 
 			s0_end 		<= in_end 	& in_valid;
 			s1_end 		<= s0_end;
@@ -143,7 +163,26 @@ module vRedAndOrXor #(
 			s3_out_addr	<= s2_out_addr;
 			s4_out_addr	<= s3_out_addr;
 			out_addr 	<= s4_out_addr;
+
+			out_be 		<= s4_be;
 		end
+	end
+
+	always @(*) begin
+		case ({s4_end, s4_sew})
+			3'b100:	s4_be = 'h1;
+			3'b101:	s4_be = 'h3;
+			3'b110:	s4_be = 'h7;
+			3'b111: begin
+				if (ENABLE_64_BIT) begin
+					s4_be = 'hF;
+				end
+				// else begin
+				// 	s4_be = 'h0;
+				// end
+			end
+			default:s4_be = 'h0;
+		endcase
 	end
 
 endmodule
