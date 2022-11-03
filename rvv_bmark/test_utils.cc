@@ -22,7 +22,7 @@ void inc_array_intrinsics( uint32_t *d, int size, int seed, int increase )
 
 void init_array_px_intrinsics(unsigned int *input, const int image_width, const int image_height)
 {
-    int aux = 1;
+    unsigned int aux = 1;
     for (int i = 0; i < image_width*image_height; ++i) {
         input[i] = aux;
         aux++;
@@ -54,7 +54,7 @@ void print_array_intrinsics_half( uint16_t *in, int rows, int cols, int rowlen, 
 
 int get_errors_intrinsics (uint32_t *out_sca, uint32_t *out, int num_elems)
 {
-    int errors;
+    int errors = 0;
     // printf("N: %d\n", num_elems);
     for(int i = 0; i < num_elems; i++){
         if (out[i] != out_sca[i]){
@@ -67,12 +67,12 @@ int get_errors_intrinsics (uint32_t *out_sca, uint32_t *out, int num_elems)
 
 int get_errors_mtx_intrinsics (uint32_t *out_sca, uint32_t *out, int rows, int cols, int rowlen)
 {
-    int errors;
+    int errors = 0;
     for(int i = 0; i < rows; i++){
         for (int j = 0; j < cols; j++){
             int idx = i*rowlen + j;
             if (out[idx] != out_sca[idx]){
-                // printf("err @ %d: %d, expected %d\n", idx, out[idx], out_sca[idx]);
+                printf("err @ %d: %d, expected %d\n", idx, out[idx], out_sca[idx]);
                 errors++;
             }
         }
@@ -83,7 +83,7 @@ int get_errors_mtx_intrinsics (uint32_t *out_sca, uint32_t *out, int rows, int c
 
 int get_errors_mtx_intrinsics_half (uint16_t *out_sca, uint16_t *out, int rows, int cols, int rowlen)
 {
-    int errors;
+    int errors = 0;
     for(int i = 0; i < rows; i++){
         for (int j = 0; j < cols; j++){
             int idx = i*rowlen + j;
