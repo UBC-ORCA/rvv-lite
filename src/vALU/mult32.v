@@ -36,8 +36,8 @@ module mult32 #(
 	always @(posedge clk) begin
 		if(rst) begin
 			prod16_a0_b0 	<= 'b0;
-			prod16_a0_b1 	<= 'b0;
-			prod16_a1_b0 	<= 'b0;
+			// prod16_a0_b1 	<= 'b0;
+			// prod16_a1_b0 	<= 'b0;
 			prod16_a1_b1 	<= 'b0;
 			out_mult16_p0	<= 'b0;
 			out_mult16_p1	<= 'b0;
@@ -48,8 +48,8 @@ module mult32 #(
 
 		else begin
 			prod16_a0_b0 	<= w_prod16_a0_b0;
-			prod16_a0_b1 	<= w_prod16_a0_b1;
-			prod16_a1_b0 	<= w_prod16_a1_b0;
+			// prod16_a0_b1 	<= w_prod16_a0_b1;
+			// prod16_a1_b0 	<= w_prod16_a1_b0;
 			prod16_a1_b1 	<= w_prod16_a1_b1;
 			out_mult16_p0 	<= prod16_a0_b0;
 			out_mult16_p1 	<= prod16_a1_b1;

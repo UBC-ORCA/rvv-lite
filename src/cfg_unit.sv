@@ -38,7 +38,7 @@ module cfg_unit #(
             // TODO: register version, which is more reasonable tbh (5 bits is too small for a vector lol)
             case (avl_set)
                 2'b00,
-                2'b10:      avl <= avl_new;
+                2'b10:      avl <= (avl_new > 0) ? avl_new : avl;
                 2'b01:      avl <= VLMAX;
                 default:    avl <= avl;
             endcase // avl_set

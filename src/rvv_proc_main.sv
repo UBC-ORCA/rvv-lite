@@ -384,7 +384,7 @@ module rvv_proc_main #(
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN), .ENABLE_64_BIT(ENABLE_64_BIT)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(~(cfg_type[0] & cfg_type[1]) ? data_in_1_f[VLEN_B_BITS:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
+        .avl_new(~(&cfg_type) ? data_in_1_f[VLEN_B_BITS:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS+1)),
@@ -497,10 +497,10 @@ module rvv_proc_main #(
 
     if (MASK_ENABLE) begin
         assign avl_max_off_m = (avl > (VLEN_B >> sew)) ? (VLEN_B/DATA_WIDTH) - 1    : (avl_eff>>(DATA_WIDTH_BITS - sew));
-        assign avl_max_off_in_rd= en_vs1 ? (logic_mop ? avl_max_off_m : avl_max_off) : (logic_mop ? avl_max_off_s_m : avl_max_off_s);
+        assign avl_max_off_in_rd= ~en_vs3 ? (logic_mop ? avl_max_off_m : avl_max_off) : (logic_mop ? avl_max_off_s_m : avl_max_off_s);
         assign avl_max_off_in_wr= alu_mask_out  ? avl_max_off_m : avl_max_off_w;
     end else begin
-        assign avl_max_off_in_rd= en_vs1 ? avl_max_off : avl_max_off_s;
+        assign avl_max_off_in_rd= ~en_vs3 ? avl_max_off : avl_max_off_s;
         assign avl_max_off_in_wr= avl_max_off_w;
     end
 
@@ -551,7 +551,7 @@ module rvv_proc_main #(
             alu_vr_idx  <= 'h0;
             s_ext_imm_d <= 'h0;
         end else begin
-            reg_count   <= (|reg_count)    ? reg_count - 1 : (hold_reg_group ? (opcode_mjr == `OP_INSN ? (~logic_mop ? (reg_count_avl >> (DW_B_BITS - sew)) : (reg_count_avl >> DATA_WIDTH_BITS)) :
+            reg_count   <= (|reg_count)    ? reg_count - 1 : ((hold_reg_group & ~stall) ? (opcode_mjr == `OP_INSN ? (~logic_mop ? (reg_count_avl >> (DW_B_BITS - sew)) : (reg_count_avl >> DATA_WIDTH_BITS)) :
                                                                                (~logic_mop ? (reg_count_avl >> (DW_B_BITS - width_store)) : (reg_count_avl >> DATA_WIDTH_BITS))) : 0);
             alu_vr_idx  <= alu_vr_idx_next;
             s_ext_imm_d <= (~(|reg_count) & opcode_mjr == `OP_INSN) ? s_ext_imm : s_ext_imm_d; // latch value for register groupings
