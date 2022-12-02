@@ -1,56 +1,69 @@
 module addr_gen_unit #(
-    parameter ADDR_WIDTH = 5    // this gives us 32 vectors
+    parameter VLEN          = 16384,
+    parameter DATA_WIDTH    = 64,
+    parameter ADDR_WIDTH    = 5,    // this gives us 32 vectors
+    parameter OFF_WIDTH     = $clog2(VLEN/DATA_WIDTH)
 ) (
+    // FIXME for avl of uneven length across regs
     // no data reset needed, if the user picks an unused register they get garbage data and that's their problem ¯\_(ツ)_/¯
     input                       clk,
     input                       rst_n,
     input                       en,
-    input   [2:0]               vlmul,
+    input   [           1:0]    sew,
+    input   [ OFF_WIDTH-1:0]    max_off_in,
+    input   [           2:0]    max_reg_in,
     input   [ADDR_WIDTH-1:0]    addr_in,   // register group address
+    input                       whole_reg,
+    input                       widen,
+    input   [ OFF_WIDTH-1:0]    off_in,
     output  [ADDR_WIDTH-1:0]    addr_out, // output of v_reg address
-    output                      idle             // signal to processor that we can get another address
+    output  [ OFF_WIDTH-1:0]    off_out,
+    output                      addr_start,
+    output                      addr_end,
+    output                      idle      // signal to processor that we can get another address
 );
+    // TODO fractional lmul support would change this up
 
-    reg [ADDR_WIDTH-1:0] curr_reg;
-    reg [ADDR_WIDTH-1:0] max_reg;
-    reg state;  // STATES: IDLE, BUSY
+    reg  [ADDR_WIDTH-1:0]   base_reg;
+    reg  [           2:0]   curr_reg, max_reg;
+    reg  [ OFF_WIDTH-1:0]   curr_off, max_off;
+    reg                     state;  // STATES: IDLE, BUSY
+    reg                     turn;   // widening
+    wire                    turn_next;
+    wire                    state_next;
+    wire [ADDR_WIDTH-1:0]   base_reg_out;
+    wire [           2:0]   curr_reg_out, max_reg_out;
+    wire [ OFF_WIDTH-1:0]   curr_off_out, max_off_out;
 
-//   assign reg_group = (vlmul > 3'b000 && vlmul < 3'b100);
-    assign addr_out         = curr_reg;
-    assign idle_single_addr = (vlmul >= 3'b100 && ~en);
-    assign idle             = ~state;
+    assign addr_out         = base_reg_out + curr_reg_out;
+    assign off_out          = curr_off_out;
+    assign idle             = (widen & ~en & ~state) | (~widen & ~state_next);
+
+    assign state_next       = rst_n & (en | (state & (curr_reg != max_reg | curr_off != max_off | (widen & ~turn))));
+
+    assign addr_start       = (~state | (curr_reg == max_reg & curr_off == max_off & (~widen | turn))) & en; // start of addr when en in idle state or when en while resetting
+    assign addr_end         = (state & curr_reg_out == max_reg_out & curr_off_out == max_off_out & (~widen | turn));
+
+    assign base_reg_out    = (addr_start ? addr_in : base_reg);
+    assign curr_reg_out    = (~addr_start & state_next) ? (curr_reg + (curr_reg != max_reg & (curr_off == max_off) & (~widen | ~turn))) : 'h0;
+    assign max_reg_out     = (addr_start ? (whole_reg ? (1 << sew) - 1 : max_reg_in) : max_reg);
+
+    assign curr_off_out    = (~addr_start & ((state_next & ~widen) | (state & widen))) & (curr_off != max_off | widen) ? (curr_off + (curr_off != max_off & (~widen | ~turn))) : (addr_start ? off_in : 'h0);
+    assign max_off_out     = (addr_start ? (whole_reg ? (VLEN/DATA_WIDTH) - 1 : max_off_in) : max_off);
+
+    assign turn_next        = widen & (en | state) ? ~turn : 0;
 
     // latching input values
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
-            curr_reg <= 0;
-            max_reg <= 0;
-        end else begin
-            if (state == 1'b0) begin
-                if (en) begin
-                    curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-                    max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-                end
-            end else begin
-                if (curr_reg === max_reg) begin
-                    if (en) begin
-                        curr_reg <= (vlmul < 3'b100) ? addr_in << vlmul : addr_in;
-                        max_reg <= (vlmul < 3'b100) ? (addr_in << vlmul) + (1'b1 << vlmul) - 1'b1 : addr_in;
-                    end
-                end else begin
-                    curr_reg <= curr_reg + 1;
-                end
-            end
-        end
-    end
-
-    // STATE MACHINE :)
     always @(posedge clk) begin
-        case (state)
-            1'b0: state <= rst_n & en; // IDLE
-            1'b1: state <= rst_n & (curr_reg !== max_reg) | en; // BUSY
-            default : state <= 1'b0;
-        endcase
-    end
+        base_reg    <= base_reg_out;
+        curr_reg    <= curr_reg_out;
+        max_reg     <= max_reg_out;
 
+        curr_off    <= curr_off_out;
+        max_off     <= max_off_out;
+
+        state       <= state_next;
+
+        turn        <= turn_next;
+    end
 endmodule

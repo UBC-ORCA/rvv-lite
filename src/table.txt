@@ -1,0 +1,196 @@
+\label{tab:synthesis}
+\begin{tabular}{|l|r|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l}{\textbf{ALU}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
+
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&& \\ 
+~~a) Load/Store/Cfg                 &  1,220 & 22 &  0 & 177.2 \\
+~~b) And/Or/Xor/Add/Sub/ID          &  2,584 & 38 &  0 & 181.7 \\
+~~c) Min/Max.                       &  2,630 & 38 &  0 & 183.3 \\
+~~d) Basic Mask                     &  3,155 & 39 &  0 & 178.6 \\
+~~e) Vector Move                    &  3,237 & 39 &  0 & 175.4 \\
+~~f) Whole Reg Mov/Ld/St            &  3,251 & 39 &  0 & 185.4 \\
+~~g) Vector Slide1                  &  3,835 & 39 &  0 & 160.1 \\ \hline
+A.2 Widening Add/Sub                &  4,070 & 39 &  0 & 177.1 \\ \hline
+A.3 Reduction                       &  4,523 & 39 &  0 & 162.1 \\ \hline
+A.4 Mul/Shift:                      &&&& \\
+~~a) Mul/ShiftL (8/16/32b)          &  4,833 & 39 & 12 & 172.1 \\
+~~b) MulH/ShiftR (8/16b)            &  4,857 & 39 & 12 & 183.8 \\ 
+~~c) MulH/ShiftR (32b)              &  5,165 & 39 & 12 & 166.5 \\
+~~d) Widening Mul, Narrowing Shift  &  5,647 & 39 & 12 & 167.3 \\
+A.5 Slide-by-N                      &  5,932 & 39 & 12 & 187.3 \\ 
+A.6 Mul/Shift (64b)                 &  6,273 & 39 & 16 & 161.0 \\ \hline
+A.7 FXP                             &  6,523 & 39 & 16 & 169.4 \\ \hline
+
+B.1 Mask (+A.8)                     &  7,164 & 39 & 16 & 172.0 \\ \hline
+A.7+B.1+VexRiscv                    &        & 58 & 20 &       \\ \hline
+A.7+B.1+VexRiscv+FPU                & 18,555 & 61 & 23 & 172.0 \\ \hline
+
+A.7 FXP                       (32b) &        & 39 & 16 &       \\ \hline
+B.1 Mask (+A.7)               (32b) &  5,718 & 39 & 16 & 211.3 \\ \hline
+A.7+B.1+VexRiscv (VLMAX=128)  (32b) & 15,283 & 61 & 23 & 211.3 \\ \hline
+\end{tabular}
+\end{table*}
+
+
+// ------------------------------------------------------------------------------------------------------
+
+\label{tab:synthesis}
+\begin{tabular}{|l|r|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l}{\textbf{ALU}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
+
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&&&&&&& \\ 
+~~a) Load/Store/Cfg                                 &  1,220 &   342 &     0 & 882 & 22 & 16 & 6 & 0 & 177.2 \\
+~~b) And/Or/Xor/Add/Sub/ID                          &  2,584 & 1,728 &   521 & 857 & 38 & 32 & 6 & 0 & 181.7 \\
+~~c) Min/Max.                                       &  2,630 & 1,811 &   610 & 819 & 38 & 32 & 6 & 0 & 183.3 \\
+~~d) Basic Mask                                     &  3,155 & 2,293 &   947 & 862 & 39 & 33 & 6 & 0 & 178.6 \\
+~~e) Vector Move                                    &  3,237 & 2,387 &   981 & 849 & 39 & 33 & 6 & 0 & 175.4 \\
+~~f) Whole Reg Mov/Ld/St                            &  3,251 & 2,396 &   956 & 854 & 39 & 33 & 6 & 0 & 185.4 \\
+~~g) Vector Slide1                                  &  3,835 & 3,014 & 1,529 & 876 & 39 & 33 & 6 & 0 & 160.1 \\ \hline
+A.2 Widening Add/Sub                                &  4,070 & 3,269 & 1,579 & 805 & 39 & 33 & 6 & 0 & 177.1 \\ \hline
+A.3 Reduction                                       &  4,523 & 3,697 & 1,917 & 828 & 39 & 33 & 6 & 0 & 162.1 \\ \hline
+A.4 Mul/Shift:                                      &&&& \\
+~~a) Mul/ShiftL (8/16/32b)                          &  4,833 & 3,978 & 2,140 & 857 & 39 & 33 & 6 & 12 & 172.1 \\
+~~b) MulH/ShiftR (8/16b)                            &  4,857 & 4,006 & 2,220 & 854 & 39 & 33 & 6 & 12 & 183.8 \\ 
+~~c) MulH/ShiftR (32b)                              &  5,165 & 4,292 & 2,492 & 873 & 39 & 33 & 6 & 12 & 166.5 \\
+~~d) Widening Mul, Narrowing Shift                  &  5,647 & 4,834 & 2,483 & 816 & 39 & 33 & 6 & 12 & 167.3 \\
+A.5 Slide-by-N                                      &  5,932 & 5,080 & 2,859 & 853 & 39 & 33 & 6 & 12 & 187.3 \\ 
+A.6 Mul/Shift (64b)                                 &  6,273 & 5,418 & 3,046 & 855 & 39 & 33 & 6 & 16 & 161.0 \\ \hline
+A.7 FXP                                             &  6,523 & 5,653 & 3,245 & 871 & 39 & 33 & 6 & 16 & 169.4 \\ \hline
+
+B.1 Mask (+A.8)                                     &  7,164 & 6,286 & 3,841 & 878 & 39 & 33 & 6 & 16 & 172.0 \\ \hline
+Full System (VexRiscv, A.7+B.1)                     &  &  &  &  & 58 & 33 & 6 & 20 &  \\ \hline
+Full System (VexRiscv + FPU, A.7+B.1)               & 18,555 & 6,286 & 3,841 & 878 & 61 & 33 & 6 & 23 & 172.0 \\ \hline
+
+A.7 FXP                                     (32b)   &  &  &  &  & 39 & 33 & 6 & 16 &  \\ \hline
+B.1 Mask (+A.8)                             (32b)   &  5,713 & 5,035 & 3,915 & 707 & 39 & 33 & 6 & 16 &  \\ \hline
+Full System (VexRiscv, A.7+B.1, VLMAX=128)  (32b)   & 15,262 & 5,035 & 3,915 & 707 & 61 & 33 & 6 & 23 &  \\ \hline
+\end{tabular}
+\end{table*}
+
+
+// ------------------------------------------------------------------------------------------------------
+
+
+
+\label{tab:synthesis}
+\begin{tabular}{|l|rrr|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l}{\textbf{ALU}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
+
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&&&&&&& \\ 
+~~a) Load/Store/Cfg                                 &  1,204 &   346 &     0 & 859 & 22 & 16 & 6 & 0 & 178.6 \\
+~~b) And/Or/Xor/Add/Sub/ID                          &  2,537 & 1,631 &   510 & 906 & 38 & 32 & 6 & 0 & 184.1 \\
+~~c) Min/Max.                                       &  2,683 & 1,802 &   594 & 884 & 38 & 32 & 6 & 0 & 178.2 \\
+~~d) Basic Mask                                     &  3,043 & 2,242 &   918 & 801 & 39 & 33 & 6 & 0 & 179.2 \\
+~~e) Vector Move                                    &  3,159 & 2,350 &   963 & 808 & 39 & 33 & 6 & 0 & 173.8 \\
+
+~~f) Whole Reg Mov/Ld/St                            &  3,217 & 2,356 &   956 & 860 & 39 & 33 & 6 & 0 &  \\
+~~g) Vector Slide1                                  &  4,038 & 3,221 & 1,671 & 818 & 39 & 33 & 6 & 0 &  \\ \hline
+A.2 Widening Add/Sub                                &  4,206 & 3,408 & 1,772 & 800 & 39 & 33 & 6 & 0 &  \\ \hline
+A.3 Reduction                                       &  4,814 & 4,019 & 2,266 & 797 & 39 & 33 & 6 & 0 &  \\ \hline
+A.4 Mul/Shift:                                      &&&&&&&& \\
+~~a) Mul/ShiftL (8/16/32b)                          &  5,057 & 4,189 & 2,501 & 875 & 39 & 33 & 6 & 12 &  \\
+
+~~b) MulH/ShiftR (8/16b)                            &  5,169 & 4,352 & 2,454 & 859 & 39 & 33 & 6 & 12 &  \\ ?? alu ??
+
+~~c) MulH/ShiftR (32b)                              &  5,347 & 4,516 & 2,608 & 849 & 39 & 33 & 6 & 12 &  \\
+
+~~d) Widening Mul, Narrowing Shift                  &  5,950 & 5,053 & 2,916 & 898 & 39 & 33 & 6 & 12 &  \\
+
+A.5 Slide-by-N                                      &  5,940 & 5,084 & 2,942 & 856 & 39 & 33 & 6 & 12 &  \\ ??
+
+A.6 Mul/Shift (64b)                                 &  5,689 & 4,844 & 2,607 & 847 & 39 & 33 & 6 & 16 &  \\ \hline
+A.7 FXP                                             &  5,395&  5,098 & 2,803 & 298 & 39 & 33 & 6 & 16 &  \\ \hline
+B.1 Mask (+A.8)                                     &  6,704 & 5,829 & 3,428 & 876 & 39 & 33 & 6 & 16 & 174.0 \\ \hline
+Full System (VexRiscv, A.8+B.1)                     & 16,286 & 5,854 & 3,409 & 317 & 58 & 33 & 6 & 20 & 169.2 \\ \hline
+Full System (VexRiscv + FPU, A.8+B.1)               & 18,156 & 5,829 & 3,428 & 876 & 61 & 33 & 6 & 23 & 174.0 \\ \hline
+A.7 FXP                                     (32b)   &  5,421 & 4,681 & 3,068 & 739 & 39 & 33 & 6 & 16 & 208.7 \\ \hline
+
+B.1 Mask (+A.8)                             (32b)   &  5,421 & 4,681 & 3,068 & 739 & 39 & 33 & 6 & 16 & 208.7 \\ \hline
+Full System (VexRiscv, A.8+B.1, VLMAX=128)  (32b)   & 14,955 & 4,681 & 3,068 & 739 & 61 & 33 & 6 & 23 & 208.7 \\ \hline
+\end{tabular}
+\end{table*}
+
+\label{tab:synthesis}
+\begin{tabular}{|l|rrr|rrr|r|r|}
+\hline
+\textbf{Configuration}
+& \multicolumn{1}{l}{\textbf{LUT}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l}{\textbf{BRAM}}
+& \multicolumn{1}{l}{\textbf{rvv}}
+& \multicolumn{1}{l|}{\textbf{mem}} 
+& \multicolumn{1}{l|}{\textbf{DSP}} 
+& \multicolumn{1}{l|}{\textbf{FMAX (MHz)}} \\
+
+\hline \hline
+
+A.1 Core Instructions, decomposed: &&&&&&&& \\ 
+~~a) Load/Store/Cfg                     & 1,201 &   347 & 858 & 22 & 16 & 6 & 0 & 159.9 \\
+~~b) And/Or/Xor/Add/Sub/ID              & 2,612 & 1,760 & 853 & 38 & 32 & 6 & 0 &  \\
+~~c) Min/Max.                           & 2,716 & 1,873 & 844 & 38 & 32 & 6 & 0 &  \\
+~~d) Basic Mask                         & 3,082 & 2,249 & 837 & 39 & 33 & 6 & 0 &  \\
+
+~~e) Vector Move                        & 3,178 & 2,248 & 931 & 39 & 33 & 6 & 0 &  \\
+
+~~f) Whole Reg Mov/Ld/St                & 3,147 & 2,335 & 817 & 39 & 33 & 6 & 0 &  \\
+
+~~g) Vector Slide1                      &  &  &  &  &  &  &  &  \\ \hline
+A.2 Widen/Narrow Add/Sub                & 3,826 & 2,946 & 882 & 39 & 33 & 6 & 0 & 164.0 \\ \hline
+A.3 Reduction                           & 4,452 & 3,629 & 825 & 39 & 33 & 6 & 0 & 163.3 \\ \hline
+A.4 Mul/Shift:                          &&&&&&&& \\
+~~a) Mul/ShiftL (8/16/32b)              & 4,616 & 3,724 & 894 & 39 & 33 & 6 & 12 & 154.4 \\
+~~b) MulH/ShiftR (8/16b)                & 4,831 & 3,981 & 852 & 39 & 33 & 6 & 12 & 161.7 \\
+~~c) MulH/ShiftR (32b)                  & 4,994 & 4,145 & 850 & 39 & 33 & 6 & 12 & 162.6 \\
+~~d) Widening Mul, Narrowing Shift      & 5,610 & 4,800 & 813 & 39 & 33 & 6 & 12 & 179.5 \\
+A.5 Slide-by-N                          & 5,669 & 4,804 & 865 & 39 & 33 & 6 & 12 & 158.4 \\
+A.6 Mul/Shift (64b)                     & 5,807 & 4,978 & 831 & 39 & 33 & 6 & 16 & 162.2 \\ \hline
+A.7 FXP                                 & 6,045 & 5,148 & 899 & 39 & 33 & 6 & 16 & 156.1 \\ \hline
+B.1 Mask (+A.8)                         &  &  &  & 39 & 36 & 6 & 16 &  \\ \hline
+Full System (w/ VexRiscv, A.8+B.1)      &  &  &  &  &  &  &  &  \\ \hline
+Full System (w/ VexRiscv + FPU, A.8+B.1)&  &  &  &  &  &  &  &  \\ \hline
+\end{tabular}
+\end{table*}
+
+
+vMul area:
+
+64-out            : 911     (m0-3: 114,65,33,146)
+128-out + mulh    : 1194    (m0-3: 143,179,148,116)
+128-out + 64bsmul : 1202    (m0-3: 143,179,149,116)
