@@ -12,9 +12,6 @@
 `include "vID.sv"
 `include "fxp_round.sv"
 
-// TODO optional 64-bit
-// TODO separate masking instructions - test area
-
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
     parameter REQ_DATA_WIDTH    = 64,
@@ -43,7 +40,7 @@ module vALU #(
     parameter MASK_ENABLE       = 1 ,
     parameter MASK_ENABLE_EXT   = 1 ,
     parameter FXP_ENABLE        = 1 ,
-    parameter ENABLE_64_BIT     = 0 ,
+    parameter ENABLE_64_BIT     = 1 ,
     parameter EN_128_MUL        = 0
 ) (
     input                              clk         ,
@@ -147,8 +144,8 @@ generate
     if (AND_OR_XOR_ENABLE) begin : and_or_xor_opsel
         assign vAndOrXor_en     = req_valid & (((req_func_id[5:2] == 4'b0010) & ~(req_op_mnr[1]^req_op_mnr[0])) | vMove_en | vMOP_en);
 
-        assign vAndOrXor_in0    = vMoveWhole_en ? 'h0    : req_data0;
-        assign vAndOrXor_in1    = vMove_en & ~vMoveWhole_en ? 'h0    : req_data1;
+        assign vAndOrXor_in0    = vMoveWhole_en ? req_data1   : req_data0;
+        assign vAndOrXor_in1    = vMove_en & ~vMoveWhole_en ? req_data0    : req_data1;
 
         assign vAndOrXor_opSel  = vMove_en ? 3'b010 : req_func_id[2:0];
 

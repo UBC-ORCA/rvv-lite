@@ -17,7 +17,7 @@ module vMul #(
     parameter MUL64_ENABLE    	= 0 ,
     parameter SHIFTR64_ENABLE 	= 0 ,
 	parameter FXP_ENABLE		= 0 ,
-	parameter ENABLE_64_BIT 	= MUL64_ENABLE | SHIFTR64_ENABLE,
+	parameter ENABLE_64_BIT 	= 0 ,
 	parameter EN_128_MUL		= 0
 ) (
 	input                            	clk,
@@ -62,7 +62,7 @@ module vMul #(
 	// end
 
 	//Registers
-	reg signed [16:0] 	s4_b5, s4_b4, s4_b3, s4_b2;
+	reg signed [16:0] 	s4_b7, s4_b6, s4_b5, s4_b4, s4_b3, s4_b2, s4_b1, s4_b0;
 
 	reg signed [32:0] 	s4_h0, s4_h1, s4_h2, s4_h3;
 
@@ -88,14 +88,14 @@ module vMul #(
 
 	
 	generate
-		if(MUL64_ENABLE & REQ_DATA_WIDTH >= 64) begin
+		if(MUL64_ENABLE & REQ_DATA_WIDTH > 32) begin
 			if (EN_128_MUL) begin
 				assign w_add0 = {m0_mult32,64'b0} + {{64{m3_mult32[65]}},m3_mult32[65:0]};
 				assign w_add1 = {{32{m1_mult32[65]}},m1_mult32[65:0],32'b0} + {{32{m2_mult32[65]}},m2_mult32[65:0],32'b0};
 				assign w_s3_d0 = w_add0 + w_add1;
 			end else begin
 				assign w_add0 	= m3_mult32[65:0];
-				assign w_add1 	= m1_mult32[65:0] + m2_mult32[65:0];
+				assign w_add1 	= m0_mult32[65:0] + m2_mult32[65:0];
 				assign w_s3_d0 	= w_add0 + {w_add1,32'b0};
 			end
 		end
@@ -109,7 +109,8 @@ module vMul #(
 		.INPUT_WIDTH(REQ_DATA_WIDTH),
 		.OPSEL_WIDTH(OPSEL_WIDTH),
 		.SEW_WIDTH(SEW_WIDTH),
-		.ENABLE_64_BIT(ENABLE_64_BIT)
+		.ENABLE_64_BIT(ENABLE_64_BIT),
+		.EN_128_MUL(EN_128_MUL)
 	) opSelector (
 		.clk 	(clk 		),
 		.rst  	(rst     	),
@@ -145,6 +146,10 @@ module vMul #(
 		.in_a1 			(m0_a1		),
 		.in_b0 			(m0_b0		),
 		.in_b1 			(m0_b1		),
+		.out_mult8_b0 	(m0_bout0	),
+		.out_mult8_b1 	(m0_bout1	),
+		.out_mult8_b2 	(m0_bout2	),
+		.out_mult8_b3 	(m0_bout3	),
 		.out_mult16_p0 	(m0_p0		),
 		.out_mult16_p1 	(m0_p1		),
 		.out_mult32 	(m0_mult32	)
@@ -157,8 +162,8 @@ module vMul #(
 		.in_a1			(m1_a1		),
 		.in_b0			(m1_b0		),
 		.in_b1			(m1_b1		),
-		.out_mult16_p0	(m1_p0		),
-		.out_mult16_p1	(m1_p1		),
+		// .out_mult16_p0	(m1_p0		),
+		// .out_mult16_p1	(m1_p1		),
 		.out_mult32		(m1_mult32	)
 	);
 
@@ -169,8 +174,8 @@ module vMul #(
 		.in_a1 			(m2_a1		),
 		.in_b0 			(m2_b0		),
 		.in_b1 			(m2_b1		),
-		.out_mult16_p0	(m2_p0		),
-		.out_mult16_p1	(m2_p1		),
+		// .out_mult16_p0	(m2_p0		),
+		// .out_mult16_p1	(m2_p1		),
 		.out_mult32		(m2_mult32	)
 	);
 
@@ -182,13 +187,17 @@ module vMul #(
 		.in_a1			(m3_a1		),
 		.in_b0			(m3_b0		),
 		.in_b1			(m3_b1		),
+		.out_mult8_b0 	(m3_bout0	),
+		.out_mult8_b1 	(m3_bout1	),
+		.out_mult8_b2 	(m3_bout2	),
+		.out_mult8_b3 	(m3_bout3	),
 		.out_mult16_p0	(m3_p0		),
 		.out_mult16_p1	(m3_p1		),
 		.out_mult32		(m3_mult32	)
 	);
 
 generate
-	if (SHIFTR64_ENABLE & ~EN_128_MUL & REQ_DATA_WIDTH >= 64) begin
+	if (SHIFTR64_ENABLE & ~EN_128_MUL & REQ_DATA_WIDTH > 32) begin
 		always @(posedge clk) begin
 			if (rst) begin
 				s0_shift	<= 'h0;
@@ -299,10 +308,14 @@ endgenerate
 			s4_out_addr <= 'b0;
 			out_addr	<= 'b0;
 		end else begin
-			s4_b2     	<= m2_p1;
-			s4_b3     	<= m2_p0;
-			s4_b4     	<= m1_p1;
-			s4_b5     	<= m1_p0;
+			s4_b7     	<= m0_bout0;
+			s4_b6     	<= m0_bout1;
+			s4_b5     	<= m0_bout2;
+			s4_b4     	<= m0_bout3;
+			s4_b3     	<= m3_bout0;
+			s4_b2     	<= m3_bout1;
+			s4_b1     	<= m3_bout2;
+			s4_b0     	<= m3_bout3;
 
 			s4_h3     	<= m0_p0;
 			s4_h2     	<= m0_p1;
@@ -403,9 +416,9 @@ endgenerate
 				out_vec <= 'b0;
 			end 
 			else begin
-				if (REQ_DATA_WIDTH >= 64) begin
+				if (REQ_DATA_WIDTH > 32) begin
 					case ({s4_fxp_mul,s4_lsb,s4_sew})
-						'b0000 : out_vec <= {s4_h3[15:8],s4_h2[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
+						'b0000 : out_vec <= {s4_b7[15:8],s4_b6[15:8],s4_b5[15:8],s4_b4[15:8],s4_b3[15:8],s4_b2[15:8],s4_b1[15:8],s4_b0[15:8]};
 						'b0001 : out_vec <= {s4_h3[31:16], s4_h2[31:16], s4_h1[31:16], s4_h0[31:16]};
 						'b0010 : begin
 							if (MULH_SR_32_ENABLE) begin
@@ -425,7 +438,7 @@ endgenerate
 								out_vec <= 'h0;
 							end
 						end
-						'b0100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
+						'b0100 : out_vec <= {s4_b7[7:0],s4_b6[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_b1[7:0],s4_b0[7:0]};
 						'b0101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
 						'b0110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 						'b0111 : begin
@@ -441,7 +454,7 @@ endgenerate
 						end
 						'b1000 : begin
 							if (FXP_ENABLE) begin
-								out_vec <= {s4_h3[11:4],s4_h2[11:4],s4_b5[11:4],s4_b4[11:4],s4_b3[11:4],s4_b2[11:4],s4_h1[11:4],s4_h0[11:4]};
+								out_vec <= {s4_b7[11:4],s4_b6[11:4],s4_b5[11:4],s4_b4[11:4],s4_b3[11:4],s4_b2[11:4],s4_b1[11:4],s4_b0[11:4]};
 							end else begin
 								out_vec <= 'h0;
 							end
@@ -471,7 +484,7 @@ endgenerate
 					endcase
 				end else begin
 					case ({s4_fxp_mul,s4_lsb,s4_sew})
-						'b0000 : out_vec <= {s4_b3[15:8],s4_b2[15:8],s4_h1[15:8],s4_h0[15:8]};
+						'b0000 : out_vec <= {s4_b3[15:8],s4_b2[15:8],s4_b1[15:8],s4_b0[15:8]};
 						'b0001 : out_vec <= {s4_h1[31:16], s4_h0[31:16]};
 						'b0010 : begin
 							if (MULH_SR_32_ENABLE) begin
@@ -480,12 +493,12 @@ endgenerate
 								out_vec	<= 'h0;
 							end
 						end
-						'b0100 : out_vec <= {s4_h3[7:0],s4_h2[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_h1[7:0],s4_h0[7:0]};
+						'b0100 : out_vec <= {s4_b7[7:0],s4_b6[7:0],s4_b5[7:0],s4_b4[7:0],s4_b3[7:0],s4_b2[7:0],s4_b1[7:0],s4_b0[7:0]};
 						'b0101 : out_vec <= {s4_h3[15:0], s4_h2[15:0], s4_h1[15:0], s4_h0[15:0]};
 						'b0110 : out_vec <= {s4_w1[31:0], s4_w0[31:0]};
 						'b1000 : begin
 							if (FXP_ENABLE) begin
-								out_vec <= {s4_b3[11:4],s4_b2[11:4],s4_h1[11:4],s4_h0[11:4]};
+								out_vec <= {s4_b3[11:4],s4_b2[11:4],s4_b1[11:4],s4_b0[11:4]};
 							end else begin
 								out_vec <= 'h0;
 							end
@@ -523,7 +536,7 @@ endgenerate
 				end 
 				else begin
 					case ({s4_fxp_mul, s4_sew})
-						'b000 : out_vd	<= s4_fxp_s ? {s4_h3[8],s4_h2[8],s4_b5[8],s4_b4[8],s4_b3[8],s4_b2[8],s4_h1[8],s4_h0[8]} : 'h0;
+						'b000 : out_vd	<= s4_fxp_s ? {s4_b7[8],s4_b6[8],s4_b5[8],s4_b4[8],s4_b3[8],s4_b2[8],s4_b1[8],s4_b0[8]} : 'h0;
 						'b001 : out_vd	<= s4_fxp_s ? {1'b0, s4_h3[16], 1'b0, s4_h2[16], 1'b0, s4_h1[16], 1'b0, s4_h0[16]} : 'h0;
 						'b010 : out_vd	<= s4_fxp_s ? {3'b0, s4_w1[32], 3'b0, s4_w0[32]} : 'h0;
 						'b011 : begin
@@ -538,11 +551,11 @@ endgenerate
 							end
 						end
 
-						'b100 : out_vd	<= {s4_h3[3],s4_h2[3],s4_b5[3],s4_b4[3],s4_b3[3],s4_b2[3],s4_h1[3],s4_h0[3]};
+						'b100 : out_vd	<= {s4_b7[3],s4_b6[3],s4_b5[3],s4_b4[3],s4_b3[3],s4_b2[3],s4_b1[3],s4_b0[3]};
 						'b101 : out_vd	<= {1'b0, s4_h3[7], 1'b0, s4_h2[7], 1'b0, s4_h1[7], 1'b0, s4_h0[7]};
 						'b110 : out_vd 	<= {3'b0, s4_w1[15], 3'b0, s4_w0[15]};
 						'b111 : begin
-							if (ENABLE_64_BIT & EN_128_MUL & REQ_DATA_WIDTH >= 64) begin
+							if (ENABLE_64_BIT & EN_128_MUL & REQ_DATA_WIDTH > 32) begin
 								out_vd 	<= {7'b0, s4_d0[31]};
 							end else begin
 								out_vd	<= 'h0;
@@ -559,7 +572,7 @@ endgenerate
 				end 
 				else begin
 					case ({s4_fxp_mul, s4_sew})
-						'b000 : out_vd1 <= s4_fxp_s ? {s4_h3[7],s4_h2[7],s4_b5[7],s4_b4[7],s4_b3[7],s4_b2[7],s4_h1[7],s4_h0[7]} : 'h0;
+						'b000 : out_vd1 <= s4_fxp_s ? {s4_b7[7],s4_b6[7],s4_b5[7],s4_b4[7],s4_b3[7],s4_b2[7],s4_b1[7],s4_b0[7]} : 'h0;
 						'b001 : out_vd1 <= s4_fxp_s ? {1'b0, s4_h3[15], 1'b0, s4_h2[15], 1'b0, s4_h1[15], 1'b0, s4_h0[15]} : 'h0;
 						'b010 : out_vd1 <= s4_fxp_s ? {3'b0, s4_w1[31], 3'b0, s4_w0[31]} : 'h0;
 						'b011 : begin
@@ -574,11 +587,11 @@ endgenerate
 							end
 						end
 
-						'b100 : out_vd1 <= {s4_h3[3],s4_h2[3],s4_b5[3],s4_b4[3],s4_b3[3],s4_b2[3],s4_h1[3],s4_h0[3]};
+						'b100 : out_vd1 <= {s4_b7[3],s4_b6[3],s4_b5[3],s4_b4[3],s4_b3[3],s4_b2[3],s4_b1[3],s4_b0[3]};
 						'b101 : out_vd1 <= {1'b0, s4_h3[7], 1'b0, s4_h2[7], 1'b0, s4_h1[7], 1'b0, s4_h0[7]};
 						'b110 : out_vd1 <= {3'b0, s4_w1[15], 3'b0, s4_w0[15]};
 						'b111 : begin
-							if (ENABLE_64_BIT & EN_128_MUL & REQ_DATA_WIDTH >= 64) begin
+							if (ENABLE_64_BIT & EN_128_MUL & REQ_DATA_WIDTH > 32) begin
 								out_vd1 <= {7'b0, s4_d0[31]};
 							end else begin
 								out_vd1 <= 'h0;
@@ -595,7 +608,7 @@ endgenerate
 				end 
 				else begin
 					case ({s4_fxp_mul, s4_sew})
-						'b000 : out_vd10 <= s4_fxp_s ? {(|s4_h3[7:0]),(|s4_h2[7:0]),(|s4_b5[7:0]),(|s4_b4[7:0]),(|s4_b3[7:0]),(|s4_b2[7:0]),(|s4_h1[7:0]),(|s4_h0[7:0])} : 'h0;
+						'b000 : out_vd10 <= s4_fxp_s ? {(|s4_b7[7:0]),(|s4_b6[7:0]),(|s4_b5[7:0]),(|s4_b4[7:0]),(|s4_b3[7:0]),(|s4_b2[7:0]),(|s4_b1[7:0]),(|s4_b0[7:0])} : 'h0;
 						'b001 : out_vd10 <= s4_fxp_s ? {1'b0, |(s4_h3[15:0]), 1'b0, (|s4_h2[15:0]), 1'b0, (|s4_h1[15:0]), 1'b0, (|s4_h0[15:0])} : 'h0;
 						'b010 : out_vd10 <= s4_fxp_s ? {3'b0, (|s4_w1[31:0]), 3'b0, (|s4_w0[31:0])} : 'h0;
 						'b011 : begin
@@ -610,7 +623,7 @@ endgenerate
 							end
 						end
 
-						'b100 : out_vd10 <= {(|s4_h3[3:0]),(|s4_h2[3:0]),(|s4_b5[3:0]),(|s4_b4[3:0]),(|s4_b3[3:0]),(|s4_b2[3:0]),(|s4_h1[3:0]),(|s4_h0[3:0])};
+						'b100 : out_vd10 <= {(|s4_b7[3:0]),(|s4_b6[3:0]),(|s4_b5[3:0]),(|s4_b4[3:0]),(|s4_b3[3:0]),(|s4_b2[3:0]),(|s4_b1[3:0]),(|s4_b0[3:0])};
 						'b101 : out_vd10 <= {1'b0, (|s4_h3[7:0]), 1'b0, (|s4_h2[7:0]), 1'b0, (|s4_h1[7:0]), 1'b0, (|s4_h0[7:0])};
 						'b110 : out_vd10 <= {3'b0, (|s4_w1[15:0]), 3'b0, (|s4_w0[15:0])};
 						'b111 : begin

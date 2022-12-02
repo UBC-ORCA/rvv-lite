@@ -23,12 +23,10 @@ module cfg_unit #(
     // wire [VLEN_B_BITS-1:0]   vlmax;
     
     wire [           1:0]   sew_nxt;
-    // wire [           2:0]   vlmul_nxt;
-    // wire                    vill_nxt;
+    wire                    vill_nxt;
 
-    // assign vlmul_nxt   = vtype_nxt[5:3];//vtype_nxt[2:0];
     assign sew_nxt     = vtype_nxt[4:3]; // only need bottom 2 bits (00,01,10,11)
-    // assign vill_nxt    = vtype_nxt[XLEN-1];
+    assign vill_nxt    = vtype_nxt[XLEN-1] | (vtype_nxt[2:0] != vtype_nxt[5:3]);
     // we only support 1 mode
     // assign vlmax        = VLMAX;//~vlmul_nxt[2] ? (VLEN_B << vlmul_nxt) >> (sew_nxt) : (VLEN_B >> (3'b100 - vlmul_nxt[1:0] + sew_nxt));
 
@@ -49,8 +47,10 @@ module cfg_unit #(
 
             if (cfg_type[0] | ~cfg_type[1]) begin
                 // update vtype values if using vset{i}vli
-                sew     <= sew_nxt;
+                sew <= sew_nxt;
             end
+
+            vill    <= vill_nxt;
         end
     end
 
