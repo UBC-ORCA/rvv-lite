@@ -18,7 +18,7 @@ module vALU #(
     parameter RESP_DATA_WIDTH   = 64,
     parameter SEW_WIDTH         = 2 ,
     parameter REQ_ADDR_WIDTH    = 32,
-    parameter REQ_VL_WIDTH      = 12 ,
+    parameter REQ_VL_WIDTH      = 11 ,
     parameter REQ_BYTE_EN_WIDTH = REQ_DATA_WIDTH>>3,
     parameter AND_OR_XOR_ENABLE = 1 ,
     parameter ADD_SUB_ENABLE    = 1 ,
@@ -54,7 +54,7 @@ module vALU #(
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
     input      [     REQ_VL_WIDTH-1:0] req_vl      ,
-    input      [                 11:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
+    input      [                11-1:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
     input                              req_mask    ,
