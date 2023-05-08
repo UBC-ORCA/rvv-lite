@@ -57,7 +57,7 @@ module rvv_proc_main #(
     parameter SLIDE_N_ENABLE    = 1,
     parameter MULT64_ENABLE     = 0,
     parameter SHIFT64_ENABLE    = 0,
-    parameter FXP_ENABLE        = 0, // BUG ?
+    parameter FXP_ENABLE        = 1,
     parameter MASK_ENABLE_EXT   = 1,
     parameter EN_128_MUL        = 0
 ) (
@@ -189,7 +189,7 @@ module rvv_proc_main #(
     reg   [               1:0]  mop_d;
     reg   [               5:0]  funct6_d;
     reg                         vm_d;
-    reg   [   VLEN_B_BITS-1:0]  avl_d;
+    reg   [     VLEN_B_BITS:0]  avl_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_1_d;
     reg   [VEX_DATA_WIDTH-1:0]  sca_data_in_2_d;
     reg   [               1:0]  vxrm_in_d;
@@ -206,9 +206,9 @@ module rvv_proc_main #(
     reg                         out_ack_m;
 
     // CONFIG VALUES -- config unit flops them, these are just connector wires
-    wire  [   VLEN_B_BITS-1:0]  avl ; //= 8; // Application Vector Length (vlen effective)
-    wire  [   VLEN_B_BITS-1:0]  avl_eff; // avl - 1
-    wire  [   VLEN_B_BITS-1:0]  reg_count_avl; // avl - 1
+    wire  [     VLEN_B_BITS:0]  avl; // Application Vector Length (vlen effective)
+    wire  [     VLEN_B_BITS:0]  avl_eff; // avl - 1
+    wire  [     VLEN_B_BITS:0]  reg_count_avl; // avl - 1
     wire                        new_vl;
 
     // VTYPE values
@@ -240,7 +240,7 @@ module rvv_proc_main #(
     reg   [      OFF_BITS-1:0]  alu_off_agu;
     wire  [      OFF_BITS-1:0]  alu_off_out;
     wire                        alu_valid_out;
-    wire  [   VLEN_B_BITS-1:0]  alu_avl_out;
+    wire  [     VLEN_B_BITS:0]  alu_avl_out;
     wire                        alu_mask_out;
     wire                        alu_sca_out;
     reg   [          DW_B-1:0]  alu_req_be;
@@ -384,11 +384,10 @@ module rvv_proc_main #(
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN), .ENABLE_64_BIT(ENABLE_64_BIT)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(~(&cfg_type) ? data_in_1_f[VLEN_B_BITS-1:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
-        // BUG ??? 
+        .avl_new(~(&cfg_type) ? data_in_1_f[VLEN_B_BITS:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
-    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS)),
+    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS+1)),
             .AND_OR_XOR_ENABLE(AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(ADD_SUB_ENABLE),.MIN_MAX_ENABLE(MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(VEC_MOVE_ENABLE),.WHOLE_REG_ENABLE(WHOLE_REG_ENABLE),
             .WIDEN_ADD_ENABLE(WIDEN_ADD_ENABLE),.WIDEN_MUL_ENABLE(WIDEN_MUL_ENABLE),.NARROW_ENABLE(NARROW_ENABLE),.REDUCTION_ENABLE(REDUCTION_ENABLE),.MULT_ENABLE(MULT_ENABLE),
             .MULH_SR_ENABLE(MULH_SR_ENABLE),.MULH_SR_32_ENABLE(MULH_SR_32_ENABLE), .MULT64_ENABLE(MULT64_ENABLE),.SHIFT_ENABLE(SHIFT_ENABLE),.SLIDE_ENABLE(SLIDE_ENABLE),
@@ -813,7 +812,7 @@ module rvv_proc_main #(
     assign alu_req_slide1 = (opcode_mnr_d == `MVX_TYPE && funct6_d[5:1] == 5'b00111);
 
     generate
-        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH((VLEN_B_BITS)), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
+        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH((VLEN_B_BITS+1)), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
     endgenerate
 
 
@@ -907,8 +906,6 @@ module rvv_proc_main #(
             mop_m           <= wait_mem ? mop_m     : mop_d;
 
             wait_mem        <= wait_mem ? ~mem_port_done_ld : (opcode_mjr_d == `LD_INSN);
-            //FIXME-ME
-            //wait_mem        <= 0;
             if (MASK_ENABLE_EXT) begin
                 wait_mem_msk    <= wait_mem_msk ? ~mem_port_done_ld : ((opcode_mjr_d == `LD_INSN) & lumop_d == 5'hB & mop_d == 'h0);
             end else begin
