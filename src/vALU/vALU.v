@@ -1,3 +1,4 @@
+/*
 `include "vAdd_min_max.v"
 `include "vAndOrXor.v"
 `include "vMerge.v"
@@ -11,6 +12,7 @@
 `include "vAdd_unit_block.v"
 `include "vID.sv"
 `include "fxp_round.sv"
+*/
 
 module vALU #(
     parameter REQ_FUNC_ID_WIDTH = 6 ,
@@ -54,7 +56,7 @@ module vALU #(
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
     input      [     REQ_VL_WIDTH-1:0] req_vl      ,
-    input      [                 11:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
+    input      [                 11-1:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
     input                              req_mask    ,
@@ -126,7 +128,7 @@ wire [                  2:0]    vMask_opSel;
 wire                            vFirst_Popc_opSel;
 wire                            vMove_en, vMerge_en, vMOP_en, vFirst_Popc_en, vRedAndOrXor_en, vRedSum_min_max_en,  vMCmp_en, vAdd_en, vMinMax_en,
                                 vAndOrXor_en, vMul_en, vSlide_en, vID_en, vNarrow_en, vWiden_en, vAAdd_en, vAddSubCarry_en, vSShift_en, vMoveXS_en, 
-                                vMoveSX_en, vSMul_en, vMoveWhole_en;
+                                vMoveSX_en, vMoveVY_en, vSMul_en, vMoveWhole_en;
 wire                            vMul_outNarrow;
 
 wire [   REQ_ADDR_WIDTH-1:0]    vAdd_outAddr, vAndOrXor_outAddr, vMul_outAddr, vSlide_outAddr, vMerge_outAddr,
@@ -142,13 +144,6 @@ assign req_ready            = 1'b1; //TODO: control
 
 generate
     if (AND_OR_XOR_ENABLE) begin : and_or_xor_opsel
-        assign vAndOrXor_en     = req_valid & (((req_func_id[5:2] == 4'b0010) & ~(req_op_mnr[1]^req_op_mnr[0])) | vMove_en | vMOP_en);
-
-        assign vAndOrXor_in0    = vMoveWhole_en ? req_data1   : req_data0;
-        assign vAndOrXor_in1    = vMove_en & ~vMoveWhole_en ? req_data0    : req_data1;
-
-        assign vAndOrXor_opSel  = vMove_en ? 3'b010 : req_func_id[2:0];
-
         if (VEC_MOVE_ENABLE) begin
             if (WHOLE_REG_ENABLE) begin
                 assign vMoveWhole_en    = (req_func_id == 6'b100111 & req_op_mnr == 3'h3);
@@ -158,13 +153,20 @@ generate
 
             assign vMoveSX_en       = (req_func_id == 'h10) & ~req_data1[4] & (req_op_mnr == 3'h6); 
             assign vMoveXS_en       = (req_func_id == 'h10) & ~req_data0[4] & (req_op_mnr == 3'h2); 
-            assign vMove_en         = (((req_func_id == 6'b010111) & req_mask) | vMoveWhole_en | vMoveSX_en | vMoveXS_en);
+            assign vMoveVY_en       = (req_func_id == 6'b010111) & req_mask;
+            assign vMove_en         = (vMoveVY_en | vMoveWhole_en | vMoveSX_en | vMoveXS_en);
         end else begin
             assign vMoveXS_en       = 1'b0;
+            assign vMoveSX_en       = 1'b0;
+            assign vMoveVY_en       = 1'b0;
             assign vMove_en         = 1'b0;
-
             assign vMoveWhole_en    = 1'b0;
         end
+
+        assign vAndOrXor_en     = req_valid & (((req_func_id[5:2] == 4'b0010) & ~(req_op_mnr[1]^req_op_mnr[0])) | vMove_en | vMOP_en);
+        assign vAndOrXor_in0    = (vMoveXS_en | vMoveWhole_en) ? req_data1 : req_data0;
+        assign vAndOrXor_in1    = vMove_en ? vAndOrXor_in0 : req_data1;
+        assign vAndOrXor_opSel  = vMove_en ? 3'b010 : req_func_id[2:0];
     end
 
     if (MASK_ENABLE_EXT) begin

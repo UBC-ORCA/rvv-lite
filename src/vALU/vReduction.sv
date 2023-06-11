@@ -1,5 +1,7 @@
+/*
 `include "vRedAndOrXor_unit_block.v"
 `include "vRedSum_Min_Max_unit_block.v"
+*/
 
 `define MIN(a,b) {(a > b) ? b : a}
 

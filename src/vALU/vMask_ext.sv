@@ -1,5 +1,7 @@
+/*
 `include "vFirst_bit.sv"
 `include "vAdd_mask.v"
+*/
 
 module vFirst_Popc #(
     parameter REQ_DATA_WIDTH    = 64,

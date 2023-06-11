@@ -1,4 +1,6 @@
+/*
 `include "vAdd_mask.v"
+*/
 
 module vPopc #(
 	parameter REQ_DATA_WIDTH  	= 64,

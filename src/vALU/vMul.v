@@ -1,5 +1,7 @@
+/*
 `include "mult32.v"
 `include "operand_selector.v"
+*/
 
 `define MIN(a,b) {(a < b) ? a : b}
 
@@ -162,8 +164,12 @@ module vMul #(
 		.in_a1			(m1_a1		),
 		.in_b0			(m1_b0		),
 		.in_b1			(m1_b1		),
-		// .out_mult16_p0	(m1_p0		),
-		// .out_mult16_p1	(m1_p1		),
+		.out_mult8_b0 	        (),
+		.out_mult8_b1 	        (),
+		.out_mult8_b2 	        (),
+		.out_mult8_b3 	        (),
+		.out_mult16_p0	        (),
+		.out_mult16_p1	        (),
 		.out_mult32		(m1_mult32	)
 	);
 
@@ -174,8 +180,12 @@ module vMul #(
 		.in_a1 			(m2_a1		),
 		.in_b0 			(m2_b0		),
 		.in_b1 			(m2_b1		),
-		// .out_mult16_p0	(m2_p0		),
-		// .out_mult16_p1	(m2_p1		),
+		.out_mult8_b0 	        (),
+		.out_mult8_b1 	        (),
+		.out_mult8_b2 	        (),
+		.out_mult8_b3 	        (),
+		.out_mult16_p0	        (),
+		.out_mult16_p1	        (),
 		.out_mult32		(m2_mult32	)
 	);
 
@@ -187,12 +197,12 @@ module vMul #(
 		.in_a1			(m3_a1		),
 		.in_b0			(m3_b0		),
 		.in_b1			(m3_b1		),
-		.out_mult8_b0 	(m3_bout0	),
-		.out_mult8_b1 	(m3_bout1	),
-		.out_mult8_b2 	(m3_bout2	),
-		.out_mult8_b3 	(m3_bout3	),
-		.out_mult16_p0	(m3_p0		),
-		.out_mult16_p1	(m3_p1		),
+		.out_mult8_b0 	        (m3_bout0	),
+		.out_mult8_b1 	        (m3_bout1	),
+		.out_mult8_b2 	        (m3_bout2	),
+		.out_mult8_b3 	        (m3_bout3	),
+		.out_mult16_p0	        (m3_p0		),
+		.out_mult16_p1	        (m3_p1		),
 		.out_mult32		(m3_mult32	)
 	);
 

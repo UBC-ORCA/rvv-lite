@@ -1,6 +1,8 @@
 // `include "vMinMaxSelector.v"
 // `include "vAdd_unit_block.v"
+/*
 `include "avg_unit.sv"
+*/
 
 `define MIN(a,b) {(a > b) ? b : a}
 

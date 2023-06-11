@@ -46,7 +46,7 @@ module operand_select #(
 	wire 							b0_ext, b1_ext, b2_ext, b3_ext;
 	wire 							b_a0_ext, b_a1_ext, b_a2_ext, b_a3_ext, b_a4_ext, b_a5_ext, b_a6_ext, b_a7_ext;
 	wire 							b_b0_ext, b_b1_ext, b_b2_ext, b_b3_ext, b_b4_ext, b_b5_ext, b_b6_ext, b_b7_ext;
-	wire 							b_op, h_op, w_op, d_op;    
+	wire 							b_op, h_op, w_op, l_op;    
 
     assign a_signed = ~(r_opSel == 'b00);
     assign b_signed = r_opSel[0];

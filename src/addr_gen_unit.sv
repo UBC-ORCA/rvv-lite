@@ -9,6 +9,7 @@ module addr_gen_unit #(
     input                       clk,
     input                       rst_n,
     input                       en,
+    input                       ack,
     input   [           1:0]    sew,
     input   [ OFF_WIDTH-1:0]    max_off_in,
     input   [           2:0]    max_reg_in,
@@ -55,15 +56,24 @@ module addr_gen_unit #(
 
     // latching input values
     always @(posedge clk) begin
+      if (ack) begin
         base_reg    <= base_reg_out;
         curr_reg    <= curr_reg_out;
         max_reg     <= max_reg_out;
-
         curr_off    <= curr_off_out;
         max_off     <= max_off_out;
-
         state       <= state_next;
-
         turn        <= turn_next;
+      end
+
+      if (~rst_n) begin
+        base_reg    <= 0;
+        curr_reg    <= 0;
+        max_reg     <= 0;
+        curr_off    <= 0;
+        max_off     <= 0;
+        state       <= 0;
+        turn        <= 0;
+      end
     end
 endmodule
