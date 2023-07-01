@@ -91,6 +91,11 @@ module rvv_proc_main #(
     output logic     [VEX_DATA_WIDTH-1:0]     vexrv_data_out,   // anything writing to a scalar register should already know the dest register
     output logic vexrv_valid_out,
 
+    // INVALIDATION
+    input  logic inv_ack,
+    output logic inv_valid,
+    output logic [MEM_ADDR_WIDTH-1:0] inv_addr,
+
     /* AXI */
     // Read address channel
     output logic [1:0] ar_burst,
@@ -1032,6 +1037,31 @@ module rvv_proc_main #(
         aw_valid <= 1'b0;
         aw_addr  <= 'b0;
         aw_len   <= 'b0;
+      end
+    end
+
+    //////////////////////////
+    // INVALIDATION
+    // FIXME
+    
+    logic [MEM_ADDR_WIDTH-1:0] inv_addr_max;
+
+    always @(posedge clk) begin
+      inv_valid <= 1'b0;
+
+      if (aw_ready == 1'b1 && aw_valid == 1'b1) begin
+        inv_addr <= aw_addr;
+        inv_addr_max <= aw_addr + 4*2*aw_len; 
+        inv_valid <= 1'b1;
+      end else if (inv_ack == 1'b1 && inv_addr != inv_addr_max) begin
+        inv_addr <= inv_addr + 4;
+        inv_valid <= 1'b1;
+      end
+
+      if (~rst_n) begin
+        inv_addr <= 'b0;
+        inv_addr_max <= 'b0;
+        inv_valid <= 'b0;
       end
     end
 
