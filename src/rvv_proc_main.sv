@@ -261,9 +261,9 @@ module rvv_proc_main #(
     logic                         out_ack_m;
 
     // CONFIG VALUES -- config unit flops them, these are just connector logics
-    logic  [     VLEN_B_BITS-1:0]  avl; // Application Vector Length (vlen effective)
-    logic  [     VLEN_B_BITS-1:0]  avl_eff; // avl - 1
-    logic  [     VLEN_B_BITS-1:0]  reg_count_avl; // avl - 1
+    logic  [     VLEN_B_BITS-1+1:0]  avl; // Application Vector Length (vlen effective)
+    logic  [     VLEN_B_BITS-1+1:0]  avl_eff; // avl - 1
+    logic  [     VLEN_B_BITS-1+1:0]  reg_count_avl; // avl - 1
     logic                        new_vl;
 
     // VTYPE values
@@ -454,7 +454,7 @@ module rvv_proc_main #(
     endgenerate
   
     cfg_unit #(.XLEN(XLEN), .VLEN(VLEN), .ENABLE_64_BIT(ENABLE_64_BIT)) cfg_unit (.clk(clk), .en(cfg_en), .vtype_nxt(vtype_nxt), .cfg_type(cfg_type), .avl_set(avl_set),
-        .avl_new(~(&cfg_type) ? data_in_1_f[VLEN_B_BITS-1:0] : src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
+        .avl_new(~(&cfg_type) ? data_in_1_f: src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
     vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS)),

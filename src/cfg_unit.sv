@@ -13,9 +13,9 @@ module cfg_unit #(
     input       [      XLEN-1:0]    vtype_nxt,
     input       [           1:0]    cfg_type,
     input       [           1:0]    avl_set,
-    input       [VLEN_B_BITS-1:0]   avl_new,
+    input       [           31:0]   avl_new, //input avl should  be 32 bits long
 
-    output reg  [VLEN_B_BITS-1:0]    avl,   // Application Vector Length (vlen effective)
+    output reg  [VLEN_B_BITS-1+1:0]    avl,   // Application Vector Length (vlen effective)
     output reg  [           1:0]    sew,    // sew = vlmul for this when sew/vlmul = 8 (our setting)
     output reg                      vill,
     output reg                      new_vl
@@ -36,7 +36,7 @@ module cfg_unit #(
             // TODO: register version, which is more reasonable tbh (5 bits is too small for a vector lol)
             case (avl_set)
                 2'b00,
-                2'b10:      avl <= (avl_new > 0) ? avl_new : avl;
+                2'b10:      avl <= (avl_new > 0) ? ((avl_new>=VLMAX) ? VLMAX : avl_new) : avl;
                 2'b01:      avl <= VLMAX;
                 default:    avl <= avl;
             endcase // avl_set
