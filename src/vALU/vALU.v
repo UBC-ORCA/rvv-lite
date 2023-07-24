@@ -55,7 +55,7 @@ module vALU #(
     input      [   REQ_DATA_WIDTH-1:0] req_data1   ,
     input      [   REQ_ADDR_WIDTH-1:0] req_addr    ,
     input      [REQ_BYTE_EN_WIDTH-1:0] req_be      ,
-    input      [     REQ_VL_WIDTH-1:0] req_vl      ,
+    input      [   REQ_VL_WIDTH-1+1:0] req_vl      ,
     input      [                 11-1:0] req_vr_idx  , // we include this for insns where we need to know index in register groups
     input                              req_start   ,
     input                              req_end     ,
@@ -71,7 +71,7 @@ module vALU #(
     output                             req_ready   ,
     output reg [   REQ_ADDR_WIDTH-1:0] resp_addr,
     output reg [                  7:0] resp_off    ,
-    output reg [     REQ_VL_WIDTH-1:0] req_vl_out  ,
+    output reg [    REQ_VL_WIDTH-1+1:0] req_vl_out  ,
     output reg [REQ_BYTE_EN_WIDTH-1:0] resp_be  ,
     output reg                         resp_mask_out,
     output reg                         resp_sca_out,

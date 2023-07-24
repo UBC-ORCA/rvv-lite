@@ -295,7 +295,7 @@ module rvv_proc_main #(
     logic   [      OFF_BITS-1:0]  alu_off_agu;
     logic  [      OFF_BITS-1:0]  alu_off_out;
     logic                        alu_valid_out;
-    logic  [     VLEN_B_BITS-1:0]  alu_avl_out;
+    logic  [     VLEN_B_BITS-1+1:0]  alu_avl_out; // change for the edge case 
     logic                        alu_mask_out;
     logic                        alu_sca_out;
     logic   [          DW_B-1:0]  alu_req_be;
@@ -457,7 +457,7 @@ module rvv_proc_main #(
         .avl_new(~(&cfg_type) ? data_in_1_f: src_1), .avl(avl), .sew(sew), .vill(vill), .new_vl(new_vl));
 
     // TODO: update to use active low reset lol
-    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS)),
+    vALU #(.REQ_DATA_WIDTH(DATA_WIDTH), .RESP_DATA_WIDTH(DATA_WIDTH), .REQ_ADDR_WIDTH(ADDR_WIDTH), .REQ_VL_WIDTH((VLEN_B_BITS+1)),
             .AND_OR_XOR_ENABLE(AND_OR_XOR_ENABLE),.ADD_SUB_ENABLE(ADD_SUB_ENABLE),.MIN_MAX_ENABLE(MIN_MAX_ENABLE),.VEC_MOVE_ENABLE(VEC_MOVE_ENABLE),.WHOLE_REG_ENABLE(WHOLE_REG_ENABLE),
             .WIDEN_ADD_ENABLE(WIDEN_ADD_ENABLE),.WIDEN_MUL_ENABLE(WIDEN_MUL_ENABLE),.NARROW_ENABLE(NARROW_ENABLE),.REDUCTION_ENABLE(REDUCTION_ENABLE),.MULT_ENABLE(MULT_ENABLE),
             .MULH_SR_ENABLE(MULH_SR_ENABLE),.MULH_SR_32_ENABLE(MULH_SR_32_ENABLE), .MULT64_ENABLE(MULT64_ENABLE),.SHIFT_ENABLE(SHIFT_ENABLE),.SLIDE_ENABLE(SLIDE_ENABLE),
@@ -884,7 +884,7 @@ module rvv_proc_main #(
     assign alu_req_slide1 = (opcode_mnr_d == `MVX_TYPE && funct6_d[5:1] == 5'b00111);
 
     generate
-        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH((VLEN_B_BITS)), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
+        generate_be #(.DATA_WIDTH(DATA_WIDTH), .DW_B(DW_B), .AVL_WIDTH((VLEN_B_BITS+1)), .ENABLE_64_BIT(ENABLE_64_BIT)) gen_be_alu (.avl   (avl), .sew(sew), .reg_count(widen_en_d ? alu_vr_idx[11:1] : alu_vr_idx[10:0]), .avl_be(gen_avl_be));
     endgenerate
 
 
