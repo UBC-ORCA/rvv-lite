@@ -67,10 +67,10 @@ module vcfg
     endcase
 
     if (nvtype.vill == 1'b1)
-      nvl = 'b0;
+      nvl = 0;
   end
 
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (valid) begin
       vtype <= nvtype;
       vl <= nvl;
