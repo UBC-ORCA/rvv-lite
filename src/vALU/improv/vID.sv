@@ -4,57 +4,49 @@ module vID
     parameter REQ_DATA_WIDTH    = 64,
     parameter RESP_DATA_WIDTH   = 64,
     parameter REQ_ADDR_WIDTH    = 5,
+    parameter SEW_WIDTH         = 2,
     parameter ENABLE_64_BIT     = 1
   ) 
   (
     input  logic clk,
     input  logic rst,
-    input  logic [REQ_ADDR_WIDTH-1:0] in_addr,
-    input  logic [1:0] in_sew,
     input  logic in_valid,
+    input  logic [SEW_WIDTH-1:0] in_sew,
     input  logic [11:0] in_start_idx,
+    input  logic [REQ_ADDR_WIDTH-1:0] in_addr,
     output logic [REQ_ADDR_WIDTH-1:0] out_addr,
     output logic [RESP_DATA_WIDTH-1:0] out_vec,
     output logic out_valid
   );
 
     localparam NUM_STAGES = 6;
+    localparam NUM_SEWS = 1 << SEW_WIDTH;
     logic [REQ_ADDR_WIDTH-1:0] addrs[NUM_STAGES];
     logic [REQ_DATA_WIDTH-1:0] vecs[NUM_STAGES];
     logic valids[NUM_STAGES];
+    logic [REQ_DATA_WIDTH-1:0] i_vecs[NUM_SEWS];
 
-    logic [REQ_DATA_WIDTH-1:0] vec;
+    genvar j, k;
 
-    always_comb begin
-      unique case (in_sew)
-        2'b00: begin
-          for (int i = 0; i < REQ_DATA_WIDTH/8; i++)
-            vec[ 8*i +:  8] = in_start_idx + i;
-        end
+    for (j = 0; j < NUM_SEWS-1; j++) begin
+      localparam W = 8*(1 << j);
+      for (k = 0; k < REQ_DATA_WIDTH/W; k++) begin
+        assign i_vecs[j][k*W +: W] = REQ_DATA_WIDTH'(in_start_idx + k);
+      end
+    end
 
-        2'b01: begin
-          for (int i = 0; i < REQ_DATA_WIDTH/16; i++)
-            vec[16*i +: 16] = in_start_idx + i;
-        end
-
-        2'b10: begin
-          for (int i = 0; i < REQ_DATA_WIDTH/32; i++)
-            vec[32*i +: 32] = in_start_idx + i;
-        end
-
-        2'b11: begin
-          for (int i = 0; i < REQ_DATA_WIDTH/64; i++)
-            vec[64*i +: 64] = in_start_idx + i;
-
-          if (ENABLE_64_BIT == 0)
-            vec = REQ_DATA_WIDTH'(0);
-        end
-      endcase
+    if (ENABLE_64_BIT) begin
+      localparam W = 8*(1 << (NUM_SEWS-1));
+      for (k = 0; k < REQ_DATA_WIDTH/W; k++) begin
+        assign i_vecs[NUM_SEWS-1][k*W +: W] = REQ_DATA_WIDTH'(in_start_idx + k);
+      end
+    end else begin
+      assign i_vecs[NUM_SEWS-1] = REQ_DATA_WIDTH'(0);
     end
 
     always_ff @(posedge clk) begin
       addrs[0]  <= in_valid ? in_addr : REQ_ADDR_WIDTH'(0);
-      vecs[0]   <= in_valid ? vec : REQ_DATA_WIDTH'(0);
+      vecs[0]   <= in_valid ? i_vecs[in_sew] : REQ_DATA_WIDTH'(0);
       valids[0] <= in_valid;
 
       for (int s = 1; s < NUM_STAGES; s++) begin
