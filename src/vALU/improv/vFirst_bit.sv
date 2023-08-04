@@ -14,7 +14,11 @@ module vFirst_bit
     output logic out_found
   );
 
+  logic [RESP_DATA_WIDTH-1:0] vec;
+  logic found;
   logic [$clog2(REQ_DATA_WIDTH+1)-1:0] lz_count;
+  logic [$clog2(REQ_DATA_WIDTH+1)-1:0] idx;
+  logic [IDX_BITS-1:0] idx_base;
 
   ctz #(
     .WIDTH(REQ_DATA_WIDTH), 
@@ -25,18 +29,24 @@ module vFirst_bit
 
   always_ff @(posedge clk) begin
     if (in_valid) begin
-      out_vec <= in_idx + lz_count[$high(lz_count)-1:0];
-      out_found <= ~lz_count[$high(lz_count)];
+      idx <= lz_count[$high(lz_count)-1:0];
+      idx_base <= in_idx;
+      found <= ~lz_count[$high(lz_count)];
     end else begin
-      out_vec <= 0;
-      out_found <= 0;
+      idx <= 0;
+      idx_base <= 0;
+      found <= 0;
     end
 
     if (rst) begin
-      out_vec <= 0;
-      out_found <= 0;
+      idx <= 0;
+      idx_base <= 0;
+      found <= 0;
     end
   end
+
+  assign out_vec = idx + idx_base;
+  assign out_found = found;
 
 endmodule
 
