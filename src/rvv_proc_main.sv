@@ -590,6 +590,7 @@ import opcodes::*;
       .resp_sca_out(alu_resp_sca), 
       .resp_narrow(alu_resp_narrow));
 
+
     // -------------------------------------------------- FETCH AND HAZARD DETECTION -----------------------------------------------------------------------
     always_ff @(posedge clk) begin
       if (~stall) begin
