@@ -1,44 +1,46 @@
-module vAdd_mask #(
-	parameter REQ_DATA_WIDTH  	= 64,
-	parameter RESP_DATA_WIDTH 	= 64,
-	parameter MIN_MAX_ENABLE  	= 1,
-	parameter DATA_WIDTH_BITS 	= 6
-) (
-	input                          	clk,
-	input                          	rst,
-	input   [ 	REQ_DATA_WIDTH-1:0] in_m0,
-	input                          	in_valid,
-	input 	[	REQ_DATA_WIDTH-1:0]	in_count,
-	output 	[  RESP_DATA_WIDTH-1:0] out_vec
-	);
+module vAdd_mask
+  #(
+    parameter REQ_DATA_WIDTH  = 64,
+    parameter RESP_DATA_WIDTH = 64,
+    parameter DATA_WIDTH_BITS = $clog2(REQ_DATA_WIDTH)
+  )
+  (
+    input  logic clk,
+    input  logic rst,
+    input  logic in_valid,
+    input  logic [REQ_DATA_WIDTH-1:0] in_m0,
+    input  logic [REQ_DATA_WIDTH-1:0] in_count,
+    output logic [RESP_DATA_WIDTH-1:0] out_vec
+  );
 
-	reg [DATA_WIDTH_BITS-1:0]	s0_add0_next;
-	reg [DATA_WIDTH_BITS-1:0]	s0_add0;
-	reg [RESP_DATA_WIDTH-1:0] 	s0_count;
+  logic [REQ_DATA_WIDTH-1:0] count;
+  logic [DATA_WIDTH_BITS-1:0] popcount;
+  logic [DATA_WIDTH_BITS-1:0] npopcount;
 
-	assign out_vec = s0_add0 + s0_count;
+  // This may need to be updated
+  always_comb begin
+    npopcount = 0;
+    for (int i = 0; i < REQ_DATA_WIDTH; i++) begin
+      npopcount = npopcount + in_m0[i];
+    end
+  end
 
-	integer i;
+  always_ff @(posedge clk) begin
+    if (in_valid) begin
+      count <= in_count;
+      popcount <= npopcount; 
+    end else begin
+      count <= 0;
+      popcount <= 0;
+    end
 
-	// This may need to be updated
-	generate
-		always @(*) begin
-			s0_add0_next = 0;
-			for (i = 0; i < REQ_DATA_WIDTH; i=i+1) begin
-				s0_add0_next	= s0_add0_next + in_m0[i];
-			end
-		end
+    if (rst) begin
+      count <= 0;
+      popcount <= 0;
+    end
+  end
 
-		always @(posedge clk) begin
-			if (rst) begin
-				s0_add0 	<= 0;
-				s0_count 	<= 0;
-			end else begin
-				s0_add0 	<= in_valid ? s0_add0_next : 'h0;
-
-				s0_count 	<= in_valid ? in_count : 'h0;
-			end
-		end
-	endgenerate
+  assign out_vec = count + popcount;
 
 endmodule
+

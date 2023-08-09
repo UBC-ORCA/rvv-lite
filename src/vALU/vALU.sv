@@ -267,7 +267,10 @@ module vALU
       assign vWiden_en = req_insn inside {VWADDU_VV, VWADDU_VX, VWADD_VV, VWADD_VX, VWSUBU_VV, VWSUBU_VX, VWSUB_VV, VWSUB_VX, VWMUL_VV, VWMUL_VX, VWMULSU_VV, VWMULSU_VX} & req_sew != 2'b11;
 
       vWiden #(.REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH), .RESP_DATA_WIDTH(RESP_DATA_WIDTH)) 
-      vWiden_0 ( .in_vec0 (req_data0 ), .in_vec1 (req_data1 ), .in_turn (turn ), .in_be (req_be ), .in_signed0 (vSigned_op0), .in_signed1 (vSigned_op1), .in_sew (req_sew ), .out_be (vWiden_be ), .out_vec0 (vWiden_in0 ), .out_vec1 (vWiden_in1 ), .out_sew (vWiden_sew ));
+      vWiden_0 ( .in_vec (req_data0 ), .in_turn (turn ), .in_be (req_be ), .in_signed (vSigned_op0), .in_sew (req_sew ), .out_be (vWiden_be ), .out_vec (vWiden_in0 ), .out_sew (vWiden_sew ));
+
+      vWiden #(.REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH), .RESP_DATA_WIDTH(RESP_DATA_WIDTH)) 
+      vWiden_1 ( .in_vec (req_data1 ), .in_turn (turn ), .in_be (req_be ), .in_signed (vSigned_op1), .in_sew (req_sew ), .out_be (          ), .out_vec (vWiden_in1 ), .out_sew (           ));
     end else begin
       assign vWiden_en = 0;
 
@@ -281,7 +284,7 @@ module vALU
       assign vNarrow_en = req_valid & req_insn inside {VNSRL_VV, VNSRL_VX, VNSRL_VI} & req_sew != 2'b00;
 
       vNarrow #( .REQ_BYTE_EN_WIDTH(REQ_BYTE_EN_WIDTH), .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH), .RESP_DATA_WIDTH(RESP_DATA_WIDTH), .ENABLE_64_BIT(ENABLE_64_BIT)) 
-      vNarrow_0 ( .clk (clk ), .rst (rst ), .in_vec0 (vMul_outVec ), .in_valid (vMul_outNarrow ), .in_sew (s5_sew ), .in_be (s5_be ), .out_be (vNarrow_be ), .out_vec (vNarrow_outVec ), .out_valid (vNarrow_outValid ), .out_sew (vNarrow_sew ));
+      vNarrow_0 ( .clk (clk ), .rst (rst ), .in_vec (vMul_outVec ), .in_valid (vMul_outNarrow ), .in_sew (s5_sew ), .in_be (s5_be ), .out_be (vNarrow_be ), .out_vec (vNarrow_outVec ), .out_valid (vNarrow_outValid ), .out_sew (vNarrow_sew ));
     end else begin
       assign vNarrow_en = 1'b0;
       assign vNarrow_sew = 'h0;

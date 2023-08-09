@@ -1,95 +1,100 @@
-module vAdd_unit_block #(
-	parameter REQ_DATA_WIDTH    = 64,
-	parameter RESP_DATA_WIDTH   = 64,
-	parameter SEW_WIDTH         = 2 ,
-	parameter OPSEL_WIDTH       = 5 ,
-	parameter ENABLE_64_BIT		= 0
-) (
-	input                              	clk,
-	input                              	rst,
-	input      [  REQ_DATA_WIDTH-1:0] 	vec0,
-	input      [  REQ_DATA_WIDTH-1:0] 	vec1,
-	input 	   [  REQ_DATA_WIDTH-1:0]	carry,
-	input      [	   SEW_WIDTH-1:0]	sew,
-	input      [	 OPSEL_WIDTH-1:0]	opSel,
-	output     [RESP_DATA_WIDTH+16:0]	result
-);
+module vAdd_unit_block 
+  #(
+    parameter REQ_DATA_WIDTH = 64,
+    parameter RESP_DATA_WIDTH = 64,
+    parameter SEW_WIDTH = 2,
+    parameter OPSEL_WIDTH = 5,
+    parameter ENABLE_64_BIT = 1
+  ) 
+  (
+    input  logic clk,
+    input  logic rst,
+    input  logic [REQ_DATA_WIDTH-1:0] vec0,
+    input  logic [REQ_DATA_WIDTH-1:0] vec1,
+    input  logic [REQ_DATA_WIDTH-1:0] carry,
+    input  logic [SEW_WIDTH-1:0] sew,
+    input  logic [OPSEL_WIDTH-1:0] opSel,
+    output logic [RESP_DATA_WIDTH+16:0] result
+    );
 
-	genvar i;
+    genvar i;
 
-	wire [  REQ_DATA_WIDTH-1:0]	w_vec0, w_vec1;
-	wire [ REQ_DATA_WIDTH+15:0]	w_op0, w_op1;
+    logic [REQ_DATA_WIDTH-1:0] w_vec0, w_vec1;
+    logic [REQ_DATA_WIDTH+(1+1)*8-1:0] w_op0, w_op1;
+    logic [REQ_DATA_WIDTH/8-1:0] v0_sgn, v1_sgn;
+    logic [REQ_DATA_WIDTH/8-1:0] v0_ext, v1_ext;
 
-	wire 						is_sub;
-	wire 						v0_ext0, v0_ext1, v0_ext2, v0_ext4;
-	wire 						v1_ext0, v1_ext1, v1_ext2, v1_ext4;
-	wire [REQ_DATA_WIDTH/8-1:0] v0_sgn, v1_sgn;
+    /*
+     * opSel[1:0] == vAdd_opSel
+     * vMinMax_en or vMComp_en (1) -> vAdd_opSel = 2'b10 ->  vec0 - vec1
+     *                         (0) -> 2'b00 (vadd) - 2'b01 (reserved) - 2'b10 (vsub) - 2'b11 (vrsub)
+    */
+    assign w_vec0 = opSel[1:0] == 2'b11 ? ~vec0 : vec0;
+    assign w_vec1 = opSel[1:0] == 2'b10 ? ~vec1 : vec1;
 
-	assign is_sub 	= opSel[1];
-	assign v0_ext0	= is_sub;
-	assign v1_ext0	= is_sub;
-	assign v0_ext1	= (sew[1] | sew[0]) | is_sub;
-	assign v1_ext1	= ~(sew[1] | sew[0]) & is_sub;
-	assign v0_ext2	=  (sew[1]) | is_sub;
-	assign v1_ext2	= ~(sew[1]) & is_sub;
+    /* ?????????????????????????
+     * opSel[4] == vMinMax_opSel
+     * opSel[2] == vSigned_op0
+    */
+    always_comb begin
+      unique casez ({opSel[4], opSel[2]})
+        2'b0?: begin
+          v0_sgn = {REQ_DATA_WIDTH/8{1'b1}};
+          v1_sgn = {REQ_DATA_WIDTH/8{1'b0}};
+        end
 
-	if (ENABLE_64_BIT) begin
-		assign v0_ext4	=  (sew[1] & sew[0]) | is_sub;
-		assign v1_ext4	= ~(sew[1] & sew[0]) & is_sub;
-	end else begin
-		assign v0_ext4	= is_sub;
-		assign v1_ext4	= is_sub;
-	end
+        2'b10: begin  // vminu, vmaxu
+          v0_sgn = {REQ_DATA_WIDTH/8{1'b0}};
+          v1_sgn = {REQ_DATA_WIDTH/8{1'b1}};
+        end
 
-	assign w_vec0	= (opSel[1] & opSel[0]) 		? ~(vec0) : vec0;
-	assign w_vec1	= (opSel[1] & (~(opSel[0])))	? ~(vec1) : vec1;
+        2'b11: begin  // vmin, vmax
+          for(int i = 0; i < REQ_DATA_WIDTH/8; i++) begin
+            v0_sgn[i] =  vec0[8*(i+1)-1];
+            v1_sgn[i] = ~vec1[8*(i+1)-1];
+          end
+        end
+      endcase
+    end
 
-	generate
-		for(i=0;i<8;i=i+1) begin
-			assign v0_sgn[i]	= ~opSel[4] | (opSel[2] & vec0[i*8+7]);
-			assign v1_sgn[i]	= opSel[4] & ~(opSel[2] & vec1[i*8+7]);
-		end
-	endgenerate
+    /*
+     * 0 -> carry-kill if addition        -> ext = 2'b00
+     *      carry-generate if subtraction -> ext = 2'b11
+     * 1 -> carry-propagate               -> ext = 2'b01 | 2'b10
+    */
+    logic [8-1:0] msk;
 
-	if (REQ_DATA_WIDTH >= 64) begin
-		assign w_op0 	= {
-			v0_sgn[7],w_vec0[63:56],v0_ext1,
-			v0_sgn[6],w_vec0[55:48],v0_ext2,
-			v0_sgn[5],w_vec0[47:40],v0_ext1,
-			v0_sgn[4],w_vec0[39:32],v0_ext4,
-			v0_sgn[3],w_vec0[31:24],v0_ext1,
-			v0_sgn[2],w_vec0[23:16],v0_ext2,
-			v0_sgn[1],w_vec0[15:8] ,v0_ext1,
-			v0_sgn[0],w_vec0[7:0]  ,is_sub};
+    always_comb begin
+      unique case (sew)
+        2'b00: msk = 8'b00000000;
+        2'b01: msk = 8'b10101010;
+        2'b10: msk = 8'b11101110;
+        2'b11: msk = ENABLE_64_BIT ? 8'b11111110: 8'b11101110;
+      endcase
+    end
 
-		assign w_op1 	= {
-			v1_sgn[7],w_vec1[63:56],v1_ext1,
-			v1_sgn[6],w_vec1[55:48],v1_ext2,
-			v1_sgn[5],w_vec1[47:40],v1_ext1,
-			v1_sgn[4],w_vec1[39:32],v1_ext4,
-			v1_sgn[3],w_vec1[31:24],v1_ext1,
-			v1_sgn[2],w_vec1[23:16],v1_ext2,
-			v1_sgn[1],w_vec1[15:8] ,v1_ext1,
-			v1_sgn[0],w_vec1[7:0]  ,is_sub};
-	end else begin
-		assign w_op0 	= {
-			v0_sgn[3],w_vec0[31:24],v0_ext1,
-			v0_sgn[2],w_vec0[23:16],v0_ext2,
-			v0_sgn[1],w_vec0[15:8] ,v0_ext1,
-			v0_sgn[0],w_vec0[7:0]  ,is_sub};
+    /*
+     * opSel[1] == is_sub
+    */
+    for (i = 0; i < REQ_DATA_WIDTH/8; i++) begin
+      assign v0_ext[i] = opSel[1];
+      assign v1_ext[i] = opSel[1] ^ msk[i];
+    end
 
-		assign w_op1 	= {
-			v1_sgn[3],w_vec1[31:24],v1_ext1,
-			v1_sgn[2],w_vec1[23:16],v1_ext2,
-			v1_sgn[1],w_vec1[15:8] ,v1_ext1,
-			v1_sgn[0],w_vec1[7:0]  ,is_sub};
-	end
+    for (i = 0; i < (REQ_DATA_WIDTH >= 64 ? 8 : 4); i++) begin
+      assign w_op0[(1+8+1)*i +: (1+8+1)] = {v0_sgn[i], w_vec0[8*i +: 8], v0_ext[i]};
+      assign w_op1[(1+8+1)*i +: (1+8+1)] = {v1_sgn[i], w_vec1[8*i +: 8], v1_ext[i]};
+    end
 
-	if (ENABLE_64_BIT) begin
-		assign result 	= w_op0 + w_op1 + carry;
-	end else begin
-		assign result[REQ_DATA_WIDTH-1:REQ_DATA_WIDTH/2] = w_op0[(REQ_DATA_WIDTH+15):(REQ_DATA_WIDTH/2+8)] + w_op1[(REQ_DATA_WIDTH+15):(REQ_DATA_WIDTH/2+8)] + carry[REQ_DATA_WIDTH-1:(REQ_DATA_WIDTH/2)];
-		assign result[(REQ_DATA_WIDTH/2)-1:0] = w_op0[(REQ_DATA_WIDTH/2+7):0] + w_op1[(REQ_DATA_WIDTH/2+7):0] + carry[(REQ_DATA_WIDTH/2)-1:0];
-	end
+    if (ENABLE_64_BIT) begin
+      assign result = w_op0 + w_op1 + carry;
+    end else begin
+      assign result[REQ_DATA_WIDTH/2 +: REQ_DATA_WIDTH/2] = w_op0[REQ_DATA_WIDTH/2+8 +: REQ_DATA_WIDTH/2+8] + 
+                                                            w_op1[REQ_DATA_WIDTH/2+8 +: REQ_DATA_WIDTH/2+8] + 
+                                                            carry[REQ_DATA_WIDTH/2   +: REQ_DATA_WIDTH/2];
+      assign result[0 +: REQ_DATA_WIDTH/2]  =   w_op0[0 +: REQ_DATA_WIDTH/2+8] + 
+                                                w_op1[0 +: REQ_DATA_WIDTH/2+8] + 
+                                                carry[0 +: REQ_DATA_WIDTH/2];
+    end
 
 endmodule

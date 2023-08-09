@@ -1,70 +1,83 @@
-module vNarrow #(
-	parameter REQ_DATA_WIDTH    = 64,
-	parameter NARROW_DATA_WIDTH = REQ_DATA_WIDTH>>1,
-	parameter RESP_DATA_WIDTH   = 64,
-	parameter REQ_ADDR_WIDTH 	= 32,
-	parameter OPSEL_WIDTH       = 2 ,
-	parameter SEW_WIDTH         = 2 ,
-	parameter REQ_BYTE_EN_WIDTH = 8 ,
-	parameter ENABLE_64_BIT		= 1
-) (
-	input                              	clk      ,
-	input                              	rst      ,
-	input      	[   REQ_DATA_WIDTH-1:0] in_vec0  ,
-	input                              	in_valid ,
-	input      	[        SEW_WIDTH-1:0] in_sew   ,
-	input      	[REQ_BYTE_EN_WIDTH-1:0] in_be    ,
-	output    	[REQ_BYTE_EN_WIDTH-1:0] out_be   ,
-	output reg	[  RESP_DATA_WIDTH-1:0] out_vec  ,
-	output                             	out_valid,
-	output     	[				   1:0] out_sew
-);
+module vNarrow 
+  #(
+    parameter REQ_DATA_WIDTH    = 64,
+    parameter NARROW_DATA_WIDTH = REQ_DATA_WIDTH>>1,
+    parameter RESP_DATA_WIDTH   = 64,
+    parameter REQ_ADDR_WIDTH    = 32,
+    parameter OPSEL_WIDTH       = 2,
+    parameter SEW_WIDTH         = 2,
+    parameter REQ_BYTE_EN_WIDTH = 8,
+    parameter ENABLE_64_BIT     = 1
+  ) 
+  (
+    input  logic clk,
+    input  logic rst,
+    input  logic [REQ_DATA_WIDTH-1:0] in_vec,
+    input  logic in_valid,
+    input  logic [SEW_WIDTH-1:0] in_sew,
+    input  logic [REQ_BYTE_EN_WIDTH-1:0] in_be,
+    output logic [REQ_BYTE_EN_WIDTH-1:0] out_be,
+    output logic [RESP_DATA_WIDTH-1:0] out_vec,
+    output logic out_valid,
+    output logic [SEW_WIDTH-1:0] out_sew
+  );
 
-	reg	[   REQ_DATA_WIDTH-1:0]	s0_vec0;
-	reg	[REQ_BYTE_EN_WIDTH-1:0] s0_be;
-	reg                         s0_valid;
-	reg                         turn ;
-	reg [        SEW_WIDTH-1:0] s0_sew  ;
-	wire [NARROW_DATA_WIDTH-1:0] s0_64, s0_32, s0_16;
+  localparam NUM_SEWS = 1 << SEW_WIDTH;
+  logic [RESP_DATA_WIDTH-1:0] o_vecs[2][NUM_SEWS];
+  logic [REQ_BYTE_EN_WIDTH-1:0] o_bes[2];
+  logic turn;
 
-	assign s0_64 = in_vec0[31:0];
-	assign s0_32 = {in_vec0[47:32],in_vec0[15:0]};
-	assign s0_16 = {in_vec0[55:48],in_vec0[39:32],in_vec0[23:16],in_vec0[7:0]};
+  always @(posedge clk) begin
+    // default
+    turn <= 1'b0;
+    if (in_valid)
+      turn <= ~turn;
 
-	always @(posedge clk) begin
-		if(rst) begin
-			turn  		<= 'b0;
-		end else begin
-			turn 		<= in_valid & ~turn;
-		end
-	end
+    if (rst)
+      turn <= 1'b0;
+  end
 
-	assign out_be	= turn ? {in_be[6],in_be[4],in_be[2],in_be[0],4'b0} : {4'b0,in_be[6],in_be[4],in_be[2],in_be[0]};
-	assign out_valid= in_valid;
-	assign out_sew	= in_sew - 2'b01;
+  genvar i, j, k;
 
-	// FIXME - make combinational so turn is in order
-	always @(*) begin
-		case({turn,s0_sew})
-			3'b111: begin
-				if (ENABLE_64_BIT) begin
-					out_vec = {s0_64,32'b0};
-				end else begin
-					out_vec = s0_vec0;
-				end
-			end
-			3'b110: 	out_vec = {s0_32,32'b0};
-			3'b101: 	out_vec = {s0_16,32'b0};
-			3'b011: begin
-				if (ENABLE_64_BIT) begin
-					out_vec = {32'b0,s0_64};
-				end else begin
-					out_vec = s0_vec0;
-				end
-			end
-			3'b010: 	out_vec = {32'b0,s0_32};
-			3'b001: 	out_vec = {32'b0,s0_16};
-			default: 	out_vec = s0_vec0;
-		endcase
-	end
+  for (i = 0; i < 2; i++) begin
+    assign o_vecs[i][0] = (REQ_DATA_WIDTH)'(0);
+  end
+
+  for (i = 0; i < 2; i++) begin
+    for (j = 1; j < NUM_SEWS-1; j++) begin
+      localparam W = 8*(1 << j);
+      for (k = 0; k < REQ_DATA_WIDTH/W; k++) begin
+        assign o_vecs[i][j][i*REQ_DATA_WIDTH/2 + k*W/2 +: W/2] = in_vec[k*W +: W/2];
+      end
+      assign o_vecs[i][j][(1-i)*REQ_DATA_WIDTH/2 +: REQ_DATA_WIDTH/2] = (REQ_DATA_WIDTH/2)'(0);
+    end
+  end
+
+  for (i = 0; i < 2; i++) begin
+    if (ENABLE_64_BIT) begin
+      localparam W = 8*(1 << (NUM_SEWS-1));
+      for (k = 0; k < REQ_DATA_WIDTH/W; k++) begin
+        assign o_vecs[i][NUM_SEWS-1][i*REQ_DATA_WIDTH/2 + k*W/2 +: W/2] = in_vec[k*W +: W/2];
+      end
+      assign o_vecs[i][NUM_SEWS-1][(1-i)*REQ_DATA_WIDTH/2 +: REQ_DATA_WIDTH/2] = (REQ_DATA_WIDTH/2)'(0);
+    end else begin
+      assign o_vecs[i][NUM_SEWS-1] = (REQ_DATA_WIDTH)'(0);
+    end
+  end
+  
+  for (i = 0; i < 2; i++) begin
+    localparam W = 1;
+    for (k = 0; k < REQ_BYTE_EN_WIDTH/W; k++) begin
+      //assign o_bes[i][i*REQ_BYTE_EN_WIDTH/2 + k*W/2 +: W/2] = in_be[k*W +: W/2];
+      if (k % 2 == 0)
+        assign o_bes[i][i*REQ_BYTE_EN_WIDTH/2 + k*W/2] = in_be[k*W];
+    end
+    assign o_bes[i][(1-i)*REQ_BYTE_EN_WIDTH/2 +: REQ_BYTE_EN_WIDTH/2] = (REQ_BYTE_EN_WIDTH/2)'(0);
+  end
+
+  assign out_vec    = o_vecs[turn][in_sew];
+  assign out_be     = o_bes[turn];
+  assign out_valid  = in_valid;
+  assign out_sew    = in_sew - 2'b01;
+
 endmodule
