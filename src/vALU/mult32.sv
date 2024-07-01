@@ -5,6 +5,7 @@ module mult32
   (
     input  logic clk,
     input  logic rst,
+    input  logic in_shift,
     input  logic signed [INPUT_WIDTH-1:0] in_a0,
     input  logic signed [INPUT_WIDTH-1:0] in_a1,
     input  logic signed [INPUT_WIDTH-1:0] in_b0,
@@ -23,6 +24,19 @@ module mult32
   logic signed [1+16-1:0] prods8[2][2];
   logic signed [1+32-1:0] prods16[2][2];
   logic signed [1+1+64-1:0] prod32;
+
+  logic shift;
+  logic [2*INPUT_WIDTH-1:0] addend;
+
+  always_ff @(posedge clk) begin
+    shift <= in_shift;
+    addend   <= {A[1], A[0]};
+
+    if (rst) begin
+      shift <= 'b0;
+      addend <= 'b0;
+    end
+  end
 
   always_comb begin
     A[0] = in_a0;
@@ -57,17 +71,20 @@ module mult32
     prod32 = {(1+64)'(prods16[0][0]) << 32} + 
              {(1+64)'(prods16[0][1]) << 16} + 
              {(1+64)'(prods16[1][0]) << 16} + 
-             {(1+64)'(prods16[1][1]) <<  0};
+             {(1+64)'(prods16[1][1]) <<  0} ;
   end
 
+  //TODO Clean up logic
   always_ff @(posedge clk) begin
-    out_mult8_b0  <= prods8[0][0];
-    out_mult8_b1  <= prods8[0][1];
-    out_mult8_b2  <= prods8[1][0];
-    out_mult8_b3  <= prods8[1][1];
-    out_mult16_p0 <= prods16[0][0];
-    out_mult16_p1 <= prods16[1][1];
-    out_mult32    <= prod32;
+    out_mult8_b0  <= prods8[0][1]  + (shift ? (1+16)'(addend[        1+8 +:  8]) : (1+16)'(0));
+    out_mult8_b1  <= prods8[0][0]  + (shift ? (1+16)'(addend[          0 +:  8]) : (1+16)'(0));
+    out_mult8_b2  <= prods8[1][1]  + (shift ? (1+16)'(addend[2*(1+8)+1+8 +:  8]) : (1+16)'(0));
+    out_mult8_b3  <= prods8[1][0]  + (shift ? (1+16)'(addend[2*(1+8)+  0 +:  8]) : (1+16)'(0));
+
+    out_mult16_p0 <= prods16[0][0] + (shift ? (1+32)'(addend[   0 +: 16]) : (1+32)'(0));
+    out_mult16_p1 <= prods16[1][1] + (shift ? (1+32)'(addend[2+16 +: 16]) : (1+32)'(0));
+
+    out_mult32    <= prod32 + (shift ? (1+1+64)'({addend[0 +: 16], addend[2+16 +: 16]}) : (1+1+64)'(0));
 
     if (rst) begin
       out_mult8_b0  <= 'b0;
