@@ -2,7 +2,7 @@
 
 (* keep_hierarchy = "yes" *) module rvv_proc_main 
   import opcodes::*;
-  import dma_types::*;
+  import cx_dma_types::*;
   #(
     parameter VLEN                = 16384, // vector length in bits
     parameter XLEN                = 32, // not sure, data width maybe?
