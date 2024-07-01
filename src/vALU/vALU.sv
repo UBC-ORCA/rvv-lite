@@ -34,32 +34,29 @@ module vALU
   (
     input  logic clk ,
     input  logic rst ,
+    output logic req_ready ,
     input  logic req_valid ,
     input  logic [32-1:0] req_insn , // [NEW]
-    input  logic [2:0] req_op_mnr ,
-    input  logic [REQ_FUNC_ID_WIDTH-1:0] req_func_id ,
     input  logic [SEW_WIDTH-1:0] req_sew ,
     input  logic [REQ_DATA_WIDTH-1:0] req_data0 ,
     input  logic [REQ_DATA_WIDTH-1:0] req_data1 ,
     input  logic [REQ_ADDR_WIDTH-1:0] req_addr ,
     input  logic [REQ_BYTE_EN_WIDTH-1:0] req_be ,
+    input  logic [REQ_BYTE_EN_WIDTH-1:0] req_avl_be ,
     input  logic [REQ_VL_WIDTH-1:0] req_vl      ,
     input  logic [11-1:0] req_vr_idx , // we include this for insns where we need to know index in register groups
     input  logic req_start ,
     input  logic req_end ,
-    input  logic req_mask ,
     input  logic [7:0] req_off ,
     input  logic [1:0] req_vxrm ,
-    input  logic req_slide1 ,
     output logic resp_valid ,
     output logic resp_start ,
     output logic resp_end ,
     output logic [RESP_DATA_WIDTH-1:0] resp_data ,
+    output logic [REQ_VL_WIDTH-1:0] resp_vl,
     output logic [1:0] resp_sew ,
-    output logic req_ready ,
     output logic [REQ_ADDR_WIDTH-1:0] resp_addr,
     output logic [7:0] resp_off ,
-    output logic [REQ_VL_WIDTH-1:0] req_vl_out  ,
     output logic [REQ_BYTE_EN_WIDTH-1:0] resp_be ,
     output logic resp_mask_out,
     output logic resp_sca_out,
@@ -73,6 +70,8 @@ module vALU
     logic s0_end, s1_end, s2_end, s3_end, s4_end, s5_end;
 
     logic [1:0] s0_sew, s1_sew, s2_sew, s3_sew, s4_sew, s5_sew;
+
+    logic [REQ_VL_WIDTH-1:0] s0_vl, s1_vl, s2_vl, s3_vl, s4_vl, s5_vl;
 
     logic [7:0] s0_off, s1_off, s2_off, s3_off, s4_off, s5_off; // TODO pipe through modules
     logic turn;
@@ -91,6 +90,8 @@ module vALU
     logic [5:0] vShift_inShift ;
     logic vShiftR64 ;
     logic vShift_orTop ;
+    logic vShiftLeft  ;
+    logic vShiftRight ;
     logic [REQ_DATA_WIDTH-1:0] vShift_cmpl_sew [0:3];
     logic [1:0] vWiden_sew, vAdd_sew, vMul_sew, vNarrow_sew;
     logic [REQ_BYTE_EN_WIDTH-1:0] vSlide_outBe, vWiden_be, vNarrow_be, vMCmp_outBe, vRed_outBe;
@@ -121,7 +122,19 @@ module vALU
 
     logic vAAdd_outFXP, vMul_outFXP;
 
+    logic [3-1:0] req_op_mnr;
+    logic [6-1:0] req_func_id;
+    logic req_mask;
+    logic req_slide1;
+
     assign req_ready = 1'b1; //TODO: control
+
+    always_comb begin
+      req_op_mnr  = req_insn[14:12];
+      req_mask    = req_insn[25];
+      req_func_id = req_insn[31:26];
+      req_slide1  = req_insn inside {VSLIDE1DOWN_VX, VSLIDE1UP_VX};
+    end
 
     generate
     if (AND_OR_XOR_ENABLE) begin : and_or_xor_opsel
@@ -296,10 +309,24 @@ module vALU
     genvar i,j;
 
     if(SHIFT_ENABLE) begin : shift
+      /*
       for (j = 0; j < 3; j = j + 1) begin
         for (i = 0; i < (REQ_DATA_WIDTH >> (j+3)); i = i + 1) begin
-          assign vShift_mult_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]);
+          assign vShift_mult_sew[j][i*(1 << (j+3)) +: (1 << (j+3))] = 2**(vShift_cmpl_sew[j][i*(1 << (j+3)) +: (1 << (j+3))]) - 1; //FIXME Wraparound assumption
         end
+      end
+      */
+
+      for (i = 0; i < REQ_DATA_WIDTH/8 ; i++) begin
+        assign vShift_mult_sew[0][i*8  +:  8] = get_ones_8 (vShift_cmpl_sew[0][i*8  +:  8]);
+      end
+
+      for (i = 0; i < REQ_DATA_WIDTH/16; i++) begin
+        assign vShift_mult_sew[1][i*16 +: 16] = get_ones_16(vShift_cmpl_sew[1][i*16 +: 16]);
+      end
+
+      for (i = 0; i < REQ_DATA_WIDTH/32; i++) begin
+        assign vShift_mult_sew[2][i*32 +: 32] = get_ones_32(vShift_cmpl_sew[2][i*32 +: 32]);
       end
 
       if (SHIFT64_ENABLE) begin : shift64
@@ -312,7 +339,7 @@ module vALU
           assign vMul_vec0 = req_data1;
 
           for (i = 0; i < REQ_DATA_WIDTH/64; i = i + 1) begin
-            assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? 64 - req_data0[i*64 +: 64] : req_data0[i*64 +: 64];
+            assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? 64 - req_data0[i*64 +: $clog2(64)] : req_data0[i*64 +: $clog2(64)];
           end
         end else begin
           assign vShiftR64 = req_func_id[3] & (&req_sew);
@@ -334,14 +361,15 @@ module vALU
           assign vShift_inShift = vShiftR64 ? req_data0[5:0] - 7 : 'h0; // upper bits shift by 0-25 bits
 
           for (i = 0; i < REQ_DATA_WIDTH/64; i = i + 1) begin
-            assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: 64] : 64 - req_data0[i*64 +: 64]) : req_data0[i*64 +: 64];
+            assign vShift_cmpl_sew[3][i*64 +: 64] = req_func_id[3] ? (req_data0[i*64 +: 64] < 32 ? 32 - req_data0[i*64 +: $clog2(64)] : 64 - req_data0[i*64 +: $clog2(64)]) : req_data0[i*64 +: $clog2(64)];
           end
         end
         for (i = 0; i < REQ_DATA_WIDTH/64; i = i + 1) begin
-          assign vShift_mult_sew[3][i*64 +: 64] = 2**(vShift_cmpl_sew[3][i*64 +: 64]);
+          //assign vShift_mult_sew[3][i*64 +: 64] = 2**(vShift_cmpl_sew[3][i*64 +: 64]) - 1; //FIXME Bit width
+          assign vShift_mult_sew[3][i*64 +: 64] = get_ones_64(vShift_cmpl_sew[3][i*64 +: 64]);
         end
 
-        assign vMul_vec1 = (req_func_id[2:0] != 3'b111 && req_op_mnr[1] == req_op_mnr[0]) ? vShift_mult_sew[(req_sew)] : req_data0;
+        assign vMul_vec1 = (req_func_id[2:0] != 3'b111 && req_op_mnr[1] == req_op_mnr[0]) ? vShift_mult_sew[req_sew] : req_data0;
       end else begin
         assign vShiftR64 = 'b0;
         assign vShift_orTop = 'b0;
@@ -359,25 +387,29 @@ module vALU
       if (MULH_SR_32_ENABLE | MULH_SR_ENABLE) begin : mulh_sr
         if (MULH_SR_32_ENABLE) begin
           for (i = 0; i < REQ_DATA_WIDTH/32; i = i + 1) begin
-            assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: 32] : req_data0[i*32 +: 32];
+            assign vShift_cmpl_sew[2][i*32 +: 32] = req_func_id[3] ? 32 - req_data0[i*32 +: $clog2(32)] : req_data0[i*32 +: $clog2(32)];
           end
         end else begin
           assign vShift_cmpl_sew[2] = req_data0;
         end
 
         for (i = 0; i < REQ_DATA_WIDTH/8; i = i + 1) begin
-          assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: 8] : req_data0[i*8 +: 8];
+          assign vShift_cmpl_sew[0][i*8 +: 8] = req_func_id[3] ? 8 - req_data0[i*8 +: $clog2(8)] : req_data0[i*8 +: $clog2(8)];
         end
         for (i = 0; i < REQ_DATA_WIDTH/16; i = i + 1) begin
-          assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: 16] : req_data0[i*16 +: 16];
+          assign vShift_cmpl_sew[1][i*16 +: 16] = req_func_id[3] ? 16 - req_data0[i*16 +: $clog2(16)] : req_data0[i*16 +: $clog2(16)];
         end
 
-        assign vMul_opSel = (req_func_id[5:3] == 3'b101 && req_op_mnr[1] == req_op_mnr[0]) ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
+        assign vShiftLeft  = req_insn inside {VSLL_VV, VSLL_VX, VSLL_VI};
+        assign vShiftRight = req_insn inside {VSRL_VV, VSRL_VX, VSRL_VI, VSRA_VV, VSRA_VX, VSRA_VI, VNSRL_VV, VNSRL_VX, VNSRL_VI, VSSRL_VV, VSSRL_VX, VSSRL_VI, VSSRA_VV, VSSRA_VX, VSSRA_VI};
+        assign vMul_opSel = vShiftRight ? {req_func_id[0],1'b0} : req_func_id[1:0]; // opsel is normal except for shift right
       end else begin
         for (j = 0; j < 3; j = j + 1) begin
           assign vShift_cmpl_sew[j] = req_data0;
         end
 
+        assign vShiftLeft  = 1'b0;
+        assign vShiftRight = 1'b0;
         assign vMul_opSel = 2'b01; // only one option for mul/sll
       end
     end
@@ -426,7 +458,7 @@ module vALU
 
     if(MULT_ENABLE) begin : mult
       vMul # ( .REQ_DATA_WIDTH (REQ_DATA_WIDTH), .RESP_DATA_WIDTH (RESP_DATA_WIDTH), .REQ_ADDR_WIDTH (REQ_ADDR_WIDTH), .SEW_WIDTH (SEW_WIDTH), .MULH_SR_ENABLE (MULH_SR_ENABLE), .WIDEN_MUL_ENABLE (WIDEN_MUL_ENABLE), .NARROW_ENABLE (NARROW_ENABLE), .MULH_SR_32_ENABLE (MULH_SR_32_ENABLE), .MUL64_ENABLE (MULT64_ENABLE), .FXP_ENABLE (FXP_ENABLE), .ENABLE_64_BIT (ENABLE_64_BIT), .EN_128_MUL (EN_128_MUL), .OPSEL_WIDTH (2)) 
-      vMul_0 ( .clk (clk ), .rst (rst ), .in_vec0 (vMul_in0 ), .in_vec1 (vMul_in1 ), .in_sew (vMul_sew ), .in_valid (vMul_en ), .in_opSel (vMul_opSel ), .in_widen (vWiden_en ), .in_addr (req_addr ), .in_fxp_s (vSShift_en ), .in_fxp_mul (vSMul_en ), .in_sr_64 (vShiftR64 ), .in_or_top (vShift_orTop ), .in_vd10 (vShift_vd10 ), .in_shift (vShift_inShift ), .in_narrow (vNarrow_en ), .out_vec (vMul_outVec ), .out_valid (vMul_outValid ), .out_addr (vMul_outAddr ), .out_vd (vMul_vd ), .out_vd1 (vMul_vd1 ), .out_vd10 (vMul_vd10 ), .out_narrow (vMul_outNarrow ), .out_fxp (vMul_outFXP )); 
+      vMul_0 ( .clk (clk ), .rst (rst ), .in_vec0 (vMul_in0 ), .in_vec1 (vMul_in1 ), .in_sew (vMul_sew ), .in_valid (vMul_en ), .in_opSel (vMul_opSel ), .in_widen (vWiden_en ), .in_addr (req_addr ), .in_fxp_s (vSShift_en ), .in_fxp_mul (vSMul_en ), .in_sr (vShiftRight | vShiftLeft), .in_sr_64 (vShiftR64 ), .in_or_top (vShift_orTop ), .in_vd10 (vShift_vd10 ), .in_shift (vShift_inShift ), .in_narrow (vNarrow_en ), .out_vec (vMul_outVec ), .out_valid (vMul_outValid ), .out_addr (vMul_outAddr ), .out_vd (vMul_vd ), .out_vd1 (vMul_vd1 ), .out_vd10 (vMul_vd10 ), .out_narrow (vMul_outNarrow ), .out_fxp (vMul_outFXP )); 
     end else begin
       assign vMul_outVec = 'h0;
       assign vMul_outValid = 'b0;
@@ -435,7 +467,7 @@ module vALU
 
     if(SLIDE_ENABLE) begin : slide
       vSlide #( .REQ_DATA_WIDTH (REQ_DATA_WIDTH), .RESP_DATA_WIDTH(RESP_DATA_WIDTH), .REQ_ADDR_WIDTH(REQ_ADDR_WIDTH), .ENABLE_64_BIT(ENABLE_64_BIT), .SLIDE_N_ENABLE(SLIDE_N_ENABLE)) 
-      vSlide_0 ( .clk (clk ), .rst (rst ), .in_vec0 (req_data1 ), .in_vec1 (vSlide_in1 ), .in_be (req_be ), .in_off (vSlide_off ), .in_shift (vSlide_shift ), .in_valid (vSlide_en ), .in_start (req_start ), .in_end (req_end ), .in_opSel (vSlide_opSel ), .in_insert (vSlide_insert ), .in_addr (req_addr ), .out_be (vSlide_outBe ), .out_vec (vSlide_outVec ), .out_valid (vSlide_outValid), .out_addr (vSlide_outAddr ), .out_off (vSlide_outOff ));
+      vSlide_0 ( .clk (clk ), .rst (rst ), .in_vec0 (req_data1 ), .in_vec1 (vSlide_in1 ), .in_be (req_be ), .in_avl_be(req_avl_be), .in_off (vSlide_off ), .in_shift (vSlide_shift ), .in_valid (vSlide_en ), .in_start (req_start ), .in_end (req_end ), .in_opSel (vSlide_opSel ), .in_insert (vSlide_insert ), .in_addr (req_addr ), .out_be (vSlide_outBe ), .out_vec (vSlide_outVec ), .out_valid (vSlide_outValid), .out_addr (vSlide_outAddr ), .out_off (vSlide_outOff ));
     end else begin
       assign vSlide_outBe = 0;
       assign vSlide_outValid = 0;
@@ -514,6 +546,14 @@ module vALU
         s4_sew <= 'b0;
         s5_sew <= 'b0;
         resp_sew <= 'b0;
+
+        s0_vl <= 'b0;
+        s1_vl <= 'b0;
+        s2_vl <= 'b0;
+        s3_vl <= 'b0;
+        s4_vl <= 'b0;
+        s5_vl <= 'b0;
+        resp_vl <= 'b0;
 
         s0_be <= 'b0;
         s1_be <= 'b0;
@@ -617,6 +657,14 @@ module vALU
         s4_out_addr <= s3_out_addr;
         s5_out_addr <= s4_out_addr;
         resp_addr <= s5_out_addr;
+
+        s0_vl <= req_valid ? req_vl : 'h0;
+        s1_vl <= s0_vl;
+        s2_vl <= s1_vl;
+        s3_vl <= s2_vl;
+        s4_vl <= s3_vl;
+        s5_vl <= s4_vl;
+        resp_vl <= s5_vl;
 
         if (NARROW_ENABLE) begin
           resp_be <= vNarrow_outValid ? vNarrow_be : (vSlide_outBe | s5_be | vMCmp_outBe | vRed_outBe);
