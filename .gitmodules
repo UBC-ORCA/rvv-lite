@@ -1,0 +1,3 @@
+[submodule "src/multiported-ram"]
+	path = src/multiported-ram
+	url = git@github.com:UBC-ORCA/Multiported-RAM.git

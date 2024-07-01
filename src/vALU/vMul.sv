@@ -17,7 +17,7 @@ module vMul #(
     parameter WIDEN_MUL_ENABLE  = 0 ,
     parameter NARROW_ENABLE		= 0 ,
     parameter MUL64_ENABLE    	= 0 ,
-    parameter SHIFTR64_ENABLE 	= 0 ,
+    parameter SHIFTR64_ENABLE 	= 0 , //Note: Unused by vALU
 	parameter FXP_ENABLE		= 0 ,
 	parameter ENABLE_64_BIT 	= 0 ,
 	parameter EN_128_MUL		= 0
@@ -33,6 +33,7 @@ module vMul #(
 	input 	 	[ REQ_ADDR_WIDTH-1:0] 	in_addr,
 	input 								in_fxp_s,
 	input 								in_fxp_mul,
+	input 								in_sr,
 	input 								in_sr_64,
 	input 								in_or_top,
 	input 								in_vd10,
@@ -52,6 +53,7 @@ module vMul #(
 	wire signed [17:0]	m0_a0, m0_b0, m0_a1, m0_b1, m1_a0, m1_b0, m1_a1, m1_b1, m2_a0, m2_b0, m2_a1, m2_b1, m3_a0, m3_b0, m3_a1, m3_b1;
 	wire signed [33:0] 	m0_p0, m0_p1, m1_p0, m1_p1, m2_p0, m2_p1, m3_p0, m3_p1;
 	wire signed [66:0] 	m0_mult32, m1_mult32, m2_mult32, m3_mult32;
+	wire signed [17:0]	m0_bout0, m0_bout1, m0_bout2, m0_bout3, m3_bout0, m3_bout1, m3_bout2, m3_bout3;
 
 	// if (EN_128_MUL) begin
 		wire signed [129:0] w_s3_d0;
@@ -89,16 +91,45 @@ module vMul #(
 
 
 	
+        logic sr64;
+        logic s0_sr64;
+        logic s1_sr64;
+        logic s2_sr64;
+        logic [REQ_DATA_WIDTH-1:0] addend;
+        logic [REQ_DATA_WIDTH-1:0] s0_vec0;
+        logic [REQ_DATA_WIDTH-1:0] s1_vec0;
+        logic [REQ_DATA_WIDTH-1:0] s2_vec0;
+
+        always_ff @(posedge clk) begin
+          s0_sr64 <= in_valid & in_sr & in_sew == 2'b11;
+          s1_sr64 <= s0_sr64;
+          s2_sr64 <= s1_sr64;
+          sr64    <= s2_sr64;
+          s0_vec0 <= in_vec0;
+          s1_vec0 <= s0_vec0;
+          s2_vec0 <= s1_vec0;
+          addend  <= s2_vec0;
+
+          if (rst) begin
+            s0_sr64 <= 'b0;
+            s1_sr64 <= 'b0;
+            sr64    <= 'b0;
+            s0_vec0 <= 'b0;
+            s1_vec0 <= 'b0;
+            addend  <= 'b0;
+          end
+        end
+
 	generate
 		if(MUL64_ENABLE & REQ_DATA_WIDTH > 32) begin
 			if (EN_128_MUL) begin
 				assign w_add0 = {m0_mult32,64'b0} + {{64{m3_mult32[65]}},m3_mult32[65:0]};
 				assign w_add1 = {{32{m1_mult32[65]}},m1_mult32[65:0],32'b0} + {{32{m2_mult32[65]}},m2_mult32[65:0],32'b0};
-				assign w_s3_d0 = w_add0 + w_add1;
+				assign w_s3_d0 = w_add0 + w_add1 + (sr64 ? (1+128)'(addend) : (1+128)'(0));
 			end else begin
 				assign w_add0 	= m3_mult32[65:0];
 				assign w_add1 	= m0_mult32[65:0] + m2_mult32[65:0];
-				assign w_s3_d0 	= w_add0 + {w_add1,32'b0};
+				assign w_s3_d0 	= w_add0 + {w_add1,32'b0}; //FIXME
 			end
 		end
 		else begin
@@ -139,11 +170,23 @@ module vMul #(
 		.m3_b1	(m3_b1   	)
 	);
 
+        logic s0_sr, s1_sr;
+
+	always_ff @(posedge clk) begin
+          s0_sr <= in_valid & in_sr & in_sew != 2'b11;
+          s1_sr <= s0_sr;
+
+          if (rst) begin
+            s0_sr <= 1'b0;
+            s1_sr <= 1'b0;
+          end
+        end
 
 	// 1 cycle (s1 -> s2)
 	mult32 m0 (
 		.clk			(clk		),
 		.rst 			(rst 		),
+                .in_shift               (s1_sr          ),
 		.in_a0 			(m0_a0		),
 		.in_a1 			(m0_a1		),
 		.in_b0 			(m0_b0		),
@@ -160,6 +203,7 @@ module vMul #(
 	mult32 m1 (
 		.clk			(clk		),
 		.rst 			(rst		),
+                .in_shift               (s1_sr          ),
 		.in_a0			(m1_a0		),
 		.in_a1			(m1_a1		),
 		.in_b0			(m1_b0		),
@@ -176,6 +220,7 @@ module vMul #(
 	mult32 m2 (
 		.clk			(clk		),
 		.rst 			(rst		),
+                .in_shift               (s1_sr          ),
 		.in_a0 			(m2_a0		),
 		.in_a1 			(m2_a1		),
 		.in_b0 			(m2_b0		),
@@ -193,6 +238,7 @@ module vMul #(
 	mult32 m3 (
 		.clk			(clk		),
 		.rst			(rst 		),
+                .in_shift               (s1_sr          ),
 		.in_a0			(m3_a0		),
 		.in_a1			(m3_a1		),
 		.in_b0			(m3_b0		),
@@ -382,7 +428,7 @@ endgenerate
 			end
 		end else begin
 			always @(*) begin
-				s4_lsb 	<= 'b1;
+				s4_lsb 	= 'b1;
 			end
 		end
 

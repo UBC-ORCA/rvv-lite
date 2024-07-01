@@ -1,238 +1,325 @@
-module vSlide #(
-	parameter REQ_DATA_WIDTH    	= 64,
-	parameter RESP_DATA_WIDTH   	= 64,
-	parameter REQ_ADDR_WIDTH   		= 32,
-	parameter SEW_WIDTH         	= 3 ,
-	parameter SHIFT_WIDTH 			= $clog2(REQ_DATA_WIDTH>>3),
-	parameter REQ_BYTE_EN_WIDTH 	= 8 ,
-	parameter ENABLE_64_BIT			= 1 ,
-	parameter SLIDE_N_ENABLE 		= 1
-) (
-	input                             	clk      ,
-	input                              	rst      ,
-	input      	[   REQ_DATA_WIDTH-1:0] in_vec0  ,
-	input      	[   REQ_DATA_WIDTH-1:0] in_vec1  ,
-	input                              	in_valid ,
-	input      	[      SHIFT_WIDTH-1:0] in_shift ,
-	input                              	in_start ,
-	input                              	in_end   ,
-	input                              	in_opSel , //0-up,1-down
-	input							   	in_insert,
-	input		[   REQ_ADDR_WIDTH-1:0] in_addr  ,
-	input    	[REQ_BYTE_EN_WIDTH-1:0] in_be    ,
-	input 		[ 				  11:0] in_off 	 ,
-	output reg	[REQ_BYTE_EN_WIDTH-1:0] out_be   ,
-	output reg	[  RESP_DATA_WIDTH-1:0] out_vec  ,
-	output reg                         	out_valid,
-	output reg 	[   REQ_ADDR_WIDTH-1:0] out_addr ,
-	output reg  [				  11:0] out_off
-);
+module vSlide 
+  #(
+    parameter REQ_DATA_WIDTH    = 64,
+    parameter RESP_DATA_WIDTH   = 64,
+    parameter REQ_ADDR_WIDTH    = 32,
+    parameter SEW_WIDTH         = 3,
+    parameter SHIFT_WIDTH       = $clog2(REQ_DATA_WIDTH/8),
+    parameter REQ_BYTE_EN_WIDTH = 8,
+    parameter ENABLE_64_BIT     = 1,
+    parameter SLIDE_N_ENABLE    = 1
+  ) 
+  (
+    input  logic clk,
+    input  logic rst,
+    input  logic in_valid,
+    input  logic in_start,
+    input  logic in_end,
+    input  logic [REQ_DATA_WIDTH-1:0] in_vec0,
+    input  logic [REQ_DATA_WIDTH-1:0] in_vec1,
+    input  logic [SHIFT_WIDTH-1:0] in_shift,
+    input  logic in_opSel , //0-up,1-down
+    input  logic in_insert,
+    input  logic [REQ_ADDR_WIDTH-1:0] in_addr,
+    input  logic [REQ_BYTE_EN_WIDTH-1:0] in_be,
+    input  logic [REQ_BYTE_EN_WIDTH-1:0] in_avl_be,
+    input  logic [11:0] in_off ,
+    output logic [REQ_BYTE_EN_WIDTH-1:0] out_be,
+    output logic [RESP_DATA_WIDTH-1:0] out_vec,
+    output logic out_valid,
+    output logic [REQ_ADDR_WIDTH-1:0] out_addr,
+    output logic [11:0] out_off
+  );
 
-	reg [   REQ_DATA_WIDTH-1:0] s0_vec0, s0_vec1, s1_vec1;
+    //TODO: SLIDE_N not supported
 
-	reg [   REQ_DATA_WIDTH-1:0] s2_up_remainder, s2_up_result, s3_up_result;
-	reg [ REQ_DATA_WIDTH*2-1:0] s1_up_result   ;
+    localparam NUM_STAGES = 6;
+    localparam OFF_WIDTH  = 12; 
 
-	reg [   REQ_DATA_WIDTH-1:0] s2_down_result, s2_down_remainder, s1_down_remainder, s1_down_vec1_end,s2_down_vec1_end, s3_down_result, s4_result;
-	reg [ REQ_DATA_WIDTH*2-1:0] s1_down_result;
-	reg 						s0_insert; 
+    logic [REQ_ADDR_WIDTH-1:0] addrs[NUM_STAGES];
+    logic [REQ_BYTE_EN_WIDTH-1:0] bes[NUM_STAGES];
+    logic [REQ_BYTE_EN_WIDTH-1:0] avl_bes[NUM_STAGES];
+    logic [OFF_WIDTH-1:0] offs[NUM_STAGES];
+    logic [SHIFT_WIDTH-1:0] shifts[NUM_STAGES];
+    logic [REQ_DATA_WIDTH-1:0] vecs[NUM_STAGES];
+    logic valids[NUM_STAGES];
+    logic inserts[NUM_STAGES];
+    logic sels[NUM_STAGES];
+    logic starts[NUM_STAGES];
+    logic ends[NUM_STAGES];
+    logic [2*REQ_DATA_WIDTH-1:0]  down_padded_vec0_s0;
+    logic [2*REQ_DATA_WIDTH-1:0]  up_padded_vec0_s0;
+    logic [REQ_DATA_WIDTH-1:0]    down_carried_vec0_s0,  down_carried_vec0_s1;
+    logic [REQ_DATA_WIDTH-1:0]    down_carried_vec1_s0,  down_carried_vec1_s1;
+    logic [REQ_DATA_WIDTH-1:0]    down_stripped_vec0_s0, down_stripped_vec0_s1;
+    logic [REQ_DATA_WIDTH-1:0]    up_carried_vec0_s0,    up_carried_vec0_s1,   up_carried_vec0_s2;
+    logic [REQ_DATA_WIDTH-1:0]    up_carried_vec1_s0,    up_carried_vec1_s1;
+    logic [REQ_DATA_WIDTH-1:0]    up_stripped_vec0_s0,   up_stripped_vec0_s1;
+    logic [REQ_DATA_WIDTH-1:0]    vec0_s0;
+    logic [REQ_DATA_WIDTH-1:0]    vec1_s0;
+    logic [REQ_BYTE_EN_WIDTH-1:0] down_masked_be_s1,  down_masked_be_s0;
+    logic [REQ_BYTE_EN_WIDTH-1:0] up_masked_be_s1,    up_masked_be_s0;
 
-	reg [	   SHIFT_WIDTH-1:0] s0_shift;
-	reg                         s0_start, s1_start, s0_end, s1_end, s2_end;
-	reg                         s0_opSel, s1_opSel, s2_opSel, s3_opSel;
-	reg [REQ_BYTE_EN_WIDTH-1:0] s0_be, s1_be, s2_be, s3_be, s4_be;
-	reg 						s0_valid, s1_valid, s2_valid, s3_valid, s4_valid;
-	reg [ 	REQ_ADDR_WIDTH-1:0] s0_out_addr, s1_out_addr, s2_out_addr, s3_out_addr, s4_out_addr;
+    always_comb begin
+      down_padded_vec0_s0 = {vec0_s0,{REQ_DATA_WIDTH{1'b0}}};
+      up_padded_vec0_s0   = {{REQ_DATA_WIDTH{1'b0}},vec0_s0};
 
-	reg [				  11:0]	s0_out_off, s1_out_off, s2_out_off, s3_out_off, s4_out_off;
+      if (inserts[0]) begin
+        unique case (shifts[0][2:0])
+          3'b001: begin
+            {down_stripped_vec0_s0,down_carried_vec0_s0}    = down_padded_vec0_s0 >> 8;
+            {up_carried_vec0_s0,up_stripped_vec0_s0}        = up_padded_vec0_s0   << 8;
+            down_carried_vec1_s0                            = {vec1_s0[8-1:0],{(REQ_DATA_WIDTH-8){1'b0}}} >> clz_avl_be_s0*8;
+            up_carried_vec1_s0                              = {{(REQ_DATA_WIDTH-8){1'b0}},vec1_s0[8-1:0]};
+          end
+          3'b010: begin 
+            {down_stripped_vec0_s0,down_carried_vec0_s0}    = down_padded_vec0_s0 >> 16;
+            {up_carried_vec0_s0,up_stripped_vec0_s0}        = up_padded_vec0_s0   << 16;
+            down_carried_vec1_s0                            = {vec1_s0[16-1:0],{(REQ_DATA_WIDTH-16){1'b0}}} >> clz_avl_be_s0*8;
+            up_carried_vec1_s0                              = {{(REQ_DATA_WIDTH-16){1'b0}},vec1_s0[16-1:0]};
+          end
+          3'b100: begin
+            {down_stripped_vec0_s0,down_carried_vec0_s0}    = down_padded_vec0_s0 >> 32;
+            {up_carried_vec0_s0,up_stripped_vec0_s0}        = up_padded_vec0_s0   << 32;
+            down_carried_vec1_s0                            = {vec1_s0[32-1:0],{(REQ_DATA_WIDTH-32){1'b0}}} >> clz_avl_be_s0*8;
+            up_carried_vec1_s0                              = {{(REQ_DATA_WIDTH-32){1'b0}},vec1_s0[32-1:0]};
+          end
+          default: begin
+            if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
+              {down_stripped_vec0_s0,down_carried_vec0_s0}  = down_padded_vec0_s0 >> 64;
+              {up_carried_vec0_s0,up_stripped_vec0_s0}      = up_padded_vec0_s0   << 64;
+              down_carried_vec1_s0                          = {vec1_s0[64-1:0],{(REQ_DATA_WIDTH-64){1'b0}}} >> clz_avl_be_s0*8;
+              up_carried_vec1_s0                            = {{(REQ_DATA_WIDTH-64){1'b0}},vec1_s0[64-1:0]};
+            end else begin
+              {down_stripped_vec0_s0,down_carried_vec0_s0}  = down_padded_vec0_s0 >> 32;
+              {up_carried_vec0_s0,up_stripped_vec0_s0}      = up_padded_vec0_s0   << 32;
+              down_carried_vec1_s0                          = {vec1_s0[32-1:0],{(REQ_DATA_WIDTH-32){1'b0}}} >> clz_avl_be_s0*8;
+              up_carried_vec1_s0                            = {{(REQ_DATA_WIDTH-32){1'b0}},vec1_s0[32-1:0]};
+            end
+          end
+        endcase
+      end else begin
+        down_carried_vec1_s0 = (REQ_DATA_WIDTH)'(0);
+        up_carried_vec1_s0   = (REQ_DATA_WIDTH)'(0);
+        {down_stripped_vec0_s0,down_carried_vec0_s0} = (2*REQ_DATA_WIDTH)'(0);
+        {up_carried_vec0_s0,up_stripped_vec0_s0}     = (2*REQ_DATA_WIDTH)'(0);
+      end
+    end
 
-	wire [REQ_DATA_WIDTH*2-1:0] w_s0_up_vec0, w_s0_up_result, w_s0_down_vec0, w_s0_down_result, w_s0_up_result_n, w_s0_down_result_n;
-	wire [  REQ_DATA_WIDTH-1:0] w_s1_up_remainder, w_s1_down_remainder, w_s0_be_shifted_right, w_s0_be_shifted_left;
-	wire [  REQ_DATA_WIDTH-1:0] w_s0_be_r, w_s0_be_l, w_s0_vec1, w_s0_vec1_r, w_s0_vec1_l;
+    always_ff @(posedge clk) begin
+      vec0_s0     <= in_valid  ?  in_vec0 : (REQ_DATA_WIDTH)'(0);
+      vec1_s0     <= in_valid  ?  in_vec1 : (REQ_DATA_WIDTH)'(0);
+      addrs[0]    <= in_valid  ?  in_addr : (REQ_ADDR_WIDTH)'(0);
+      bes[0]      <= in_valid  ?  in_be : (REQ_DATA_WIDTH/8)'(0);
+      avl_bes[0]  <= in_valid  ?  in_avl_be : (REQ_DATA_WIDTH/8)'(0);
+      ends[0]     <= in_valid  &  in_end;
+      inserts[0]  <= in_valid  &  in_insert;
+      offs[0]     <= in_valid  & ~in_opSel ? in_off : (OFF_WIDTH)'(0);
+      sels[0]     <= in_valid  &  in_opSel;
+      shifts[0]   <= in_valid  ?  in_shift : (SHIFT_WIDTH)'(0);
+      starts[0]   <= in_valid  &  in_start;
+      valids[0]   <= in_valid;
 
-	// These do not change when slide_n is enabled
+      for (int s = 1; s < NUM_STAGES; s++) begin
+        addrs[s]    <= addrs[s-1];
+        bes[s]      <= bes[s-1];
+        avl_bes[s]  <= avl_bes[s-1];
+        ends[s]     <= ends[s-1];
+        inserts[s]  <= inserts[s-1];
+        offs[s]     <= offs[s-1];
+        sels[s]     <= sels[s-1];
+        shifts[s]   <= shifts[s-1];
+        starts[s]   <= starts[s-1];
+        valids[s]   <= valids[s-1];
+        vecs[s]     <= vecs[s-1];
+      end
 
+      /////////////////////////////////////////////////////////////////////////////////////////////
 
-	if (SLIDE_N_ENABLE) begin
-		assign w_s0_be_r 	= s0_be >> s0_shift;
-		assign w_s0_be_l 	= s0_be << s0_shift;
-	end else begin
-		assign w_s0_be_r 	= s0_shift[0] ? s0_be >> 1 : (s0_shift[1] ? s0_be >> 2 : s0_be >> 4);
-		assign w_s0_be_l 	= s0_shift[0] ? s0_be << 1 : (s0_shift[1] ? s0_be << 2 : s0_be << 4);
-	end
+      down_carried_vec0_s1  <= down_carried_vec0_s0;
+      down_carried_vec1_s1  <= down_carried_vec1_s0;
+      down_stripped_vec0_s1 <= down_stripped_vec0_s0;
 
-	if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
-		assign w_s0_vec1_r 	= s0_shift[0] ? {{(REQ_DATA_WIDTH-8){1'b0}},s0_vec1[7:0]} :
-										(s0_shift[1] ? {{(REQ_DATA_WIDTH-16){1'b0}},s0_vec1[15:0]} :
-														(s0_shift[2] ? {{(REQ_DATA_WIDTH-32){1'b0}},s0_vec1[31:0]} :
-																		{{(REQ_DATA_WIDTH-64){1'b0}},s0_vec1[63:0]}));
-		assign w_s0_vec1_l 	= s0_shift[0] ? {s0_vec1[7:0],{(REQ_DATA_WIDTH-8){1'b0}}} :
-										(s0_shift[1] ? {s0_vec1[15:0],{(REQ_DATA_WIDTH-16){1'b0}}} :
-														(s0_shift[2] ? {s0_vec1[31:0],{(REQ_DATA_WIDTH-32){1'b0}}} : 
-																		{s0_vec1[63:0],{(REQ_DATA_WIDTH-64){1'b0}}}));
-		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? w_s0_vec1_l : w_s0_vec1_r) : 'h0;
+      up_carried_vec0_s1    <= up_carried_vec0_s0;
+      up_carried_vec1_s1    <= up_carried_vec1_s0;
+      up_stripped_vec0_s1   <= up_stripped_vec0_s0;
+      up_carried_vec0_s2    <= up_carried_vec0_s1;
 
-		assign w_s0_be_shifted_right 	= (|s0_shift) ? w_s0_be_r : s0_be >> 8;
-		assign w_s0_be_shifted_left 	= (|s0_shift) ? w_s0_be_l : s0_be << 8;
-	end else begin
-		assign w_s0_vec1_r 	= s0_shift[0] ? {{(REQ_DATA_WIDTH-8){1'b0}},s0_vec1[7:0]} :
-										(s0_shift[1] ? {{(REQ_DATA_WIDTH-16){1'b0}},s0_vec1[15:0]} :
-														{{(REQ_DATA_WIDTH-32){1'b0}},s0_vec1[31:0]});
-		assign w_s0_vec1_l 	= s0_shift[0] ? {s0_vec1[7:0],{(REQ_DATA_WIDTH-8){1'b0}}} :
-										(s0_shift[1] ? {s0_vec1[15:0],{(REQ_DATA_WIDTH-16){1'b0}}} :
-														{s0_vec1[31:0],{(REQ_DATA_WIDTH-32){1'b0}}});
-		assign w_s0_vec1       			= s0_insert ? (s0_opSel ? w_s0_vec1_l : w_s0_vec1_r) : 'h0;
+      down_masked_be_s1     <= down_masked_be_s0;
+      up_masked_be_s1       <= up_masked_be_s0;
 
-		assign w_s0_be_shifted_right 	= w_s0_be_r;
-		assign w_s0_be_shifted_left 	= w_s0_be_l;
-	end
+      if (sels[1]) begin // SLIDEDOWN
+        if (ends[1]) begin
+          vecs[2] <= down_stripped_vec0_s1 | down_carried_vec1_s1;
+        end else begin
+          vecs[2] <= down_stripped_vec0_s1 | down_carried_vec0_s0; // or-ed with next carry
+        end
+      end else begin    // SLIDEUP
+        if (starts[1]) begin
+          vecs[2] <= up_stripped_vec0_s1 | up_carried_vec1_s1;
+        end else begin
+          vecs[2] <= up_stripped_vec0_s1 | up_carried_vec0_s2;    // or-ed with previous carry
+        end
+      end
 
-	assign w_s0_down_vec0      		= {s0_vec0,{(REQ_DATA_WIDTH){1'b0}}};
-	assign w_s1_down_remainder 		= s2_end ? s2_down_vec1_end : s1_down_remainder;
+      /////////////////////////////////////////////////////////////////////////////////////////////
 
-	if (SLIDE_N_ENABLE) begin
-		assign w_s0_down_result_n	= (w_s0_down_vec0 >> (s0_shift*8));
-		assign w_s0_up_result_n 	= (w_s0_up_vec0 << (s0_shift*8));
-	end else begin
-		assign w_s0_down_result_n	= s0_shift[0] ? (w_s0_down_vec0 >> 8) : (s0_shift[1] ? (w_s0_down_vec0 >> 16) : (w_s0_down_vec0 >> 32));
-		assign w_s0_up_result_n		= s0_shift[0] ? (w_s0_up_vec0 << 8) : (s0_shift[1] ? (w_s0_up_vec0 << 16) : (w_s0_up_vec0 << 32));
-	end
+      if (rst) begin
+        vec0_s0               <= (REQ_DATA_WIDTH)'(0);
+        vec1_s0               <= (REQ_DATA_WIDTH)'(0);
+        down_carried_vec0_s1  <= (REQ_DATA_WIDTH)'(0);
+        down_carried_vec1_s1  <= (REQ_DATA_WIDTH)'(0);
+        down_stripped_vec0_s1 <= (REQ_DATA_WIDTH)'(0);
+        up_carried_vec0_s1    <= (REQ_DATA_WIDTH)'(0);
+        up_carried_vec1_s1    <= (REQ_DATA_WIDTH)'(0);
+        up_stripped_vec0_s1   <= (REQ_DATA_WIDTH)'(0);
+        up_carried_vec0_s2    <= (REQ_DATA_WIDTH)'(0);
+        down_masked_be_s1     <= (REQ_BYTE_EN_WIDTH)'(0);
+        up_masked_be_s1       <= (REQ_BYTE_EN_WIDTH)'(0);
 
-	if (ENABLE_64_BIT) begin
-		assign w_s0_down_result		= (|s0_shift) ? w_s0_down_result_n : (w_s0_down_vec0 >> 64);
-	end else begin
-		assign w_s0_down_result		= w_s0_down_result_n;
-	end
+        for (int s = 0; s < NUM_STAGES; s++) begin
+          addrs[s]    <= (REQ_ADDR_WIDTH)'(0);
+          bes[s]      <= (REQ_BYTE_EN_WIDTH)'(0);
+          avl_bes[s]  <= (REQ_BYTE_EN_WIDTH)'(0);
+          ends[s]     <= 1'b0;
+          inserts[s]  <= 1'b0;
+          offs[s]     <= (OFF_WIDTH)'(0);
+          sels[s]     <= 1'b0;
+          shifts[s]   <= (SHIFT_WIDTH)'(0);
+          starts[s]   <= 1'b0;
+          valids[s]   <= 1'b0;
+          vecs[s]     <= (REQ_DATA_WIDTH)'(0);
+        end
+      end
+    end
 
-	assign w_s1_up_remainder 		= s1_start ? w_s0_vec1 : s2_up_remainder;
-	assign w_s0_up_vec0      		= {{(REQ_DATA_WIDTH){1'b0}}, s0_vec0};
-	if (ENABLE_64_BIT & REQ_DATA_WIDTH >= 64) begin
-		assign w_s0_up_result		= (|s0_shift) ? w_s0_up_result_n : (w_s0_up_vec0 << 64);
-	end else begin
-		assign w_s0_up_result		= w_s0_up_result_n;
-	end
+    assign out_addr  = addrs[NUM_STAGES-1];
+    assign out_vec   = valids[NUM_STAGES-1] ? vecs[NUM_STAGES-1] : (RESP_DATA_WIDTH)'(0); //FIXME
+    assign out_valid = valids[NUM_STAGES-1];
+    assign out_be    = bes[NUM_STAGES-1];
+    assign out_off   = offs[NUM_STAGES-1];
 
-	always @(posedge clk) begin
-		if(rst) begin
-			s0_vec0          	<= 'b0;
-			s0_vec1          	<= 'b0;
+    logic [(REQ_BYTE_EN_WIDTH == 1) ? 0 : ($clog2(REQ_BYTE_EN_WIDTH)-1) : 0] clz_avl_be_s0;
+    CountLeadingZeros #(.WIDTH(REQ_BYTE_EN_WIDTH))
+    clz_block (
+      .in(avl_bes[0]),
+      .out(clz_avl_be_s0));
 
-			s0_out_off			<= 'b0;
-			s1_out_off			<= 'b0;
-			s2_out_off			<= 'b0;
-			s3_out_off			<= 'b0;
-			s4_out_off			<= 'b0;
+endmodule
 
-			s1_down_vec1_end 	<= 'b0;
-			s2_down_vec1_end 	<= 'b0;
-			s1_up_result     	<= 'b0;
-			s2_up_remainder  	<= 'b0;
-			s2_up_result     	<= 'b0;
-			s1_down_result    	<= 'b0;
-			s1_down_remainder 	<= 'b0;
-			s2_down_result    	<= 'b0;
-			s3_down_result 		<= 'b0;
-			s0_insert 			<= 'b0;
-			s3_up_result 		<= 'b0;
-			out_vec      		<= 'b0;
+module CountLeadingZerosTree #(parameter L=8, parameter R=8)
+  (input [L-1:0] left,
+   input [R-1:0] right,
+   output logic [$clog2(L+R+1)-1:0] out);
 
-			s0_opSel     		<= 'b0;
-			s1_opSel     		<= 'b0;
-			s2_opSel     		<= 'b0;
-			s3_opSel     		<= 'b0;
+  // L is always a power of 2; R might not be
+  localparam L2 = L / 2;
 
-			s0_be  				<= 'b0;
-			s1_be  				<= 'b0;
-			s2_be  				<= 'b0;
-			s3_be  				<= 'b0;
-			s4_be  				<= 'b0;
-			out_be 				<= 'b0;
+  // The new L for the right-hand recursion should be a power of 2 as
+  // well
+  localparam R2A = 2 ** ($clog2(R) - 1);
 
-			s0_shift 			<= 'b0;
+  // floor(R / 2)
+  localparam R2B = R - R2A;
 
-			s0_valid  			<= 'b0;
-			s1_valid  			<= 'b0;
-			s2_valid  			<= 'b0;
-			s3_valid  			<= 'b0;
-			s4_valid  			<= 'b0;
-			out_valid 			<= 'b0;
+  initial begin
+    assert(L > 0);
+    assert(R > 0);
+    assert($clog2(L) == $clog2(L+1) - 1);
+    assert(L >= R);
+  end
 
-			s0_start  			<= 'b0;
-			s1_start  			<= 'b0;
-			s0_end    			<= 'b0;
-			s1_end    			<= 'b0;
-			s2_end 				<= 'b0;
-			s4_result 			<= 'b0;
+  logic [$clog2(L+1)-1:0] lCount;
+  logic [$clog2(R+1)-1:0] rCount;
 
-			s0_out_addr			<= 'b0;
-			s1_out_addr			<= 'b0;
-			s2_out_addr			<= 'b0;
-			s3_out_addr			<= 'b0;
-			s4_out_addr			<= 'b0;
-			out_addr			<= 'b0;
-		end
-		else begin
-			s0_vec0          	<= in_valid ? in_vec0 : 'h0;
-			s0_vec1          	<= in_valid ? in_vec1 : 'h0;
+  logic [$clog2(L+1)-1:0] rCountExtend;
 
-			s0_insert			<= in_valid & in_insert;
+  genvar i;
 
-			s0_shift 			<= in_valid ? in_shift : 'h0;
+  generate
+    assign rCountExtend[$clog2(R+1)-1:0] = rCount;
 
-			s1_down_vec1_end 	<= w_s0_vec1;
-			s2_down_vec1_end 	<= s1_down_vec1_end;
+    for (i = $clog2(L+1)-1; i > $clog2(R+1)-1; --i) begin : extend
+      assign rCountExtend[i] = 1'b0;
+    end
 
-			s1_up_result 		<= w_s0_up_result;
-			s2_up_remainder 	<= s1_up_result[2*REQ_DATA_WIDTH-1:REQ_DATA_WIDTH];
-			s2_up_result    	<= s1_up_result[REQ_DATA_WIDTH-1:0] | w_s1_up_remainder;
-			s3_up_result    	<= s2_up_result;
+    if (L >= 2) begin : lBranch
+      CountLeadingZerosTree #(.L(L2), .R(L2))
+      leftCount(left[(L-1)-:L2], left[L2-1:0], lCount);
+    end else begin : lLeaf
+      always_comb begin
+        lCount = ~left[0];
+      end
+    end
 
-			s1_down_remainder 	<= w_s0_down_result[REQ_DATA_WIDTH-1:0];
-			s1_down_result    	<= w_s0_down_result[2*REQ_DATA_WIDTH-1:REQ_DATA_WIDTH];
-			s2_down_result    	<= s1_down_result;
-			s3_down_result    	<= s2_down_result | w_s1_down_remainder;
+    if (R >= 2) begin : rBranch
+      CountLeadingZerosTree #(.L(R2A), .R(R2B))
+      leftCount(right[(R-1)-:R2A], right[R2B-1:0], rCount);
+    end else begin : rLeaf
+      always_comb begin
+        rCount = ~right[0];
+      end
+    end
 
-			s4_result 			<= s3_opSel ? s3_down_result : s3_up_result;
-			out_vec 			<= s4_result;
+    if ($clog2(L+1) > 1) begin : makeCount1
+      always_comb begin
+        if (lCount[$clog2(L+1)-1] && rCountExtend[$clog2(L+1)-1]) begin
+          out = {1'b1, {($clog2(L+R+1)-1){1'b0}}};
+        end else if (!lCount[$clog2(L+1)-1]) begin
+          out = {1'b0, lCount};
+        end else begin
+          out = {2'b01, rCountExtend[$clog2(L+1)-2:0]};
+        end
 
-			s0_be  				<= in_valid ? in_be : 'h0;
-			s1_be  				<= (~s0_insert & s0_opSel & s0_end) ? (w_s0_be_shifted_right) : ((~s0_insert & ~s0_opSel & s0_start) ? (w_s0_be_shifted_left) : (s0_be));
-			s2_be  				<= s1_be;
-			s3_be  				<= s2_be;
-			s4_be  				<= s3_be;
-			out_be 				<= s4_be;
+        // $display("%d %d: left %b right %b lcount %b rcount %b rcountext %b out %b",
+        //          L, R, left, right, lCount, rCount, rCountExtend, out);
+      end
+    end else begin : makeCount2
+      always_comb begin
+        if (lCount[$clog2(L+1)-1] && rCountExtend[$clog2(L+1)-1]) begin
+          out = {1'b1, {($clog2(L+R+1)-1){1'b0}}};
+        end else if (!lCount[$clog2(L+1)-1]) begin
+          out = {1'b0, lCount};
+        end else begin
+          out = {2'b01};
+        end
 
-			s0_opSel 			<= in_valid & in_opSel;
-			s1_opSel 			<= s0_opSel;
-			s2_opSel 			<= s1_opSel;
-			s3_opSel 			<= s2_opSel;
+        // $display("%d %d: left %b right %b lcount %b rcount %b rcountext %b out %b",
+        //          L, R, left, right, lCount, rCount, rCountExtend, out);
+      end
+    end
+  endgenerate
+endmodule
 
-			s0_valid 			<= in_valid;
-			s1_valid 			<= s0_valid;
-			s2_valid 			<= s1_valid;
-			s3_valid 			<= s2_valid;
-			s4_valid 			<= s3_valid;
-			out_valid 			<= s4_valid;
+// ADD_OFFSET is in effect a constant added to `out`, so as to avoid an
+// additional adder in a case where one wants to shift past a leading 1, for
+// example
+module CountLeadingZeros #(parameter WIDTH=74,
+                           parameter ADD_OFFSET=0)
+  (input [WIDTH-1:0] in,
+   output logic [$clog2(WIDTH+1+ADD_OFFSET)-1:0] out);
 
-			s0_out_addr			<= in_valid ? in_addr : 'h0;
-			s1_out_addr			<= s0_out_addr;
-			s2_out_addr			<= s1_out_addr;
-			s3_out_addr			<= s2_out_addr;
-			s4_out_addr			<= s3_out_addr;
-			out_addr 			<= s4_out_addr;
+  // What's the largest power of 2 divisor of WIDTH?
+  localparam L = 2 ** ($clog2(WIDTH + ADD_OFFSET) - 1);
+  localparam R = WIDTH + ADD_OFFSET - L;
 
-			s0_start 			<= in_valid & in_start;
-			s1_start 			<= s0_start;
-			s0_end 				<= in_valid & in_end;
-			s1_end 				<= s0_end;
-			s2_end 				<= s1_end;
+  initial begin
+    assert(L >= R);
+    assert(L > 0);
+    assert(R > 0);
+  end
 
-			s0_out_off			<= in_valid & ~in_opSel ? in_off : 'h0;
-			s1_out_off			<= s0_out_off;
-			s2_out_off			<= s1_out_off;
-			s3_out_off			<= s2_out_off;
-			s4_out_off			<= s3_out_off;
-			out_off 			<= s4_out_off;
-		end
-	end
+  logic [WIDTH+ADD_OFFSET-1:0] inPad;
+
+  genvar i;
+  generate
+    for (i = WIDTH+ADD_OFFSET-1; i >= WIDTH; --i) begin : in_pad
+      assign inPad[i] = 1'b0;
+    end
+
+    assign inPad[WIDTH-1:0] = in;
+  endgenerate
+
+  CountLeadingZerosTree #(.L(L), .R(R))
+  tree(inPad[(WIDTH+ADD_OFFSET-1)-:L], in[R-1:0], out);
 endmodule
