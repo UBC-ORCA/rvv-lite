@@ -293,6 +293,18 @@ package opcodes;
   } vstore_instruction_t;
 
   typedef struct packed {
+    logic [3-1:0] nf;
+    logic mew;
+    logic [2-1:0] mop;
+    logic vm;
+    logic [5-1:0] empty2;
+    logic [5-1:0] empty1;
+    logic [3-1:0] width;
+    logic [5-1:0] empty0;
+    logic [7-1:0] opcode;
+  } vmem_instruction_t;
+
+  typedef struct packed {
       logic [6-1:0] fn6;
       logic vm;
       logic [5-1:0] vs2_addr;
@@ -320,5 +332,176 @@ package opcodes;
     logic [3-1:0] vsew;
     logic [3-1:0] vlmul;
   } vtype_t;
+
+  typedef enum bit {
+    READ_ISSUE  = 0,
+    READ_COMMIT = 1
+  } read_attr_t;
+
+  function logic [ 8-1:0] get_ones_8 (logic [3+1-1:0] num_ones);
+    logic [ 8-1:0] bits;
+
+    unique case (num_ones[3-1:0])
+       0: bits = 8'h00;
+       1: bits = 8'h01;
+       2: bits = 8'h03;
+       3: bits = 8'h07;
+       4: bits = 8'h0f;
+       5: bits = 8'h1f;
+       6: bits = 8'h3f;
+       7: bits = 8'h7f;
+    endcase
+
+    return bits ^ {8{num_ones[3]}};
+  endfunction
+
+  function logic [16-1:0] get_ones_16 (logic [4+1-1:0] num_ones);
+    logic [16-1:0] bits;
+
+    unique case (num_ones[4-1:0])
+       0: bits = 16'h0000;
+       1: bits = 16'h0001;
+       2: bits = 16'h0003;
+       3: bits = 16'h0007;
+       4: bits = 16'h000f;
+       5: bits = 16'h001f;
+       6: bits = 16'h003f;
+       7: bits = 16'h007f;
+       8: bits = 16'h00ff;
+       9: bits = 16'h01ff;
+      10: bits = 16'h03ff;
+      11: bits = 16'h07ff;
+      12: bits = 16'h0fff;
+      13: bits = 16'h1fff;
+      14: bits = 16'h3fff;
+      15: bits = 16'h7fff;
+    endcase
+
+    return bits ^ {16{num_ones[4]}};
+  endfunction
+
+  function logic [32-1:0] get_ones_32 (logic [5+1-1:0] num_ones);
+    logic [32-1:0] bits;
+
+    unique case (num_ones[5-1:0])
+       0: bits = 32'h00000000;
+       1: bits = 32'h00000001;
+       2: bits = 32'h00000003;
+       3: bits = 32'h00000007;
+       4: bits = 32'h0000000f;
+       5: bits = 32'h0000001f;
+       6: bits = 32'h0000003f;
+       7: bits = 32'h0000007f;
+       8: bits = 32'h000000ff;
+       9: bits = 32'h000001ff;
+      10: bits = 32'h000003ff;
+      11: bits = 32'h000007ff;
+      12: bits = 32'h00000fff;
+      13: bits = 32'h00001fff;
+      14: bits = 32'h00003fff;
+      15: bits = 32'h00007fff;
+      16: bits = 32'h0000ffff;
+      17: bits = 32'h0001ffff;
+      18: bits = 32'h0003ffff;
+      19: bits = 32'h0007ffff;
+      20: bits = 32'h000fffff;
+      21: bits = 32'h001fffff;
+      22: bits = 32'h003fffff;
+      23: bits = 32'h007fffff;
+      24: bits = 32'h00ffffff;
+      25: bits = 32'h01ffffff;
+      26: bits = 32'h03ffffff;
+      27: bits = 32'h07ffffff;
+      28: bits = 32'h0fffffff;
+      29: bits = 32'h1fffffff;
+      30: bits = 32'h3fffffff;
+      31: bits = 32'h7fffffff;
+    endcase
+
+    return bits ^ {32{num_ones[5]}};
+  endfunction
+
+  function logic [64-1:0] get_ones_64 (logic [6+1-1:0] num_ones);
+    logic [64-1:0] bits;
+
+    unique case (num_ones[6-1:0])
+       0: bits = 64'h0000000000000000;
+       1: bits = 64'h0000000000000001;
+       2: bits = 64'h0000000000000003;
+       3: bits = 64'h0000000000000007;
+       4: bits = 64'h000000000000000f;
+       5: bits = 64'h000000000000001f;
+       6: bits = 64'h000000000000003f;
+       7: bits = 64'h000000000000007f;
+       8: bits = 64'h00000000000000ff;
+       9: bits = 64'h00000000000001ff;
+      10: bits = 64'h00000000000003ff;
+      11: bits = 64'h00000000000007ff;
+      12: bits = 64'h0000000000000fff;
+      13: bits = 64'h0000000000001fff;
+      14: bits = 64'h0000000000003fff;
+      15: bits = 64'h0000000000007fff;
+      16: bits = 64'h000000000000ffff;
+      17: bits = 64'h000000000001ffff;
+      18: bits = 64'h000000000003ffff;
+      19: bits = 64'h000000000007ffff;
+      20: bits = 64'h00000000000fffff;
+      21: bits = 64'h00000000001fffff;
+      22: bits = 64'h00000000003fffff;
+      23: bits = 64'h00000000007fffff;
+      24: bits = 64'h0000000000ffffff;
+      25: bits = 64'h0000000001ffffff;
+      26: bits = 64'h0000000003ffffff;
+      27: bits = 64'h0000000007ffffff;
+      28: bits = 64'h000000000fffffff;
+      29: bits = 64'h000000001fffffff;
+      30: bits = 64'h000000003fffffff;
+      31: bits = 64'h000000007fffffff;
+      32: bits = 64'h00000000ffffffff;
+      33: bits = 64'h00000001ffffffff;
+      34: bits = 64'h00000003ffffffff;
+      35: bits = 64'h00000007ffffffff;
+      36: bits = 64'h0000000fffffffff;
+      37: bits = 64'h0000001fffffffff;
+      38: bits = 64'h0000003fffffffff;
+      39: bits = 64'h0000007fffffffff;
+      40: bits = 64'h000000ffffffffff;
+      41: bits = 64'h000001ffffffffff;
+      42: bits = 64'h000003ffffffffff;
+      43: bits = 64'h000007ffffffffff;
+      44: bits = 64'h00000fffffffffff;
+      45: bits = 64'h00001fffffffffff;
+      46: bits = 64'h00003fffffffffff;
+      47: bits = 64'h00007fffffffffff;
+      48: bits = 64'h0000ffffffffffff;
+      49: bits = 64'h0001ffffffffffff;
+      50: bits = 64'h0003ffffffffffff;
+      51: bits = 64'h0007ffffffffffff;
+      52: bits = 64'h000fffffffffffff;
+      53: bits = 64'h001fffffffffffff;
+      54: bits = 64'h003fffffffffffff;
+      55: bits = 64'h007fffffffffffff;
+      56: bits = 64'h00ffffffffffffff;
+      57: bits = 64'h01ffffffffffffff;
+      58: bits = 64'h03ffffffffffffff;
+      59: bits = 64'h07ffffffffffffff;
+      60: bits = 64'h0fffffffffffffff;
+      61: bits = 64'h1fffffffffffffff;
+      62: bits = 64'h3fffffffffffffff;
+      63: bits = 64'h7fffffffffffffff;
+    endcase
+
+    return bits ^ {64{num_ones[6]}};
+  endfunction
+
+  function logic [2-1:0] get_sew (logic [3-1:0] nf); // Note: whole vector register move
+    unique case (nf)
+      3'b000:  return 2'b00;
+      3'b001:  return 2'b01;
+      3'b011:  return 2'b10;
+      3'b111:  return 2'b11;
+      default: return 2'b00;
+    endcase
+  endfunction
 
 endpackage
