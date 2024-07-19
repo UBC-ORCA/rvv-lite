@@ -2,6 +2,10 @@
 
 (* keep_hierarchy = "yes" *) module rvv_proc_main 
   import opcodes::*;
+  import cva5_config::*;
+  import riscv_types::*;
+  import cva5_types::*;
+  import cxu_types::*;
   import cx_dma_types::*;
   #(
     parameter VLEN                = 16384, // vector length in bits
@@ -38,7 +42,8 @@
     parameter SHIFT64_ENABLE      = 0,  // a6
     parameter FXP_ENABLE          = 1,  // a7
     parameter MASK_ENABLE_EXT     = 1,  // b1
-    parameter EN_128_MUL          = 0
+    parameter EN_128_MUL          = 0,
+    parameter NUM_PERF_COUNTERS   = 2
   )
   (
     input  logic clk,
@@ -60,10 +65,11 @@
     stream_interface.slave  s_read_stream,
     stream_interface.master m_write_stream,
     /* Scoreboard */
-    output logic read_scoreboard [NUM_VREGS]
+    output logic read_scoreboard [NUM_VREGS],
+    output logic [32-1:0] perf_cnts [NUM_PERF_COUNTERS]
   );
 
-    genvar i, q;
+    genvar i, q, r;
 
     localparam NUM_QUEUES = 2**STATE_ID_WIDTH;
     localparam NUM_STAGES = 7;
@@ -81,10 +87,18 @@
       WRITE = 1
     } mem_port_t;
 
-    logic vr_rd_en_1;
-    logic vr_rd_en_2;
+    typedef enum bit [$clog2(NUM_RESP_PORTS)-1:0] {
+      ALU   = 0,
+      CFG   = 1,
+      LOAD  = 2,
+      STORE = 3
+    } resp_port_t;
+
     logic vr_rd_valid_1;
     logic vr_rd_valid_2;
+    logic vr_rd_valid_3;
+    logic vr_rd_start_3;
+    logic vr_rd_end_3;
     logic [DW_B-1:0] vr_wr_en;
     logic [DW_B-1:0] vr_ld_en;
     logic [DW_B-1:0] vr_in_en_1;
@@ -112,6 +126,7 @@
     logic [DATA_WIDTH-1:0] vr_ld_data_in;
     logic [DATA_WIDTH-1:0] vr_rd_data_out_1;
     logic [DATA_WIDTH-1:0] vr_rd_data_out_2;
+    logic [DATA_WIDTH-1:0] vr_rd_data_out_3;
     logic [DATA_WIDTH-1:0] vr_wr_data_in;
 
     logic [DATA_WIDTH-1:0] vm_rd_data_out;
@@ -147,7 +162,6 @@
     logic [XLEN-1:0] out_avl;
     logic [XLEN-1:0] out_data_e;
     logic out_ack_e;
-    logic out_ack_m;
     logic out_ack_ld;
     logic out_ack_st;
     logic out_ack_cfg;
@@ -481,20 +495,20 @@
     ////////////////////////////////////////////////////
     // Vector address generation units
     ////////////////////////////////////////////////////
+    // Checkpoint
 
-    localparam NUM_AGUS = 4;
+    localparam NUM_AGUS = 5;
 
-    typedef enum bit [2-1:0] {
+    typedef enum bit [$clog2(NUM_AGUS)-1:0] {
       VS1 = 0,
       VS2 = 1,
-      VDA = 2,
-      VDR = 3
+      VS3 = 2,
+      VDA = 3,
+      VDR = 4
     } agu_port_t;
 
     logic agu_en [NUM_AGUS];
     logic agu_ack [NUM_AGUS];
-    logic [2-1:0] agu_sew [NUM_AGUS];
-    logic agu_whole_reg [NUM_AGUS];
     logic agu_widen_in [NUM_AGUS];
     logic [OFF_BITS-1:0] agu_off_in [NUM_AGUS];
     logic [OFF_BITS-1:0] agu_max_off_in [NUM_AGUS];
@@ -502,6 +516,7 @@
     logic [ADDR_WIDTH-1:0] agu_max_reg_in [NUM_AGUS];
     logic [ADDR_WIDTH-1:0] agu_addr_out [NUM_AGUS];
     logic [OFF_BITS-1:0] agu_off_out [NUM_AGUS];
+    logic agu_addr_valid [NUM_AGUS];
     logic agu_addr_start [NUM_AGUS];
     logic agu_addr_end [NUM_AGUS];
     logic agu_idle [NUM_AGUS];
@@ -512,13 +527,11 @@
         .DATA_WIDTH(DATA_WIDTH),
         .OFF_WIDTH(OFF_BITS),
         .VLEN(VLEN)) 
-      agu_vd_alu_block (
+      vagu_block (
         .clk(clk), 
         .rst(rst), 
         .en(agu_en[i]), 
         .ack(1'b1),
-        .sew(agu_sew[i]), 
-        .whole_reg(agu_whole_reg[i]),
         .widen_in(agu_widen_in[i]), 
         .off_in(agu_off_in[i]), 
         .max_off_in(agu_max_off_in[i]), 
@@ -526,6 +539,7 @@
         .max_reg_in(agu_max_reg_in[i]),
         .addr_out(agu_addr_out[i]), 
         .off_out(agu_off_out[i]), 
+        .addr_valid(agu_addr_valid[i]), 
         .addr_start(agu_addr_start[i]), 
         .addr_end(agu_addr_end[i]), 
         .idle(agu_idle[i]));
@@ -533,46 +547,39 @@
 
     // Note-unused: agu_addr_start[VDA|VDR], agu_addr_end[VDA|VDR]
     always_comb begin
-      agu_en[VS1] = (uses_vs1 | uses_vs3) & ~stall;
+      agu_en[VS1] = (uses_vs1) & ~stall;
       agu_en[VS2] = (uses_vs2 | uses_vm) & ~stall; //Note: Added uses_vm for vid
+      agu_en[VS3] = (uses_vs3) & ~stall;
       agu_en[VDA] = en_vd;
       agu_en[VDR] = is_vload & read_attr_f == READ_COMMIT & ~stall;
 
-      agu_sew[VS1] = is_vmask_op ? 'h0 : (uses_vs1 ? (is_vnarrow ? sew[state_id_f] + 2'b1 : 
-                                                                   sew[state_id_f]) : 
-                                                     width_store);
-      agu_sew[VS2] = is_vmask_op ? 'h0 : (is_vnarrow ? sew[state_id_f] + 2'b1 : 
-                                                       sew[state_id_f]);
-      agu_sew[VDA] = alu_resp_sew;
-      agu_sew[VDR] = width_store;
-
-      agu_whole_reg[VS1] = is_vwhole_reg;
-      agu_whole_reg[VS2] = is_vwhole_reg;
-      agu_whole_reg[VDA] = alu_resp_whole_reg;
-      agu_whole_reg[VDR] = 'h0; //FIXME
-
       agu_widen_in[VS1] = is_vwiden | is_vwiden_d;
       agu_widen_in[VS2] = is_vwiden | is_vwiden_d;
+      agu_widen_in[VS3] = 'h0;
       agu_widen_in[VDA] = alu_resp_narrow;
       agu_widen_in[VDR] = 'h0;
 
       agu_off_in[VS1] = 'h0;
       agu_off_in[VS2] = rd_off_in;
+      agu_off_in[VS3] = 'h0;
       agu_off_in[VDA] = dest_off_in;
       agu_off_in[VDR] = 'h0;
 
       agu_max_off_in[VS1] = avl_max_off_in_rd;
       agu_max_off_in[VS2] = avl_max_off_in_rd;
+      agu_max_off_in[VS3] = avl_max_off_s;
       agu_max_off_in[VDA] = avl_max_off_in_wr;
       agu_max_off_in[VDR] = avl_max_off_s;
 
-      agu_addr_in[VS1] = uses_vs1 ? vs1_addr : vs3_addr;
+      agu_addr_in[VS1] = vs1_addr;
       agu_addr_in[VS2] = vs2_addr;
+      agu_addr_in[VS3] = vs3_addr;
       agu_addr_in[VDA] = alu_resp_addr;
       agu_addr_in[VDR] = vd_addr;
 
       agu_max_reg_in[VS1] = avl_max_reg_in_rd;
       agu_max_reg_in[VS2] = avl_max_reg_in_rd;
+      agu_max_reg_in[VS3] = avl_max_reg_s;
       agu_max_reg_in[VDA] = avl_max_reg_in_wr;
       agu_max_reg_in[VDR] = avl_max_reg_s;
     end
@@ -584,7 +591,7 @@
     mpram #(
       .MEMD((VLEN/DATA_WIDTH)*2**ADDR_WIDTH), 
       .DATAW(DATA_WIDTH),
-      .nRPORTS(2),
+      .nRPORTS(3),
       .nWPORTS(2),
       .TYPE("XOR"),
       .BYP("RAW"),
@@ -599,9 +606,11 @@
               vr_in_data_1}),
       .WBe({vr_in_en_2,
             vr_in_en_1}),
-      .RAddr({{agu_addr_out[VS2], agu_off_out[VS2]}, 
+      .RAddr({{agu_addr_out[VS3], agu_off_out[VS3]},
+              {agu_addr_out[VS2], agu_off_out[VS2]}, 
               {agu_addr_out[VS1], agu_off_out[VS1]}}),
-      .RData({vr_rd_data_out_2, 
+      .RData({vr_rd_data_out_3, 
+              vr_rd_data_out_2, 
               vr_rd_data_out_1}));
 
     if (MASK_ENABLE) begin
@@ -654,6 +663,7 @@
     ////////////////////////////////////////////////////
 
     vtype_t vtype [NUM_QUEUES];
+    logic [VL_BITS-1:0] normal_avl [NUM_QUEUES]; // Application Vector Length (vlen effective)
     logic [VL_BITS-1:0] avl [NUM_QUEUES]; // Application Vector Length (vlen effective)
     logic [VL_BITS-1:0] avl_eff [NUM_QUEUES]; // avl - 1
     logic [2-1:0] sew [NUM_QUEUES]; // we dont do fractional
@@ -672,10 +682,12 @@
         .valid(is_vcfg & state_id_f == q & ~stall),
         .insn(insn_in_f),
         .rf('{data_in_1_f, data_in_2_f}),
-        .vl(avl[q]),
+        .vl(normal_avl[q]),
         .vtype(vtype[q]));
 
       always_comb begin
+        avl[q] = is_vload & read_attr_f == READ_COMMIT & state_id_f == q & ~stall ? read_avl[q] : 
+                                                                                    normal_avl[q];
         avl_eff[q] = avl[q] - 1;
         sew[q] = vtype[q].vsew; 
         vill[q] = vtype[q].vill;
@@ -691,6 +703,28 @@
         reg_count_avl = 2 * avl_eff[state_id_f]; //Note: Update size???
       end else begin
         reg_count_avl = avl_eff[state_id_f];
+      end
+    end
+
+    logic [VL_BITS-1:0] read_avl [NUM_QUEUES];
+    fifo_interface #(.DATA_WIDTH(VL_BITS)) read_avl_buffers [NUM_QUEUES] ();
+
+    for (q = 0; q < NUM_QUEUES; ++q) begin
+      cva5_fifo #(
+        .DATA_WIDTH(VL_BITS), 
+        .FIFO_DEPTH(MAX_READ_IN_FLIGHT)) 
+      read_avl_buffer_block (
+        .clk (clk),
+        .rst (rst),
+        .fifo (read_avl_buffers[q]));
+
+      always_comb begin
+        read_avl_buffers[q].potential_pop  = is_vload & read_attr_f == READ_COMMIT & state_id_f == q & ~stall;
+        read_avl_buffers[q].potential_push = is_vload & read_attr_f == READ_ISSUE  & state_id_f == q & ~stall;
+        read_avl_buffers[q].pop  = read_avl_buffers[q].potential_pop;
+        read_avl_buffers[q].push = read_avl_buffers[q].potential_push;
+        read_avl_buffers[q].data_in = normal_avl[state_id_f];
+        read_avl[q] = read_avl_buffers[q].data_out;
       end
     end
 
@@ -791,7 +825,7 @@
     end
 
     always_ff @(posedge clk) begin
-      if (~stall) begin
+      if (~is_vload & ~is_vstore & ~stall) begin
         insn_in_d <= insn_in_f;
         state_id_d <= state_id_f;
         track_id_d <= track_id_f;
@@ -833,17 +867,6 @@
       if (MASK_ENABLE_EXT == 0)
         wait_mem_msk <= 1'b0;
 
-      out_data_e  <= alu_resp_sca ? alu_resp_data[XLEN-1:0] : 'h0; //FIXME
-
-      out_ack_e   <= alu_resp_valid & alu_resp_end;
-      out_ack_cfg <= cfg_valids[NUM_STAGES-1];
-      out_ack_ld  <= load_valids[NUM_STAGES-1]; 
-      out_ack_st  <= {reg_count == 0 && en_mem_out};
-      out_ack_m   <= (r_ready & r_valid & r_last) | (b_ready & b_valid);
-
-      resp_data  <= out_ack_cfg ? out_avl : out_data_e;
-      resp_valid <= out_ack_e | out_ack_ld | out_ack_st | out_ack_cfg;
-
       if (rst) begin
         insn_in_d <= 'b0;
         state_id_d <= 'b0;
@@ -852,13 +875,6 @@
         sca_data_in_2_d <= 'b0;
         vxrm_in_d <= 'b0;
 
-        out_ack_e <= 'b0;
-        out_data_e <= 'h0;
-        out_ack_m <= 'b0;
-        out_ack_ld <= 'b0;
-        out_ack_st <= 'b0;
-        out_ack_cfg <= 'b0;
-
         insn_in_m <= 'b0;
         opcode_mnr_m <= 'h0;
         dest_m <= 'h0;
@@ -866,13 +882,114 @@
         wait_mem <= 'b0;
         wait_mem_st <= 'b0;
         wait_mem_msk <= 'b0;
-
-        resp_data <= 'h0;
-        resp_valid <= 'h0;
       end
     end
 
     assign no_bubble = hold_reg_group & reg_count != 0;
+
+    ////////////////////////////////////////////////////
+    // Retire ports TODO: Fix deadlock
+    ////////////////////////////////////////////////////
+
+    localparam NUM_RESP_PORTS = 4;
+
+    fifo_interface #(.DATA_WIDTH(XLEN)) data_buffers [NUM_RESP_PORTS] (); 
+
+    logic data_buffer_valids [NUM_RESP_PORTS];
+    logic [XLEN-1:0] data_buffer_data_outs [NUM_RESP_PORTS];
+
+    for (r = 0; r < NUM_RESP_PORTS; ++r) begin
+      cva5_fifo #(
+        .DATA_WIDTH(XLEN), 
+        .FIFO_DEPTH(8)) 
+      data_buffer_block (
+        .clk (clk),
+        .rst (rst),
+        .fifo (data_buffers[r]));
+      
+      //FIXME
+      /*
+      always_comb begin
+        data_buffer_valids[r] = data_buffers[r].valid;
+        data_buffer_data_outs[r] = data_buffers[r].data_out;
+      end
+      */
+    end
+
+    always_comb begin
+      data_buffer_valids[0] = data_buffers[0].valid;
+      data_buffer_valids[1] = data_buffers[1].valid;
+      data_buffer_valids[2] = data_buffers[2].valid;
+      data_buffer_valids[3] = data_buffers[3].valid;
+      data_buffer_data_outs[0] = data_buffers[0].data_out;
+      data_buffer_data_outs[1] = data_buffers[1].data_out;
+      data_buffer_data_outs[2] = data_buffers[2].data_out;
+      data_buffer_data_outs[3] = data_buffers[3].data_out;
+    end
+
+    always_comb begin
+      data_buffers[ALU].potential_pop  = resp_port_buffer.pop & resp_port_buffer.data_out == ALU;
+      data_buffers[ALU].potential_push = alu_resp_valid & alu_resp_end;
+      data_buffers[ALU].pop  = data_buffers[ALU].potential_pop;
+      data_buffers[ALU].push = data_buffers[ALU].potential_push;
+      data_buffers[ALU].data_in = alu_resp_sca ? alu_resp_data[XLEN-1:0] : 'h0; //FIXME
+
+      data_buffers[CFG].potential_pop  = resp_port_buffer.pop & resp_port_buffer.data_out == CFG;
+      data_buffers[CFG].potential_push = is_vcfg_d;
+      data_buffers[CFG].pop  = data_buffers[CFG].potential_pop;
+      data_buffers[CFG].push = data_buffers[CFG].potential_push;
+      data_buffers[CFG].data_in = avl[state_id_d];
+
+      data_buffers[LOAD].potential_pop  = resp_port_buffer.pop & resp_port_buffer.data_out == LOAD;
+      data_buffers[LOAD].potential_push = fifo_ld_r_en & fifo_ld_r_last;
+      data_buffers[LOAD].pop  = data_buffers[LOAD].potential_pop;
+      data_buffers[LOAD].push = data_buffers[LOAD].potential_push;
+      data_buffers[LOAD].data_in = '0;
+
+      data_buffers[STORE].potential_pop  = resp_port_buffer.pop & resp_port_buffer.data_out == STORE;
+      data_buffers[STORE].potential_push = vr_rd_valid_3 & vr_rd_end_3;
+      data_buffers[STORE].pop  = data_buffers[STORE].potential_pop;
+      data_buffers[STORE].push = data_buffers[STORE].potential_push;
+      data_buffers[STORE].data_in = '0;
+    end
+
+    fifo_interface #(.DATA_WIDTH($clog2(NUM_RESP_PORTS))) resp_port_buffer (); 
+
+    cva5_fifo #(
+      .DATA_WIDTH($clog2(NUM_RESP_PORTS)), 
+      .FIFO_DEPTH(32)) 
+    resp_port_buffer_block (
+      .clk (clk),
+      .rst (rst),
+      .fifo (resp_port_buffer));
+
+    always_comb begin
+      resp_port_buffer.potential_pop  = resp_port_buffer.valid & data_buffer_valids[resp_port_buffer.data_out];
+      resp_port_buffer.potential_push = 1'b0;
+      resp_port_buffer.data_in = ALU;
+      if (insn_valid_f & ~stall) begin
+        if (is_valu) begin
+          resp_port_buffer.potential_push = 1'b1;
+          resp_port_buffer.data_in = ALU;
+        end else if (is_vcfg) begin
+          resp_port_buffer.potential_push = 1'b1;
+          resp_port_buffer.data_in = CFG;
+        end else if (is_vstore) begin
+          resp_port_buffer.potential_push = 1'b1;
+          resp_port_buffer.data_in = STORE;
+        end else if (is_vload & read_attr_f == READ_COMMIT) begin
+          resp_port_buffer.potential_push = 1'b1;
+          resp_port_buffer.data_in = LOAD;
+        end
+      end 
+      resp_port_buffer.pop  = resp_port_buffer.potential_pop;
+      resp_port_buffer.push = resp_port_buffer.potential_push;
+    end
+
+    always_comb begin
+      resp_valid = resp_port_buffer.pop;
+      resp_data = data_buffer_data_outs[resp_port_buffer.data_out];
+    end
 
     ////////////////////////////////////////////////////
     // Scoreboard
@@ -894,7 +1011,7 @@
                                   (alu_resp_addr == i & alu_resp_valid & (alu_resp_end /*| (alu_resp_start & ~alu_resp_mask)*/));//FIXME Match to non MASK_ENABLE_EXT
       end else begin
           // clear it once only
-        assign sb_clr[i] = (((agu_addr_start[VDR] ? vd_addr : vd_addr_d) == i) & fifo_ld_r_en & fifo_ld_r_last) | (alu_resp_addr == i & alu_resp_valid & (alu_resp_end /*| (alu_resp_start & ~alu_resp_mask) */));
+        assign sb_clr[i] = (read_resp_addr == i & fifo_ld_r_en & fifo_ld_r_last) | (alu_resp_addr == i & alu_resp_valid & (alu_resp_end /*| (alu_resp_start & ~alu_resp_mask) */));
       end
       
       // right now we write to vm multiple times -- this should change to just generate one result and output the whole thing at once
@@ -917,6 +1034,21 @@
       end
     end
 
+    logic [ADDR_WIDTH-1:0] read_resp_addr;
+    logic [ADDR_WIDTH-1:0] agu_addr_in_vdr_d;
+
+    always_ff @(posedge clk) begin
+      if (agu_en[VDR]) begin
+        agu_addr_in_vdr_d <= agu_addr_in[VDR];
+      end
+
+      if (rst) begin
+        agu_addr_in_vdr_d <= '0;
+      end
+    end
+
+    assign read_resp_addr = agu_en[VDR] ? agu_addr_in[VDR] : agu_addr_in_vdr_d;
+    
     ////////////////////////////////////////////////////
     // Hazard detection
     ////////////////////////////////////////////////////
@@ -930,14 +1062,17 @@
       haz_vs3  = scoreboard[vs3_addr] & uses_vs3;
     end
 
-    // Load doesn't really ever have hazards, since it just writes to a logic and that should be in order! Right?
-    // WRONG -- CONSIDER CASE WHERE insn in the ALU path has the same dest addr. We *should* preserve write order there.
-
-    // Just stall for WAW hazards for now
-    // wait_mem included because the memory port can only handle one transaction at a time
-    // TODO rationale for first stall ???
-    assign stall = (hold_reg_group & reg_count != 0) | haz_vm | (haz_vd & uses_vm) | haz_vs1 | haz_vs2 | haz_vs3 
-                  | (is_vstore & writes_in_flight == MAX_WRITE_IN_FLIGHT*NUM_QUEUES); 
+    always_comb begin
+      if (is_vload & read_attr_f == READ_COMMIT) begin
+        stall = ~agu_idle[VDR];
+      end else if (is_vload & read_attr_f == READ_ISSUE) begin
+        stall = haz_vd;
+      end else if (is_vstore) begin
+        stall = ~agu_idle[VS3] | haz_vs3 | (is_vstore & writes_in_flight == MAX_WRITE_IN_FLIGHT*NUM_QUEUES);
+      end else begin
+        stall = (hold_reg_group & reg_count != 0) | haz_vm | (haz_vd & uses_vm) | haz_vs1 | haz_vs2; 
+      end
+    end
 
     assign req_ready = ~stall;
 
@@ -1000,7 +1135,7 @@
     //FIXME: Loads and fifo_ld_empty
     always_comb begin
       if (reg_count == 0) begin
-        hold_reg_group = is_vstore | (is_vload & read_attr_f == READ_COMMIT) | is_valu; //Note: MASK_ENABLE for is_alu? //FIXME-JO
+        hold_reg_group = /*is_vstore | (is_vload & read_attr_f == READ_COMMIT) | */ is_valu; //Note: MASK_ENABLE for is_alu? //FIXME-JO
       end else begin
         hold_reg_group = 1'b1;
       end
@@ -1021,7 +1156,6 @@
         alu_req_vr_idx <= 'h0;
     end
 
-    logic reg_count_first;
     always_ff @(posedge clk) begin
       if (reg_count == 0) begin
         if (hold_reg_group & ~stall) begin
@@ -1035,20 +1169,17 @@
               reg_count <= reg_count_avl >> (DW_B_BITS - (is_vnarrow ? (sew[state_id_f] + 2'b1) : sew[state_id_f]));
             end
             //reg_count_avl * SEW_WIDTH / DATA_WIDTH
-          end else begin
+          end else begin // FIXME Remove else
             reg_count <= reg_count_avl >> (DW_B_BITS - width_store);
             //reg_count_avl * LS_WIDTH / DATA_WIDTH
           end
         end
-        reg_count_first <= 1;
       end else begin
         reg_count <= reg_count - 1;
-        reg_count_first <= 0;
       end
 
       if (rst) begin
         reg_count <= 'h0;
-        reg_count_first <= 0;
       end
     end
 
@@ -1122,45 +1253,42 @@
     assign en_vd = alu_resp_valid & alu_resp_start & ~alu_resp_sca; // write data
 
     // used only for STORE-FP. OR with vs1, because there is no situation where vs1 and vs3 exist for the same insn
-    assign en_mem_out = is_vstore_d;
+    assign en_mem_out = agu_addr_valid[VS3];
 
     // LOAD
-    assign en_ld = ~agu_idle[VDR];
+    assign en_ld = agu_addr_valid[VDR];
 
     always_comb begin
-      //if (agu_idle[VDR]) begin
-        vr_in_en_1   = vr_wr_en;
-        vr_in_addr_1 = alu_resp_mask ? alu_resp_addr : agu_addr_out[VDA];
-        vr_in_off_1  = alu_resp_mask ? alu_resp_off  : agu_off_out[VDA];
-        vr_in_data_1 = vr_wr_data_in;
-      //end else begin
-        vr_in_en_2   = vr_ld_en;
-        vr_in_addr_2 = agu_addr_out[VDR];
-        vr_in_off_2  = agu_off_out[VDR];
-        vr_in_data_2 = vr_ld_data_in;
-      //end
+      vr_in_en_1   = vr_wr_en;
+      vr_in_addr_1 = alu_resp_mask ? alu_resp_addr : agu_addr_out[VDA];
+      vr_in_off_1  = alu_resp_mask ? alu_resp_off  : agu_off_out[VDA];
+      vr_in_data_1 = vr_wr_data_in;
+      vr_in_en_2   = vr_ld_en;
+      vr_in_addr_2 = agu_addr_out[VDR];
+      vr_in_off_2  = agu_off_out[VDR];
+      vr_in_data_2 = vr_ld_data_in;
     end
 
     // ----------------------------------------------- REGFILE CONTROL --------------------------------------------------------------------
     // FIXME-CARO only read if mask op?
 
-    assign vr_rd_en_1 = ~agu_idle[VS1];
-    assign vr_rd_en_2 = ~agu_idle[VS2];
-
     always_ff @(posedge clk) begin
         // set "active" if we're reading mask or data --
         // all this does is enable the alu so it's fine. 
-        vr_rd_valid_1 <= vr_rd_en_1;
-        vr_rd_valid_2 <= vr_rd_en_2;
+        vr_rd_valid_1 <= agu_addr_valid[VS1];
+        vr_rd_valid_2 <= agu_addr_valid[VS2];
+        vr_rd_valid_3 <= agu_addr_valid[VS3];
+        vr_rd_start_3 <= agu_addr_start[VS3];
+        vr_rd_end_3   <= agu_addr_end[VS3];
     end
 
     if (MASK_ENABLE) begin
       always_comb begin
-        if (agu_idle[VS2]) begin
+        if (~agu_addr_valid[VS2]) begin
           vm_rd_en  = 1'b0;
           vm_rd_off = agu_off_out[VS2];
         end else begin
-          vm_rd_en  = (~vm_d | ~vm); //Note: Why vm_rd_en depends on agu_idle[VS1]?
+          vm_rd_en  = (~vm_d | ~vm); //Note: Why vm_rd_en depends on ~agu_addr_valid[VS1]?
           vm_rd_off = (~vm_d | (~vm & ~stall)) ? alu_req_vr_idx_next >> (sew[~vm_d ? state_id_d : state_id_f] + 3) : agu_off_out[VS2];
         end
       end
@@ -1173,7 +1301,7 @@
     assign vr_ld_en = {DW_B{en_ld}};
 
     // --------------------------------------------------- WRITEBACK STAGE LOGIC --------------------------------------------------------------
-    assign vr_wr_en = agu_idle[VDA] ? 'h0 : alu_resp_be;
+    assign vr_wr_en = ~agu_addr_valid[VDA] ? 'h0 : alu_resp_be;
     assign vr_wr_data_in = alu_resp_data;
 
     //FIXME - vm_wr_en can be set by Non-ALU instructions
@@ -1224,26 +1352,41 @@
       .avl_be(avl_be));
 
     
-    logic cfg_valids[NUM_STAGES];
-    logic load_valids[NUM_STAGES];
+    logic [2-1:0] sew_store;
+    logic [VL_BITS-1:0] avl_store;
+    logic [DW_B-1:0] avl_be_store;
+    logic [VL_BITS-1:0] idx_store;
+    logic [ADDR_WIDTH+OFF_BITS-1:0] start_idx_store;
+
+    generate_be #(
+      .VLEN(VLEN),
+      .DATA_WIDTH(DATA_WIDTH), 
+      .AVL_WIDTH(VL_BITS), 
+      .SEW_WIDTH(2), 
+      .ENABLE_64_BIT(ENABLE_64_BIT)) 
+    generate_be_store_block (
+      .sew(sew_store), 
+      .avl(avl_store), 
+      .avl_dw_offset(idx_store), 
+      .avl_be(avl_be_store));
 
     always_ff @(posedge clk) begin
-      cfg_valids[0]  <= is_vcfg_d;
-      load_valids[0] <= fifo_ld_r_en & fifo_ld_r_last;
-
-      for (int s = 1; s < NUM_STAGES; ++s) begin
-        cfg_valids[s]  <= cfg_valids[s-1];
-        load_valids[s] <= load_valids[s-1];
+      if (is_vstore & ~stall) begin
+        sew_store <= sew[state_id_f];
+        avl_store <= avl[state_id_f];
+        start_idx_store <= {vs3_addr, (OFF_BITS)'(0)};
       end
+
+      idx_store <= {agu_addr_out[VS3], agu_off_out[VS3]} - (agu_addr_valid[VS3] ? {vs3_addr, (OFF_BITS)'(0)} : 
+                                                                                  start_idx_store);
 
       if (rst) begin
-        for (int s = 0; s < NUM_STAGES; s++) begin
-          cfg_valids[s]  <= 1'b0;
-          load_valids[s] <= 1'b0;
-        end
+        sew_store <= 0;
+        avl_store <= 0;
+        idx_store <= 0;
       end
     end
-
+    
     always_ff @(posedge clk) begin
       if (is_vcfg_d) begin
         out_avl <= avl[state_id_d];
@@ -1379,11 +1522,11 @@
     write_burst_aligner_block (
         .clk(clk),
         .rst(rst),
-        .i_valid(en_mem_out),
-        .i_start(reg_count_first && en_mem_out),
-        .i_end(reg_count == 0 && en_mem_out),
-        .i_data(vr_rd_data_out_1),
-        .i_be(alu_req_be),
+        .i_valid(vr_rd_valid_3),
+        .i_start(vr_rd_start_3),
+        .i_end(vr_rd_end_3),
+        .i_data(vr_rd_data_out_3),
+        .i_be(avl_be_store),
         .i_shamt(write_aligner_shamt),
         .o_valid(write_aligner_valid),
         .o_start(write_aligner_start),
@@ -1402,7 +1545,6 @@
     /////////////////////////////////////////////////////////////////////////////////
     logic [1+DATA_WIDTH-1:0] fifo_ld_r_datas [NUM_QUEUES];
 
-    logic fifo_ld_empty;
     logic fifo_ld_r_en;
     logic [1+DATA_WIDTH-1:0] fifo_ld_r_data;
     logic fifo_ld_r_last;
@@ -1515,64 +1657,32 @@
     // Performace counters
     ////////////////////////////////////////////////////
     
-    /*
     typedef enum int unsigned {
-      REQUESTED = 0,
-      PROCESSED = 1,
-      AGU_REQUESTED = 2,
-      AGU_PROCESSED = 3
-    } perf_cnt_t;
+      BUBBLE = 0,
+      INUSE = 1
+    } cnt_t;
 
-    typedef enum int unsigned {
-      RAW = 0,
-      WAW = 1,
-      BUSY = 2,
-      UNUSED = 3
-    } stall_cnt_t;
-
-    logic [64-1:0] stall_cnts [4];
-    logic [64-1:0] perf_cnts [4];
+    logic [32-1:0] running_cnt;
 
     always_ff @(posedge clk) begin
-      if (stall) begin
-        if (hold_reg_group & reg_count != 0) begin
-          stall_cnts[BUSY] <= stall_cnts[BUSY] + 1;
-        end else if (haz_vs1 | haz_vs2 | haz_vs3 | haz_vm | (haz_vd & uses_vm)) begin
-          stall_cnts[RAW] <= stall_cnts[RAW] + 1;
-        end else if (haz_vd) begin
-          stall_cnts[WAW] <= stall_cnts[WAW] + 1;
-        end else begin
-          stall_cnts[UNUSED] <= stall_cnts[UNUSED] + 1;
-        end
-      end
-      
-      if (rst) begin
-        for (int i = 0; i < 4; ++i) begin
-          stall_cnts[i] <= 0;
-        end
-      end
-    end
-
-    always_ff @(posedge clk) begin
-      if (req_valid) begin
-        perf_cnts[REQUESTED] <= perf_cnts[REQUESTED] + 1;
-        if (req_ready) begin
-          perf_cnts[PROCESSED] <= perf_cnts[PROCESSED] + 1;
-        end
+      if (insn_in_d == 0) begin
+        running_cnt <= running_cnt + 1;
+      end else begin
+        perf_cnts[INUSE] <= perf_cnts[INUSE] + 1;
+        if (perf_cnts[INUSE] != 0)
+          perf_cnts[BUBBLE] <= perf_cnts[BUBBLE] + running_cnt;
+        running_cnt <= 0;
       end
 
-      if (req_ready & insn_valid_f) begin
-        if (is_vstore | (is_vload & read_attr_f == READ_COMMIT) | is_valu) begin
-          perf_cnts[AGU_PROCESSED] <= perf_cnts[AGU_PROCESSED] + 1;
-        end
-      end
-      
       if (rst) begin
-        for (int i = 0; i < 4; ++i) begin
+        running_cnt <= 0;
+        for (int i = 0; i < NUM_PERF_COUNTERS; ++i) begin
           perf_cnts[i] <= 0;
         end
       end
     end
-    */
-    
+
+  ////////////////////////////////////////////////////
+  //Assertions
+
 endmodule
