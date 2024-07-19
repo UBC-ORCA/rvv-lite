@@ -12,8 +12,6 @@ module addr_gen_unit
     input  logic rst,
     input  logic en,
     input  logic ack,
-    input  logic [2-1:0] sew,
-    input  logic whole_reg,
     input  logic widen_in,
     input  logic [ OFF_WIDTH-1:0] off_in,
     input  logic [ OFF_WIDTH-1:0] max_off_in,
@@ -21,6 +19,7 @@ module addr_gen_unit
     input  logic [ADDR_WIDTH-1:0] max_reg_in,
     output logic [ADDR_WIDTH-1:0] addr_out,         // output of v_reg address
     output logic [ OFF_WIDTH-1:0] off_out,
+    output logic addr_valid,
     output logic addr_start,
     output logic addr_end,
     output logic idle                               // signal to processor that we can get another address
@@ -99,8 +98,7 @@ module addr_gen_unit
   end
 
   // Outputs
-  assign busy         = state == S_IDLE  ? en :
-                        state == S_WAIT  ? 1'b1 :
+  assign busy         = state == S_WAIT  ? 1'b1 :
                         state == S_COUNT ? 1'b1 :
                         1'b0;
   assign addr_start   = state == S_IDLE  ? en :
@@ -110,6 +108,10 @@ module addr_gen_unit
   assign addr_end     = state == S_IDLE  ? en && ~widen_in && start_count_in == end_count_in :
                         state == S_WAIT  ? count == end_count :
                         state == S_COUNT ? ~widen && count + 1 == end_count :
+                        1'b0;
+  assign addr_valid   = state == S_IDLE  ? en :
+                        state == S_WAIT  ? 1'b1 :
+                        state == S_COUNT ? 1'b1 :
                         1'b0;
   assign idle         = ~busy;
   assign {addr_out, off_out} = ncount;
