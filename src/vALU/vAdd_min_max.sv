@@ -289,7 +289,6 @@ module vAdd_min_max #(
 			s4_out_be	<= 'h0;
 			out_be 		<= 'h0;
 
-			s2_mask	 	<= 'h0;
 			s3_mask		<= 'h0;
 			s4_mask		<= 'h0;
 			out_mask	<= 'h0;
