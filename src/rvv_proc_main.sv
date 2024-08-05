@@ -825,7 +825,7 @@
     end
 
     always_ff @(posedge clk) begin
-      if (~is_vload & ~is_vstore & ~stall) begin
+      if (insn_valid_f & ~is_vload & ~is_vstore & ~stall) begin
         insn_in_d <= insn_in_f;
         state_id_d <= state_id_f;
         track_id_d <= track_id_f;
@@ -1062,19 +1062,43 @@
       haz_vs3  = scoreboard[vs3_addr] & uses_vs3;
     end
 
+    logic stalls [4];
+
     always_comb begin
-      if (is_vload & read_attr_f == READ_COMMIT) begin
-        stall = ~agu_idle[VDR];
-      end else if (is_vload & read_attr_f == READ_ISSUE) begin
+      for (int i = 0; i < 4; ++i) begin
+        stalls[i] = 1'b0;
+      end
+      stall = 1'b0;
+
+      if (insn_valid_f & is_vload & read_attr_f == READ_COMMIT) begin
+        stall = ~agu_idle[VDR] | ~agu_idle_vdr_d;
+        stalls[0] = stall;
+      end else if (insn_valid_f & is_vload & read_attr_f == READ_ISSUE) begin
         stall = haz_vd;
-      end else if (is_vstore) begin
-        stall = ~agu_idle[VS3] | haz_vs3 | (is_vstore & writes_in_flight == MAX_WRITE_IN_FLIGHT*NUM_QUEUES);
-      end else begin
+        stalls[1] = stall;
+      end else if (insn_valid_f & is_vstore) begin
+        stall = ~agu_idle[VS3] | ~agu_idle_vs3_d | haz_vs3 | (is_vstore & writes_in_flight == MAX_WRITE_IN_FLIGHT*NUM_QUEUES);
+        stalls[2] = stall;
+      end else if (insn_valid_f) begin
         stall = (hold_reg_group & reg_count != 0) | haz_vm | (haz_vd & uses_vm) | haz_vs1 | haz_vs2; 
+        stalls[3] = stall;
       end
     end
 
     assign req_ready = ~stall;
+
+    logic agu_idle_vs3_d;
+    logic agu_idle_vdr_d;
+
+    always_ff @(posedge clk) begin
+      agu_idle_vs3_d <= agu_idle[VS3];
+      agu_idle_vdr_d <= agu_idle[VDR];
+      
+      if (rst) begin
+        agu_idle_vs3_d <= 1'b0;
+        agu_idle_vdr_d <= 1'b0;
+      end
+    end
 
     // ----------------------------------------- VTYPE CONTROL SIGNALS -------------------------------------------------------------------
     if (WHOLE_REG_ENABLE) begin
@@ -1377,8 +1401,7 @@
         start_idx_store <= {vs3_addr, (OFF_BITS)'(0)};
       end
 
-      idx_store <= {agu_addr_out[VS3], agu_off_out[VS3]} - (agu_addr_valid[VS3] ? {vs3_addr, (OFF_BITS)'(0)} : 
-                                                                                  start_idx_store);
+      idx_store <= {agu_addr_out[VS3], agu_off_out[VS3]} - (agu_addr_valid[VS3] & agu_addr_start[VS3] ? {vs3_addr, (OFF_BITS)'(0)} : start_idx_store);
 
       if (rst) begin
         sew_store <= 0;
@@ -1659,7 +1682,8 @@
     
     typedef enum int unsigned {
       BUBBLE = 0,
-      INUSE = 1
+      INUSE = 1,
+      STALL = 2
     } cnt_t;
 
     logic [32-1:0] running_cnt;
@@ -1672,6 +1696,12 @@
         if (perf_cnts[INUSE] != 0)
           perf_cnts[BUBBLE] <= perf_cnts[BUBBLE] + running_cnt;
         running_cnt <= 0;
+      end
+
+      for (int i = 0; i < 4; ++i) begin
+        if (stalls[i]) begin
+          perf_cnts[STALL+i] <= perf_cnts[STALL+i] + 1;
+        end
       end
 
       if (rst) begin
