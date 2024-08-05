@@ -22,6 +22,7 @@ module read_burst_aligner
   logic [DATA_WIDTH-1:0] remainder_data;
   logic [DATA_WIDTH-1:0] result_data;
   logic [DATA_WIDTH-1:0] result_data_r;
+  logic [$clog2(DATA_WIDTH/8)-1:0] shamt_r;
   logic busy;
 
   enum int unsigned {S_START, S_WAIT, S_END} state, nstate;
@@ -29,10 +30,14 @@ module read_burst_aligner
   always_ff @(posedge clk) begin
     if (i_valid) begin
       result_data_r <= result_data;
+      if (i_start) begin
+        shamt_r <= i_shamt;
+      end
     end
 
     if (rst) begin
       result_data_r <= '0;
+      shamt_r <= '0;
     end
   end
 
@@ -81,7 +86,7 @@ module read_burst_aligner
   end
 
   assign padded_data = {i_data, DATA_WIDTH'(0)};
-  assign {result_data, remainder_data} = padded_data >> i_shamt*8;
+  assign {result_data, remainder_data} = padded_data >> (state == S_START ? i_shamt : shamt_r)*8;
 
   assign busy    = state == S_START ? i_valid && i_start :
                    state == S_END   ? 1'b1 :
