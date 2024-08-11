@@ -1649,7 +1649,7 @@
         .fifo (read_shamt_buffers[q]));
 
       always_comb begin
-        read_shamt_buffers[q].potential_pop  = r_ready & r_valid & r_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH] == q;
+        read_shamt_buffers[q].potential_pop  = r_ready & r_valid & r_first & r_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH] == q;
         read_shamt_buffers[q].potential_push = ar_ready & ar_valid & ar_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH] == q;
         read_shamt_buffers[q].pop  = read_shamt_buffers[q].potential_pop;
         read_shamt_buffers[q].push = read_shamt_buffers[q].potential_push;
