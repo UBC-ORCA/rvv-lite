@@ -1633,12 +1633,29 @@
     end
 
     logic [$clog2(DATA_WIDTH/8)-1:0] read_aligner_shamt;
-    always @(posedge clk) begin
-      if (ar_ready & ar_valid) 
-        read_aligner_shamt <= unaligned_ar_addr[$clog2(DATA_WIDTH/8)-1:0]; //FIXME URGENT
+    logic [$clog2(DATA_WIDTH/8)-1:0] data_outs [NUM_QUEUES];
 
-      if (rst)
-        read_aligner_shamt <= '0;
+    assign read_aligner_shamt = data_outs[r_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH]];
+
+    fifo_interface #(.DATA_WIDTH($clog2(DATA_WIDTH/8))) read_shamt_buffers [NUM_QUEUES] ();
+
+    for (q = 0; q < NUM_QUEUES; ++q) begin
+      cva5_fifo #(
+        .DATA_WIDTH($clog2(DATA_WIDTH/8)),
+        .FIFO_DEPTH(MAX_READ_IN_FLIGHT))
+      read_shamt_buffer_block (
+        .clk (clk),
+        .rst (rst),
+        .fifo (read_shamt_buffers[q]));
+
+      always_comb begin
+        read_shamt_buffers[q].potential_pop  = r_ready & r_valid & r_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH] == q;
+        read_shamt_buffers[q].potential_push = ar_ready & ar_valid & ar_id[TRACK_ID_WIDTH +: STATE_ID_WIDTH] == q;
+        read_shamt_buffers[q].pop  = read_shamt_buffers[q].potential_pop;
+        read_shamt_buffers[q].push = read_shamt_buffers[q].potential_push;
+        read_shamt_buffers[q].data_in = unaligned_ar_addr[$clog2(DATA_WIDTH/8)-1:0];
+        data_outs[q] = read_shamt_buffers[q].data_out;
+      end
     end
 
     /////////////////////////////////////////////////////////////////////////////////
